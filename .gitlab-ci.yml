@@ -10,7 +10,7 @@ upload:
     TERRAFORM_MODULE_1_DIR: ${CI_PROJECT_DIR}/terraform/modules/${TERRAFORM_MODULE_1_SHORTNAME}      # The relative path to the root directory of the Terraform project.
     TERRAFORM_MODULE_1_SYSTEM: google
     TERRAFORM_MODULE_2_SHORTNAME: gcp-gke-external-nat
-    TERRAFORM_MODULE_2_NAME: ${CI_PROJECT_NAME}-${TERRAFORM_MODULE_1_SHORTNAME}                 # The name of your Terraform module, must not have any spaces or underscores (will be translated to hyphens).
+    TERRAFORM_MODULE_2_NAME: ${CI_PROJECT_NAME}-${TERRAFORM_MODULE_2_SHORTNAME}                 # The name of your Terraform module, must not have any spaces or underscores (will be translated to hyphens).
     TERRAFORM_MODULE_2_DIR: ${CI_PROJECT_DIR}/terraform/modules/${TERRAFORM_MODULE_2_SHORTNAME}      # The relative path to the root directory of the Terraform project.
     TERRAFORM_MODULE_2_SYSTEM: google                                                           # The system or provider your Terraform module targets (ex. local, aws, google).
 
