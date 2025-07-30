@@ -15,7 +15,7 @@ upload:
     TERRAFORM_MODULE_2_SYSTEM: google                                                           # The system or provider your Terraform module targets (ex. local, aws, google).
 
   script:
-    - TERRAFORM_MODULE_VERSION=0.0.1
+    - TERRAFORM_MODULE_VERSION="${CI_PROJECT_DIR}/$(cat VERSION)"
     - TERRAFORM_MODULE_1_NAME=$(echo "${TERRAFORM_MODULE_1_NAME}" | tr " _" -) # module-name must not have spaces or underscores, so translate them to hyphens
     - tar -vczf /tmp/${TERRAFORM_MODULE_1_NAME}-${TERRAFORM_MODULE_1_SYSTEM}-${TERRAFORM_MODULE_VERSION}.tgz -C ${TERRAFORM_MODULE_1_DIR} --exclude=./.git .
     - 'curl --fail-with-body --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
