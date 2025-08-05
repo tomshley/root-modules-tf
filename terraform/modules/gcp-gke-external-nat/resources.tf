@@ -10,7 +10,7 @@ module "external-static-ip-nat" {
     google_compute_router.external-static-ip-router
   ]
   source                             = "terraform-google-modules/cloud-nat/google"
-  version                            = "~> 5.0"
+  version                            = "~> 5.3.0"
   project_id                         = var.project_id
   region                             = var.google_region
   router                             = google_compute_router.external-static-ip-router.name
