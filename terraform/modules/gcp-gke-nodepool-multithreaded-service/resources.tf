@@ -6,11 +6,11 @@ data "google_container_cluster" "default_cluster" {
 resource "google_container_node_pool" "containerized-multithreaded-service-pool" {
   depends_on = [
     google_service_account.default,
-    data.google_container_cluster.default
+    data.google_container_cluster.default_cluster
   ]
   name       = "${var.project_name}-pool-containr-multhrd"
   location   = var.google_region
-  cluster    = data.google_container_cluster.default.name
+  cluster    = data.google_container_cluster.default_cluster.name
 
   # initial node count
   node_count = 1
@@ -57,12 +57,12 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 ################################################################
 # resource "google_container_node_pool" "default" {
 #   depends_on = [
-#     data.google_container_cluster.default,
+#     data.google_container_cluster.default_cluster,
 #     google_service_account.default
 #   ]
 #   name       = "${var.project_name}-nodepool-default"
 #   location   = var.google_region
-#   cluster    = data.google_container_cluster.default.name
+#   cluster    = data.google_container_cluster.default_cluster.name
 #   node_count = 1
 #
 #   autoscaling {
@@ -94,12 +94,12 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 # resource "google_container_node_pool" "service-contact" {
 #   depends_on = [
 #     google_service_account.default,
-#     data.google_container_cluster.default,
+#     data.google_container_cluster.default_cluster,
 #     google_container_node_pool.default
 #   ]
 #   name       = "${var.project_name}-pool-contactsvc"
 #   location   = var.google_region
-#   cluster    = data.google_container_cluster.default.name
+#   cluster    = data.google_container_cluster.default_cluster.name
 #   node_count = 1
 #
 #   autoscaling {
@@ -137,13 +137,13 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 # resource "google_container_node_pool" "service-web" {
 #   depends_on = [
 #     google_service_account.default,
-#     data.google_container_cluster.default,
+#     data.google_container_cluster.default_cluster,
 #     google_container_node_pool.default,
 #     google_container_node_pool.service-contact
 #   ]
 #   name       = "${var.project_name}-pool-websvr"
 #   location   = var.google_region
-#   cluster    = data.google_container_cluster.default.name
+#   cluster    = data.google_container_cluster.default_cluster.name
 #   node_count = 1
 #
 #   autoscaling {
