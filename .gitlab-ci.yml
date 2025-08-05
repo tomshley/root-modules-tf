@@ -18,14 +18,9 @@ upload:
     - TERRAFORM_MODULE_VERSION="${CI_PROJECT_DIR}/$(cat VERSION)"
     - TERRAFORM_MODULE_1_NAME=$(echo "${TERRAFORM_MODULE_1_NAME}" | tr " _" -) # module-name must not have spaces or underscores, so translate them to hyphens
     - tar -vczf /tmp/${TERRAFORM_MODULE_1_NAME}-${TERRAFORM_MODULE_1_SYSTEM}-${TERRAFORM_MODULE_VERSION}.tgz -C ${TERRAFORM_MODULE_1_DIR} --exclude=./.git .
-    - 'curl --fail-with-body --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-         --upload-file /tmp/${TERRAFORM_MODULE_1_NAME}-${TERRAFORM_MODULE_1_SYSTEM}-${TERRAFORM_MODULE_VERSION}.tgz
-         ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/terraform/modules/${TERRAFORM_MODULE_1_NAME}/${TERRAFORM_MODULE_1_SYSTEM}/${TERRAFORM_MODULE_VERSION}/file'
+    
     - TERRAFORM_MODULE_2_NAME=$(echo "${TERRAFORM_MODULE_2_NAME}" | tr " _" -) # module-name must not have spaces or underscores, so translate them to hyphens
     - tar -vczf /tmp/${TERRAFORM_MODULE_2_NAME}-${TERRAFORM_MODULE_2_SYSTEM}-${TERRAFORM_MODULE_VERSION}.tgz -C ${TERRAFORM_MODULE_2_DIR} --exclude=./.git .
-    - 'curl --fail-with-body --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-         --upload-file /tmp/${TERRAFORM_MODULE_2_NAME}-${TERRAFORM_MODULE_2_SYSTEM}-${TERRAFORM_MODULE_VERSION}.tgz
-         ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/terraform/modules/${TERRAFORM_MODULE_2_NAME}/${TERRAFORM_MODULE_2_SYSTEM}/${TERRAFORM_MODULE_VERSION}/file'
-
-  rules:
-    - if: $CI_COMMIT_TAG
+#    
+#  rules:
+#    - if: $CI_COMMIT_TAG
