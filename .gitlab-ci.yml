@@ -14,8 +14,8 @@ upload:
     TERRAFORM_MODULE_2_DIR: ${CI_PROJECT_DIR}/terraform/modules/${TERRAFORM_MODULE_2_SHORTNAME}      # The relative path to the root directory of the Terraform project.
     TERRAFORM_MODULE_2_SYSTEM: google
     TERRAFORM_MODULE_3_SHORTNAME: gcp-gke-nodepool-multithreaded-service
-    TERRAFORM_MODULE_3_NAME: ${CI_PROJECT_NAME}-${TERRAFORM_MODULE_2_SHORTNAME}                 # The name of your Terraform module, must not have any spaces or underscores (will be translated to hyphens).
-    TERRAFORM_MODULE_3_DIR: ${CI_PROJECT_DIR}/terraform/modules/${TERRAFORM_MODULE_2_SHORTNAME}      # The relative path to the root directory of the Terraform project.
+    TERRAFORM_MODULE_3_NAME: ${CI_PROJECT_NAME}-${TERRAFORM_MODULE_3_SHORTNAME}                 # The name of your Terraform module, must not have any spaces or underscores (will be translated to hyphens).
+    TERRAFORM_MODULE_3_DIR: ${CI_PROJECT_DIR}/terraform/modules/${TERRAFORM_MODULE_3_SHORTNAME}      # The relative path to the root directory of the Terraform project.
     TERRAFORM_MODULE_3_SYSTEM: google                                                           # The system or provider your Terraform module targets (ex. local, aws, google).
 
   script:
