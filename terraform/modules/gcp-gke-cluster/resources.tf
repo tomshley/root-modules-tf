@@ -34,7 +34,7 @@
 
 module "gcp-project" {
   source  = "terraform-google-modules/project-factory/google"
-  version = "~> 17.0"
+  version = "~> 18.0.0"
 
   random_project_id       = false
   name                    = var.google_project_id
@@ -50,7 +50,7 @@ module "gcp-project" {
 
 module "gcp-project-enable-api" {
   source                      = "terraform-google-modules/project-factory/google//modules/project_services"
-  version                     = "~> 14.0"
+  version                     = "~> 18.0.0"
   project_id                  = module.gcp-project.project_id
   depends_on = [module.gcp-project]
   disable_services_on_destroy = true
@@ -119,7 +119,7 @@ module "external-static-ip-nat" {
     google_compute_router.external-static-ip-router
   ]
   source                             = "terraform-google-modules/cloud-nat/google"
-  version                            = "~> 5.0"
+  version                            = "~> 5.3.0"
   project_id                         = module.gcp-project.project_id
   region                             = var.google_region
   router                             = google_compute_router.external-static-ip-router.name
