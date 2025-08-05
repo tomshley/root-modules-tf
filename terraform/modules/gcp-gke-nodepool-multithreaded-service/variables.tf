@@ -10,6 +10,10 @@ variable "google_container_cluster_name" {
   type = string
 }
 
+variable "google_service_account_default_account_id" {
+  type = string
+}
+
 # https://github.com/hashicorp/terraform-provider-google/issues/12584#issuecomment-2619971101
 variable "kubelet_config" {
   type = object({

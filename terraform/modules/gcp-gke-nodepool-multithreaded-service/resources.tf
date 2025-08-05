@@ -2,10 +2,13 @@
 data "google_container_cluster" "default_cluster" {
   name = var.google_container_cluster_name
 }
+data "google_service_account" "default_service_account" {
+  account_id = var.google_service_account_default_account_id
+}
 
 resource "google_container_node_pool" "containerized-multithreaded-service-pool" {
   depends_on = [
-    google_service_account.default,
+    data.google_service_account.default_service_account,
     data.google_container_cluster.default_cluster
   ]
   name       = "${var.project_name}-pool-containr-multhrd"
@@ -45,7 +48,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
     }
     #
     #   # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
-    #   service_account = google_service_account.default.email
+    #   service_account = data.google_service_account.default_service_account.email
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]
@@ -58,7 +61,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 # resource "google_container_node_pool" "default" {
 #   depends_on = [
 #     data.google_container_cluster.default_cluster,
-#     google_service_account.default
+#     data.google_service_account.default_service_account
 #   ]
 #   name       = "${var.project_name}-nodepool-default"
 #   location   = var.google_region
@@ -84,7 +87,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 #     disk_size_gb = 20
 #     #
 #     #   # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
-#     #   service_account = google_service_account.default.email
+#     #   service_account = data.google_service_account.default_service_account.email
 #     oauth_scopes = [
 #       "https://www.googleapis.com/auth/cloud-platform"
 #     ]
@@ -93,7 +96,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 
 # resource "google_container_node_pool" "service-contact" {
 #   depends_on = [
-#     google_service_account.default,
+#     data.google_service_account.default_service_account,
 #     data.google_container_cluster.default_cluster,
 #     google_container_node_pool.default
 #   ]
@@ -121,7 +124,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 #     disk_size_gb = 10
 #     #
 #     #   # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
-#     #   service_account = google_service_account.default.email
+#     #   service_account = data.google_service_account.default_service_account.email
 #     oauth_scopes = [
 #       "https://www.googleapis.com/auth/cloud-platform"
 #     ]
@@ -136,7 +139,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 
 # resource "google_container_node_pool" "service-web" {
 #   depends_on = [
-#     google_service_account.default,
+#     data.google_service_account.default_service_account,
 #     data.google_container_cluster.default_cluster,
 #     google_container_node_pool.default,
 #     google_container_node_pool.service-contact
@@ -165,7 +168,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
 #     disk_size_gb = 10
 #     #
 #     #   # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
-#     #   service_account = google_service_account.default.email
+#     #   service_account = data.google_service_account.default_service_account.email
 #     oauth_scopes = [
 #       "https://www.googleapis.com/auth/cloud-platform"
 #     ]
