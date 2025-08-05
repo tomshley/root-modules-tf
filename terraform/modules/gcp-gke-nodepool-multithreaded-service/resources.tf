@@ -1,4 +1,3 @@
-
 data "google_container_cluster" "default_cluster" {
   name = var.google_container_cluster_name
 }
@@ -11,9 +10,9 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
     data.google_service_account.default_service_account,
     data.google_container_cluster.default_cluster
   ]
-  name       = "${var.project_name}-pool-containr-multhrd"
-  location   = var.google_region
-  cluster    = data.google_container_cluster.default_cluster.name
+  name     = "${var.project_name}-pool-containr-multhrd"
+  location = var.google_region
+  cluster = data.google_container_cluster.default_cluster.name
 
   # initial node count
   node_count = 1
@@ -27,6 +26,13 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
   management {
     auto_repair  = true
     auto_upgrade = true
+  }
+
+  # https://github.com/hashicorp/terraform-provider-google/issues/15848#issuecomment-2616355921
+  lifecycle {
+    ignore_changes = [
+      node_config[0].resource_labels["goog-gke-node-pool-provisioning-model"]
+    ]
   }
 
   node_config {
