@@ -210,11 +210,6 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
       "https://www.googleapis.com/auth/cloud-platform"
     ]
   }
-
-
-  Review the code or command that is generating the API request. Determine which of the listed fields, such as machine_type, disk_size_gb, node_version, image_type, or labels, are intended to be part of the node pool's configuration but are not being sent in the request.
-Add the required parameters:
-Include at least one of the specified parameters in your API request. For example, if you are trying to create a node pool, you must specify its machine_type, disk_size_gb, and potentially other settings like node_version. If you are updating a node pool, you need to specify the field you intend to change (e.g., labels to update labels).
 }
 
 ################################################################
