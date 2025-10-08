@@ -1,16 +1,35 @@
-
-output "google_container_cluster_default" {
-  value = google_container_cluster.default
+output "google_project_id" {
+  value = var.google_project_id
 }
 
-output "google_container_cluster_default_name" {
-  value = google_container_cluster.default.name
+output "google_project_name_prefix" {
+  value = var.project_name_prefix
 }
 
-output "google_service_account_default" {
-  value = google_service_account.default
+output "google_compute_network_gke_network_id" {
+  value = google_compute_network.gke_network.id
 }
 
-output "google_service_account_default_account_id" {
-  value = google_service_account.default.account_id
+output "google_container_cluster_gke_cluster" {
+  value = google_container_cluster.gke_cluster
+}
+
+output "google_container_cluster_gke_cluster_name" {
+  value = google_container_cluster.gke_cluster.name
+}
+
+output "google_service_account_gke_service_account" {
+  value = google_service_account.gke_service_account
+}
+
+output "google_service_account_gke_service_account_id" {
+  value = google_service_account.gke_service_account.account_id
+}
+
+output "google_compute_subnetwork_region" {
+  value = google_compute_subnetwork.gke_subnet.region
+}
+
+output "google_compute_subnetwork_id" {
+  value = google_compute_subnetwork.gke_subnet.id
 }
