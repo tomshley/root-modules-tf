@@ -2,11 +2,7 @@ variable "google_organization_id" {
   type = string
 }
 
-variable "google_region" {
-  type = string
-}
-
-variable "google_region_zone" {
+variable "google_billing_account" {
   type = string
 }
 
