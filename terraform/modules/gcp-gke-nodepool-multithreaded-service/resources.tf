@@ -10,7 +10,7 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
     data.google_service_account.default_service_account,
     data.google_container_cluster.default_cluster
   ]
-  name     = "${var.project_name}-pool-containr-multhrd"
+  name     = "${var.project_name_prefix}-pool-containr-multhrd"
   location = var.google_region
   cluster = data.google_container_cluster.default_cluster.name
 
