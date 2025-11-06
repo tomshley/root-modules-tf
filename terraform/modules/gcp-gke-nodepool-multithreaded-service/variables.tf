@@ -24,3 +24,27 @@ variable "kubelet_config" {
   })
   default = {}
 }
+
+variable "node_machine_type" {
+  type    = string
+  default = "t2d-standard-2"
+}
+
+variable "node_disk_type" {
+  type    = string
+  default = "pd-standard"
+}
+variable "node_disk_size_gb" {
+  type    = number
+  default = 30
+}
+
+variable "node_preemptible" {
+  type    = bool
+  default = false
+}
+
+variable "node_spot" {
+  type    = bool
+  default = false
+}

@@ -36,11 +36,11 @@ resource "google_container_node_pool" "containerized-multithreaded-service-pool"
   }
 
   node_config {
-    preemptible  = false
-    spot         = false
-    machine_type = "t2d-standard-2"
-    disk_type    = "pd-standard"
-    disk_size_gb = 30
+    preemptible  = var.node_preemptible
+    spot         = var.node_spot
+    machine_type = var.node_machine_type
+    disk_type    = var.node_disk_type
+    disk_size_gb = var.node_disk_size_gb
 
     # https://github.com/hashicorp/terraform-provider-google/issues/12584#issuecomment-2619971101
     dynamic "kubelet_config" {
