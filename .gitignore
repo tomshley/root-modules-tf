@@ -65,3 +65,6 @@ Thumbs.db
 # cli
 .out/
 nohup.out
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.windsurf/rules/snyk_rules.md
