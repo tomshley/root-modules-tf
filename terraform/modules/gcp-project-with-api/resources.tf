@@ -7,6 +7,7 @@ module "gcp-project" {
   org_id                  = var.google_organization_id
   billing_account         = var.google_billing_account
   default_service_account = "keep"
+  labels                  = var.labels
 
   activate_api_identities = [
   ]

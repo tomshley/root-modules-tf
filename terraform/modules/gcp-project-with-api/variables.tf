@@ -13,3 +13,9 @@ variable "google_project_id" {
 variable "project_name_prefix" {
   type = string
 }
+
+variable "labels" {
+  type        = map(string)
+  default     = {}
+  description = "Labels to apply to the GCP project"
+}
