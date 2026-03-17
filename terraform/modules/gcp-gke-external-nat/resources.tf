@@ -7,7 +7,7 @@ resource "google_compute_router" "external_static_ip_router" {
 
 
 module "external_static_nat_config" {
-  depends_on = [google_compute_router.external_static_ip_router]
+  depends_on                         = [google_compute_router.external_static_ip_router]
   source                             = "terraform-google-modules/cloud-nat/google"
   version                            = "~> 5.0"
   project_id                         = var.project_id
