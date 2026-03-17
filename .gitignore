@@ -44,6 +44,9 @@ endpoint.config
 .idea/*
 *.iml
 
+# VSCode / Editor config
+.vscode/
+
 # Unit test reports
 TEST*.xml
 
@@ -73,5 +76,3 @@ nohup.out
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .windsurf/rules/snyk_rules.md
-
-.vscode/
