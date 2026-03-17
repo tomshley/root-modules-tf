@@ -22,6 +22,11 @@ credentials.config
 endpoint.config
 
 *.env
+
+# secure files (credentials, keys — .env.example is safe to commit)
+.secure_files/*
+!.secure_files/.env.example
+
 # Compiled Java class files
 *.class
 

@@ -4,7 +4,8 @@ resource "google_service_account" "gke_service_account" {
 }
 
 resource "google_compute_network" "gke_network" {
-  name       = "${var.project_name_prefix}-network"
+  project = var.google_project_id
+  name    = "${var.project_name_prefix}-network"
 
   auto_create_subnetworks  = false
   enable_ula_internal_ipv6 = true
@@ -12,24 +13,24 @@ resource "google_compute_network" "gke_network" {
 
 resource "google_compute_subnetwork" "gke_subnet" {
   depends_on = [google_compute_network.gke_network]
+  project    = var.google_project_id
   name       = "${var.project_name_prefix}-subnetwork"
 
-  ip_cidr_range = "10.0.0.0/16"
+  ip_cidr_range = var.subnet_cidr
   region        = var.google_region
 
   stack_type       = "IPV4_IPV6"
-  ipv6_access_type = "INTERNAL" # Change to "EXTERNAL" if creating an external loadbalancer
-  # ipv6_access_type = "EXTERNAL" # Change to "EXTERNAL" if creating an external loadbalancer
+  ipv6_access_type = var.ipv6_access_type
 
   network = google_compute_network.gke_network.id
   secondary_ip_range {
     range_name    = "${var.project_name_prefix}-subnetwork-services-range"
-    ip_cidr_range = "10.4.0.0/14"
+    ip_cidr_range = var.services_cidr
   }
 
   secondary_ip_range {
     range_name    = "${var.project_name_prefix}-subnetwork-pod-ranges"
-    ip_cidr_range = "10.124.0.0/14"
+    ip_cidr_range = var.pods_cidr
   }
 }
 
@@ -49,10 +50,26 @@ resource "google_container_cluster" "gke_cluster" {
   enable_l4_ilb_subsetting = true
   datapath_provider        = "ADVANCED_DATAPATH"
 
+  master_auth {
+    client_certificate_config {
+      issue_client_certificate = false
+    }
+  }
+
   private_cluster_config {
-    master_ipv4_cidr_block  = "172.16.0.0/28"
+    master_ipv4_cidr_block  = var.master_ipv4_cidr_block
     enable_private_endpoint = false
     enable_private_nodes    = true
+  }
+
+  master_authorized_networks_config {
+    dynamic "cidr_blocks" {
+      for_each = var.master_authorized_networks_cidr_blocks
+      content {
+        cidr_block   = cidr_blocks.value
+        display_name = "authorized"
+      }
+    }
   }
 
   ip_allocation_policy {
@@ -67,10 +84,12 @@ resource "google_container_cluster" "gke_cluster" {
     }
   }
 
+  resource_labels = var.labels
+
   remove_default_node_pool = true
   initial_node_count       = 1
   # Set `deletion_protection` to `true` will ensure that one cannot
   # accidentally delete this instance by use of Terraform.
-  deletion_protection = false
+  deletion_protection = var.deletion_protection
 }
 
