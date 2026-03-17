@@ -12,6 +12,11 @@ variables:
   BASE_CONTAINERS_UPSTREAM_TAG: "0.4.3"
   CICD_PIPELINES_RUNNER_TAG: "0.5.0"
 
+# Disable mirror sync job (not needed for this project)
+tomshley-cicd-mirror-sync:
+  rules:
+    - when: never
+
 # ---------------------------------------------------------------------------
 # Terraform Module Upload
 # ---------------------------------------------------------------------------
