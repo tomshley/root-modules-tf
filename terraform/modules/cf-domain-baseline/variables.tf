@@ -85,7 +85,10 @@ variable "dns_records" {
 
   validation {
     condition = alltrue([
-      for record in var.dns_records : upper(record.type) == "A" ? can(cidrhost("${record.value}/32", 0)) : true
+      for record in var.dns_records : upper(record.type) == "A" ? (
+        can(regex("^(\\d{1,3}\\.){3}\\d{1,3}$", trimspace(record.value))) &&
+        can(cidrhost("${trimspace(record.value)}/32", 0))
+      ) : true
     ])
     error_message = "A records must use a valid IPv4 address in value."
   }

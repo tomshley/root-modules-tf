@@ -71,6 +71,10 @@ Profiles:
   - Immutable assets: edge `31536000`, browser `31536000`
   - Brotli `on`, Polish `lossless`, Mirage `on`, Early Hints `on`
 
+## Cloudflare plan requirements
+
+`polish`, `mirage`, and `early_hints` depend on Cloudflare plan level. The `aggressive` profile enables all three by default, so Free-plan zones may need to stay on `standard` or explicitly override those settings off.
+
 ## Cloudflare API surface
 
 Implemented with the Cloudflare v5 provider using:
@@ -99,4 +103,5 @@ Implemented with the Cloudflare v5 provider using:
 - Immutable asset caching targets fingerprinted file names with a hex hash segment.
 - Canonical redirects derive the zone hostname from Cloudflare rule fields so the module stays `zone_id`-only.
 - No redirect ruleset is created when `canonical_redirect = "none"`, which avoids taking ownership of the `http_request_dynamic_redirect` phase unnecessarily.
+- When `canonical_redirect` is not `none`, this module takes ownership of the zone-scoped `http_request_dynamic_redirect` phase for the target zone. Do not compose it with another module or manual configuration that also manages that phase on the same zone.
 - This module is independent of mail concerns.
