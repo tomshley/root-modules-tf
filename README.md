@@ -12,7 +12,7 @@ This repository is part of the **Tomshley – OSS IP Division** and is maintaine
 
 ## Overview
 
-Composable Terraform modules for multi-cloud Kubernetes provisioning (GCP GKE + AWS EKS). Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
+Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudflare edge/DNS composition. Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
 
 ### Design Principles
 
@@ -34,11 +34,25 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning (GCP GKE + 
 | `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times) | **New** |
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
+| `cf-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
+| `cf-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
+| `cf-preview-website` | Cloudflare | Tunnel-backed preview publication for an existing zone | **New** |
+| `cf-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
+| `cf-redirect-domain` | Cloudflare | Standalone redirect domain with owned zone lifecycle | **New** |
+| `cf-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
 
 ### Examples
 
 - `terraform/examples/gcp-gke-full-stack/` — GKE cluster + system/workload pools + NAT
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
+- `terraform/examples/cf-domain-baseline-minimal/` — baseline Cloudflare zone posture with curated DNS
+- `terraform/examples/cf-domain-baseline-with-mail/` — baseline posture composed with mail DNS publication
+- `terraform/examples/cf-public-website-standard/` — public website acceleration with the standard profile
+- `terraform/examples/cf-public-website-aggressive/` — public website acceleration with the aggressive profile
+- `terraform/examples/cf-preview-website-tunnel/` — tunnel-backed preview hostname publication
+- `terraform/examples/cf-access-guard-standalone/` — standalone Access protection for an existing hostname
+- `terraform/examples/cf-redirect-domain/` — redirect-only domain publication
+- `terraform/examples/cf-mail-foundation/` — standalone mail DNS publication
 
 - `aws-eks-cluster` requires explicit `public_access_cidrs`
 - `gcp-gke-cluster` requires explicit `master_authorized_networks_cidr_blocks`
