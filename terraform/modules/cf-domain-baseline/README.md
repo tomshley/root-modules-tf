@@ -64,6 +64,8 @@ The module validates the following constraints:
 - Non-CAA records must set `value`.
 - CAA records must omit `value` and instead provide `caa.flags`, `caa.tag`, and `caa.value`.
 
+When composing with `cf-mail-foundation`, keep mail DNS out of `dns_records`. In particular, do not define SPF, DKIM, DMARC, MX, or mail-provider verification records here when that companion module owns mail publication for the same zone.
+
 `dns_records` are keyed internally by input order as well as record name and type. Reordering existing entries in the list changes the Terraform resource addresses and will cause record replacement even when the record contents stay the same.
 
 When `origin_ca` is set, `requested_validity` must be one of Cloudflare's supported Origin CA validity periods: `7`, `30`, `90`, `365`, `730`, `1095`, or `5475` days.
