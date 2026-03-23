@@ -44,11 +44,10 @@ Implemented with the Cloudflare v5 provider using:
 
 - `access_application_id`
   - Cloudflare Access application ID.
-- `access_policy_id`
-  - Cloudflare Access inline policy ID.
 
 ## Notes
 
 - This module assumes the protected hostname already resolves in DNS.
 - The allow policy is defined inline on the Access application to avoid the reusable-policy attachment path exposed by the Cloudflare v5 provider.
+- The Cloudflare v5 provider does not expose a stable standalone ID for the inline policy block, so this module intentionally outputs only the Access application ID.
 - This module does not own any tunnel, DNS, or cache configuration.

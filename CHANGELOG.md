@@ -6,6 +6,23 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.0.4] — 2026-03-23
+
+### Features
+
+- **Cloudflare module suite**: Add `cf-domain-baseline`, `cf-website-acceleration`, `cf-preview-website`, `cf-access-guard`, `cf-redirect-domain`, and `cf-mail-foundation` for zone posture, public websites, preview publication, Access protection, redirect domains, and mail DNS.
+- **Cloudflare examples**: Add reference examples for baseline-only zones, baseline-plus-mail composition, public websites, preview publication, Access protection, redirect domains, and standalone mail DNS publication.
+
+### Fixes
+
+- **cf-domain-baseline**: Split DNS handling so proxyable `A`/`AAAA`/`CNAME` records and non-proxyable `TXT` records are managed separately, and include TXT record IDs in module outputs.
+- **cf-domain-baseline**: Tighten IPv4 validation for `A` record values.
+- **cf-redirect-domain**: Use a deterministic redirect rule reference derived from `sha256(zone_name)`.
+
+### Documentation
+
+- **Cloudflare module docs**: Clarify baseline-versus-mail composition boundaries, Cloudflare plan requirements for website acceleration, and redirect phase ownership expectations.
+
 ## [1.0.0] — 2026-03-17
 
 ### Breaking Changes
