@@ -1,3 +1,7 @@
+locals {
+  engine_major_version = split(".", var.engine_version)[0]
+}
+
 resource "random_password" "master_password" {
   length  = 32
   special = false
@@ -39,8 +43,15 @@ resource "aws_security_group" "event_journal" {
 
 resource "aws_rds_cluster_parameter_group" "event_journal" {
   name        = "${var.project_name_prefix}-event-journal-pg"
-  family      = "aurora-postgresql16"
+  family      = "aurora-postgresql${local.engine_major_version}"
   description = "Aurora PostgreSQL event journal tuning"
+
+  lifecycle {
+    precondition {
+      condition     = contains(["13", "14", "15", "16", "17"], local.engine_major_version)
+      error_message = "engine_version must start with a supported Aurora PostgreSQL major version (13–17)."
+    }
+  }
 
   parameter {
     name  = "max_connections"
