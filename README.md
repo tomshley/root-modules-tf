@@ -34,6 +34,8 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times) | **New** |
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
+| `aws-eks-event-journal-db` | AWS | Aurora PostgreSQL Serverless v2 module for EKS-hosted event journal workloads | **New** |
+| `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
 | `cf-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
 | `cf-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
 | `cf-preview-website` | Cloudflare | Tunnel-backed preview publication for an existing zone | **New** |
