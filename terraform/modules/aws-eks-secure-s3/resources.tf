@@ -73,6 +73,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "secure" {
   count  = var.lifecycle_expiration_days > 0 || var.lifecycle_glacier_transition_days > 0 || var.lifecycle_deep_archive_transition_days > 0 ? 1 : 0
   bucket = aws_s3_bucket.secure.id
 
+  lifecycle {
+    precondition {
+      condition     = var.lifecycle_deep_archive_transition_days == 0 || var.lifecycle_glacier_transition_days == 0 || var.lifecycle_deep_archive_transition_days >= var.lifecycle_glacier_transition_days
+      error_message = "lifecycle_deep_archive_transition_days must be >= lifecycle_glacier_transition_days when both are set."
+    }
+  }
+
   rule {
     id     = "lifecycle"
     status = "Enabled"
