@@ -52,6 +52,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure" {
 
     bucket_key_enabled = var.sse_algorithm == "aws:kms"
   }
+
+  lifecycle {
+    precondition {
+      condition     = var.sse_algorithm != "aws:kms" || var.kms_key_id != ""
+      error_message = "kms_key_id must be set when sse_algorithm is aws:kms."
+    }
+  }
 }
 
 resource "aws_s3_bucket_versioning" "secure" {

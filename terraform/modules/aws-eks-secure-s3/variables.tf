@@ -44,11 +44,6 @@ variable "sse_algorithm" {
 variable "kms_key_id" {
   type    = string
   default = ""
-
-  validation {
-    condition     = var.sse_algorithm != "aws:kms" || var.kms_key_id != ""
-    error_message = "kms_key_id must be set when sse_algorithm is aws:kms."
-  }
 }
 
 variable "logging_target_bucket" {
