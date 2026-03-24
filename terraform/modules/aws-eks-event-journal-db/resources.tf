@@ -59,11 +59,6 @@ resource "aws_rds_cluster_parameter_group" "event_journal" {
   }
 
   parameter {
-    name  = "checkpoint_timeout"
-    value = "900"
-  }
-
-  parameter {
     name  = "wal_buffers"
     value = "2048"
   }
