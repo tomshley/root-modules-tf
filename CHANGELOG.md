@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.1.1] — 2026-03-24
+
+### Fixes
+
+- **aws-eks-event-journal-db**: Remove `checkpoint_timeout` from cluster parameter group — Aurora Serverless v2 manages this parameter internally and rejects modifications via the ModifyDBClusterParameterGroup API.
+
 ## [1.1.0] — 2026-03-24
 
 ### Features
