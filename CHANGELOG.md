@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.1.2] — 2026-03-24
+
+### Fixes
+
+- **aws-eks-event-journal-db**: Set `apply_method = "pending-reboot"` on static parameters (`max_connections`, `wal_buffers`) to prevent `InvalidParameterCombination` errors during apply.
+
 ## [1.1.1] — 2026-03-24
 
 ### Fixes
