@@ -54,13 +54,15 @@ resource "aws_rds_cluster_parameter_group" "event_journal" {
   }
 
   parameter {
-    name  = "max_connections"
-    value = "400"
+    name         = "max_connections"
+    value        = "400"
+    apply_method = "pending-reboot"
   }
 
   parameter {
-    name  = "wal_buffers"
-    value = "2048"
+    name         = "wal_buffers"
+    value        = "2048"
+    apply_method = "pending-reboot"
   }
 
   parameter {
