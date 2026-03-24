@@ -6,6 +6,17 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.1.0] — 2026-03-24
+
+### Features
+
+- **aws-eks-event-journal-db**: Add Aurora PostgreSQL Serverless v2 module for event journal workloads running on EKS, including subnet group, security group wiring, parameter group tuning, and Secrets Manager credential publication.
+- **aws-eks-secure-s3**: Add hardened S3 module with public-access blocking, encryption, optional lifecycle rules, TLS-only bucket policy, and pre-built readwrite/readonly IAM policies for IRSA consumers.
+
+### Documentation
+
+- **Module inventory**: Document the new AWS data plane modules in `README.md`.
+
 ## [1.0.4] — 2026-03-23
 
 ### Features
