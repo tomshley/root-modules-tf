@@ -12,7 +12,11 @@ output "cluster_ca_certificate" {
 }
 
 output "cluster_security_group_id" {
-  value = aws_security_group.eks_cluster_sg.id
+  # EKS-managed SG — automatically attached to both control plane and node groups.
+  # The custom additional SG (eks_cluster_sg) is only on the control plane, so
+  # downstream consumers (RDS, ElastiCache, etc.) must reference this managed SG
+  # to allow traffic from pods running on nodes.
+  value = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
 }
 
 output "oidc_provider_arn" {
