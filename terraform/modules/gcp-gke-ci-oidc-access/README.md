@@ -60,6 +60,6 @@ module "ci_deploy" {
 
 - The service account IAM binding is scoped explicitly to `repository_selector` using the configurable `repository_attribute` (e.g., `attribute.repository` for GitHub, `attribute.namespace_path` for GitLab), creating a narrow, visible security boundary. The `attribute_condition` on the provider provides defense-in-depth.
 - `repository_selector` must match the value of the attribute mapped in `attribute_mapping` (e.g., repository name for GitHub, group name for GitLab, UUID for Bitbucket).
-- `repository_attribute` must match the attribute name mapped in `attribute_mapping` (without the "attribute." prefix).
+- `repository_attribute` must match the key in `attribute_mapping` exactly, including the `attribute.` prefix.
 - `project_roles` should include at minimum `roles/container.developer` for GKE deploy access.
 - Workload Identity pools and providers are global resources within a project.
