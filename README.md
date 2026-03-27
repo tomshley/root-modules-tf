@@ -36,12 +36,6 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-event-journal-db` | AWS | Aurora PostgreSQL Serverless v2 module for EKS-hosted event journal workloads | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
-| `cf-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
-| `cf-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
-| `cf-preview-website` | Cloudflare | Tunnel-backed preview publication for an existing zone | **New** |
-| `cf-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
-| `cf-redirect-domain` | Cloudflare | Standalone redirect domain with owned zone lifecycle | **New** |
-| `cf-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
 | `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
@@ -50,14 +44,6 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 - `terraform/examples/gcp-gke-full-stack/` — GKE cluster + system/workload pools + NAT
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
-- `terraform/examples/cf-domain-baseline-minimal/` — baseline Cloudflare zone posture with curated DNS
-- `terraform/examples/cf-domain-baseline-with-mail/` — baseline posture composed with mail DNS publication
-- `terraform/examples/cf-public-website-standard/` — public website acceleration with the standard profile
-- `terraform/examples/cf-public-website-aggressive/` — public website acceleration with the aggressive profile
-- `terraform/examples/cf-preview-website-tunnel/` — tunnel-backed preview hostname publication
-- `terraform/examples/cf-access-guard-standalone/` — standalone Access protection for an existing hostname
-- `terraform/examples/cf-redirect-domain/` — redirect-only domain publication
-- `terraform/examples/cf-mail-foundation/` — standalone mail DNS publication
 - `terraform/examples/streaming-workload-access-commercial/` — Confluent workload with Schema Registry access
 - `terraform/examples/streaming-workload-access-external-sr/` — Kafka-only workload (external SR)
 - `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access

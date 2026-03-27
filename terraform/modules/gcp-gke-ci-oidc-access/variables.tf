@@ -87,6 +87,11 @@ variable "service_account_display_name" {
   description = "Display name for the service account. Defaults to service_account_id."
 }
 
+variable "repository_selector" {
+  type        = string
+  description = "Repository or namespace selector for explicit IAM binding scope (e.g., 'my-org/my-repo' for GitHub, 'my-group/' for GitLab group). This creates a narrow, explicit IAM binding instead of relying solely on provider attribute_condition."
+}
+
 variable "project_roles" {
   type        = list(string)
   description = "GCP project-level roles to grant to the service account (e.g., roles/container.developer)."

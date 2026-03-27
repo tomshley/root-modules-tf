@@ -28,6 +28,7 @@ module "gitlab_deploy" {
   provider_id           = "gitlab-oidc"
   provider_display_name = "GitLab CI OIDC"
   service_account_id    = "gitlab-ci-deploy"
+  repository_selector   = "my-group/"
 
   # GitLab CI OIDC (use your instance URL for self-managed)
   oidc_issuer_url = "https://gitlab.com"
