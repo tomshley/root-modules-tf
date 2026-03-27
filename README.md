@@ -42,6 +42,9 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `cf-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
 | `cf-redirect-domain` | Cloudflare | Standalone redirect domain with owned zone lifecycle | **New** |
 | `cf-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
+| `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
+| `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
+| `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
 
 ### Examples
 
@@ -55,6 +58,15 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/cf-access-guard-standalone/` — standalone Access protection for an existing hostname
 - `terraform/examples/cf-redirect-domain/` — redirect-only domain publication
 - `terraform/examples/cf-mail-foundation/` — standalone mail DNS publication
+- `terraform/examples/streaming-workload-access-commercial/` — Confluent workload with Schema Registry access
+- `terraform/examples/streaming-workload-access-external-sr/` — Kafka-only workload (external SR)
+- `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access
+- `terraform/examples/aws-eks-ci-oidc-github-reuse/` — GitHub Actions with existing OIDC provider
+- `terraform/examples/aws-eks-ci-oidc-gitlab/` — GitLab CI → AWS → EKS deploy access
+- `terraform/examples/aws-eks-ci-oidc-bitbucket/` — Bitbucket Pipelines → AWS → EKS deploy access
+- `terraform/examples/gcp-gke-ci-oidc-github/` — GitHub Actions → GCP → GKE deploy access
+- `terraform/examples/gcp-gke-ci-oidc-gitlab/` — GitLab CI → GCP → GKE deploy access
+- `terraform/examples/gcp-gke-ci-oidc-bitbucket/` — Bitbucket Pipelines → GCP → GKE deploy access
 
 - `aws-eks-cluster` requires explicit `public_access_cidrs`
 - `gcp-gke-cluster` requires explicit `master_authorized_networks_cidr_blocks`
