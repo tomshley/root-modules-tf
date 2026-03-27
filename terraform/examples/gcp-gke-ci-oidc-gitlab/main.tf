@@ -28,7 +28,8 @@ module "gitlab_deploy" {
   provider_id           = "gitlab-oidc"
   provider_display_name = "GitLab CI OIDC"
   service_account_id    = "gitlab-ci-deploy"
-  repository_selector   = "my-group/"
+  repository_selector   = "my-group"
+  repository_attribute  = "attribute.namespace_path"
 
   # GitLab CI OIDC (use your instance URL for self-managed)
   oidc_issuer_url = "https://gitlab.com"
@@ -43,7 +44,7 @@ module "gitlab_deploy" {
   }
 
   # Only allow tokens from projects under this group
-  attribute_condition = "assertion.namespace_path.startsWith('my-group/')"
+  attribute_condition = "assertion.namespace_path.startsWith('my-group')"
 
   # GKE deploy access
   project_roles = [
