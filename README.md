@@ -12,7 +12,7 @@ This repository is part of the **Tomshley – OSS IP Division** and is maintaine
 
 ## Overview
 
-Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudflare edge/DNS composition. Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
+Composable Terraform modules for multi-cloud Kubernetes provisioning. Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
 
 ### Design Principles
 

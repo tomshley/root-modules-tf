@@ -91,6 +91,11 @@ variable "repository_attribute" {
   type        = string
   default     = "attribute.repository"
   description = "Mapped attribute name for the IAM binding principal set (e.g., 'attribute.repository' for GitHub, 'attribute.namespace_path' for GitLab, 'attribute.repository_uuid' for Bitbucket)."
+
+  validation {
+    condition     = startswith(var.repository_attribute, "attribute.")
+    error_message = "repository_attribute must start with 'attribute.' (e.g., 'attribute.repository')."
+  }
 }
 
 variable "repository_selector" {
