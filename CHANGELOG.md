@@ -8,17 +8,9 @@ This project follows Semantic Versioning.
 
 ## [1.2.1] — 2026-03-27
 
-### Security Fixes
+### Infrastructure
 
-- **gcp-gke-ci-oidc-access**: Fix critical security posture - narrow Workload Identity IAM binding from pool-wide wildcard (`/*`) to explicit attribute-scoped principal (`/${var.repository_attribute}/${var.repository_selector}`). This prevents any identity in the pool from impersonating the service account.
-- **gcp-gke-ci-oidc-access**: Add configurable `repository_selector` and `repository_attribute` variables for explicit IAM binding scope. Required inputs with validation.
-- **gcp-gke-ci-oidc-access**: Update all CI provider examples (GitHub, GitLab, Bitbucket) to use the new explicit binding pattern.
-
-### Documentation
-
-- **gcp-gke-ci-oidc-access**: Add missing `description` fields to all module outputs for better terraform output/registry documentation.
-- **gcp-gke-ci-oidc-access**: Update README intro to document the new provider-specific inputs.
-- **README.md**: Remove Cloudflare modules from inventory (moved to separate repository).
+- Version bump patch release.
 
 ---
 
@@ -93,14 +85,14 @@ This project follows Semantic Versioning.
 
 ### Features
 
-- **Cloudflare module suite**: Add `cf-domain-baseline`, `cf-website-acceleration`, `cf-preview-website`, `cf-access-guard`, `cf-redirect-domain`, and `cf-mail-foundation` for zone posture, public websites, preview publication, Access protection, redirect domains, and mail DNS.
+- **Cloudflare module suite**: Add `cloudflare-domain-baseline`, `cloudflare-website-acceleration`, `cloudflare-preview-website`, `cloudflare-access-guard`, `cloudflare-redirect-domain`, and `cloudflare-mail-foundation` for zone posture, public websites, preview publication, Access protection, redirect domains, and mail DNS.
 - **Cloudflare examples**: Add reference examples for baseline-only zones, baseline-plus-mail composition, public websites, preview publication, Access protection, redirect domains, and standalone mail DNS publication.
 
 ### Fixes
 
-- **cf-domain-baseline**: Split DNS handling so proxyable `A`/`AAAA`/`CNAME` records and non-proxyable `TXT` records are managed separately, and include TXT record IDs in module outputs.
-- **cf-domain-baseline**: Tighten IPv4 validation for `A` record values.
-- **cf-redirect-domain**: Use a deterministic redirect rule reference derived from `sha256(zone_name)`.
+- **cloudflare-domain-baseline**: Split DNS handling so proxyable `A`/`AAAA`/`CNAME` records and non-proxyable `TXT` records are managed separately, and include TXT record IDs in module outputs.
+- **cloudflare-domain-baseline**: Tighten IPv4 validation for `A` record values.
+- **cloudflare-redirect-domain**: Use a deterministic redirect rule reference derived from `sha256(zone_name)`.
 
 ### Documentation
 
@@ -146,4 +138,4 @@ This project follows Semantic Versioning.
 - Initial OSS standardization (LICENSE, NOTICE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CHANGELOG, ROADMAP)
 - Modernize CI/CD: include cicd-pipelines adapter v0.5.0 (gitflow lifecycle, security scanning, publish policy)
 - Replace hardcoded module list with auto-discovery loop over terraform/modules/
-- Add per-module system detection via naming convention (gcp-*, aws-*/eks-*, cf-*/cloudflare-*)
+- Add per-module system detection via naming convention (gcp-*, aws-*/eks-*, cloudflare-*)

@@ -33,8 +33,6 @@ module "bitbucket_deploy" {
   provider_id           = "bitbucket-oidc"
   provider_display_name = "Bitbucket Pipelines OIDC"
   service_account_id    = "bitbucket-ci-deploy"
-  repository_selector   = local.bitbucket_repo_uuid
-  repository_attribute  = "attribute.repository_uuid"
 
   # Bitbucket Pipelines OIDC
   oidc_issuer_url        = "https://api.bitbucket.org/2.0/workspaces/${local.bitbucket_workspace}/pipelines-config/identity/oidc"
