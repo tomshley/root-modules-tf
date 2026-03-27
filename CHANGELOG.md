@@ -8,9 +8,17 @@ This project follows Semantic Versioning.
 
 ## [1.2.1] — 2026-03-27
 
-### Infrastructure
+### Security Fixes
 
-- Version bump patch release.
+- **gcp-gke-ci-oidc-access**: Fix critical security posture - narrow Workload Identity IAM binding from pool-wide wildcard (`/*`) to explicit attribute-scoped principal (`/${var.repository_attribute}/${var.repository_selector}`). This prevents any identity in the pool from impersonating the service account.
+- **gcp-gke-ci-oidc-access**: Add configurable `repository_selector` and `repository_attribute` variables for explicit IAM binding scope. Required inputs with validation.
+- **gcp-gke-ci-oidc-access**: Update all CI provider examples (GitHub, GitLab, Bitbucket) to use the new explicit binding pattern.
+
+### Documentation
+
+- **gcp-gke-ci-oidc-access**: Add missing `description` fields to all module outputs for better terraform output/registry documentation.
+- **gcp-gke-ci-oidc-access**: Update README intro to document the new provider-specific inputs.
+- **README.md**: Remove Cloudflare modules from inventory (moved to separate repository).
 
 ---
 
