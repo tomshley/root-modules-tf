@@ -3,7 +3,7 @@
 # GitLab.com OIDC issuer: https://gitlab.com
 # Self-managed GitLab: use your GitLab instance URL
 # Attribute mapping: project_path, ref, ref_type, namespace_path
-# Condition: restrict to specific group or project
+# Condition: provider filtering plus exact IAM binding scoped by namespace_path
 
 terraform {
   required_providers {
@@ -28,6 +28,8 @@ module "gitlab_deploy" {
   provider_id           = "gitlab-oidc"
   provider_display_name = "GitLab CI OIDC"
   service_account_id    = "gitlab-ci-deploy"
+  repository_selector   = "my-group"
+  repository_attribute  = "attribute.namespace_path"
 
   # GitLab CI OIDC (use your instance URL for self-managed)
   oidc_issuer_url = "https://gitlab.com"
@@ -41,8 +43,10 @@ module "gitlab_deploy" {
     "attribute.namespace_path" = "assertion.namespace_path"
   }
 
-  # Only allow tokens from projects under this group
-  attribute_condition = "assertion.namespace_path.startsWith('my-group/')"
+  # Provider-side filtering admits the group path and subgroup paths.
+  # Effective impersonation in this example still stays scoped to namespace_path == "my-group"
+  # because the IAM binding is an exact match on repository_selector.
+  attribute_condition = "assertion.namespace_path == 'my-group' || assertion.namespace_path.startsWith('my-group/')"
 
   # GKE deploy access
   project_roles = [
