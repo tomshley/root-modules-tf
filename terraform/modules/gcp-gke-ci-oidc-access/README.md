@@ -20,6 +20,7 @@ CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are exp
 | service_account_id | Service account ID to create | `string` | yes | — |
 | service_account_display_name | Display name for the SA | `string` | no | service_account_id |
 | repository_selector | Repository or namespace selector for explicit IAM binding | `string` | yes | — |
+| repository_attribute | Mapped attribute name for the IAM binding principal set | `string` | no | attribute.repository |
 | project_roles | GCP roles to grant to the SA | `list(string)` | yes | — |
 
 ## Outputs
@@ -43,6 +44,7 @@ module "ci_deploy" {
   oidc_issuer_url     = "https://token.actions.githubusercontent.com"
   service_account_id  = "github-ci-deploy"
   repository_selector = "my-org/my-repo"
+  repository_attribute = "attribute.repository"
   project_roles       = ["roles/container.developer"]
 
   attribute_mapping = {
@@ -56,7 +58,8 @@ module "ci_deploy" {
 
 ## Notes
 
-- The service account IAM binding is scoped explicitly to `repository_selector` (e.g., `my-org/my-repo` for GitHub, `my-group/` for GitLab group), creating a narrow, visible security boundary. The `attribute_condition` on the provider provides defense-in-depth.
-- `repository_selector` must match the attribute mapped in `attribute_mapping` (typically `attribute.repository` for GitHub, `attribute.namespace_path` for GitLab).
+- The service account IAM binding is scoped explicitly to `repository_selector` using the configurable `repository_attribute` (e.g., `attribute.repository` for GitHub, `attribute.namespace_path` for GitLab), creating a narrow, visible security boundary. The `attribute_condition` on the provider provides defense-in-depth.
+- `repository_selector` must match the value of the attribute mapped in `attribute_mapping` (e.g., repository name for GitHub, group name for GitLab, UUID for Bitbucket).
+- `repository_attribute` must match the attribute name mapped in `attribute_mapping` (without the "attribute." prefix).
 - `project_roles` should include at minimum `roles/container.developer` for GKE deploy access.
 - Workload Identity pools and providers are global resources within a project.

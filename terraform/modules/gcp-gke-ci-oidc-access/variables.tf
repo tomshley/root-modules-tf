@@ -63,7 +63,7 @@ variable "attribute_mapping" {
 
 variable "attribute_condition" {
   type        = string
-  description = "CEL expression to restrict which OIDC tokens are accepted (e.g., assertion.repository == 'org/repo'). Required — the pool-wide IAM binding grants all pool identities SA impersonation, so this is the primary scoping mechanism."
+  description = "CEL expression to restrict which OIDC tokens are accepted (e.g., assertion.repository == 'org/repo'). Required — provides defense-in-depth in addition to the explicit IAM binding scope."
 
   validation {
     condition     = trimspace(var.attribute_condition) != ""
@@ -87,9 +87,15 @@ variable "service_account_display_name" {
   description = "Display name for the service account. Defaults to service_account_id."
 }
 
+variable "repository_attribute" {
+  type        = string
+  default     = "attribute.repository"
+  description = "Mapped attribute name for the IAM binding principal set (e.g., 'attribute.repository' for GitHub, 'attribute.namespace_path' for GitLab, 'attribute.repository_uuid' for Bitbucket)."
+}
+
 variable "repository_selector" {
   type        = string
-  description = "Repository or namespace selector for explicit IAM binding scope (e.g., 'my-org/my-repo' for GitHub, 'my-group/' for GitLab group). This creates a narrow, explicit IAM binding instead of relying solely on provider attribute_condition."
+  description = "Repository or namespace selector for explicit IAM binding scope (e.g., 'my-org/my-repo' for GitHub, 'my-group' for GitLab group, UUID for Bitbucket). This creates a narrow, explicit IAM binding instead of relying solely on provider attribute_condition."
 }
 
 variable "project_roles" {
