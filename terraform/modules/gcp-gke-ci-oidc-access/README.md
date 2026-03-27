@@ -2,7 +2,7 @@
 
 Provisions the full CI → GCP → GKE deploy path: creates a Workload Identity Pool and Provider for a CI platform, a GCP service account with federated access, and grants project-level roles for GKE deployment.
 
-CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are expressed through the generic `oidc_issuer_url`, `attribute_mapping`, `attribute_condition`, `repository_selector`, and `repository_attribute` inputs — not through module branching. See examples for provider-specific configurations.
+CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are expressed through the generic `oidc_issuer_url`, `attribute_mapping`, and `attribute_condition` inputs — not through module branching. See examples for provider-specific configurations.
 
 ## Inputs
 
@@ -19,8 +19,6 @@ CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are exp
 | attribute_condition | CEL expression to restrict accepted tokens | `string` | yes | — |
 | service_account_id | Service account ID to create | `string` | yes | — |
 | service_account_display_name | Display name for the SA | `string` | no | service_account_id |
-| repository_selector | Repository or namespace selector for explicit IAM binding | `string` | yes | — |
-| repository_attribute | Mapped attribute name for the IAM binding principal set | `string` | no | attribute.repository |
 | project_roles | GCP roles to grant to the SA | `list(string)` | yes | — |
 
 ## Outputs
@@ -43,8 +41,6 @@ module "ci_deploy" {
   provider_id         = "github-oidc"
   oidc_issuer_url     = "https://token.actions.githubusercontent.com"
   service_account_id  = "github-ci-deploy"
-  repository_selector = "my-org/my-repo"
-  repository_attribute = "attribute.repository"
   project_roles       = ["roles/container.developer"]
 
   attribute_mapping = {
@@ -58,8 +54,6 @@ module "ci_deploy" {
 
 ## Notes
 
-- The service account IAM binding is scoped explicitly to `repository_selector` using the configurable `repository_attribute` (e.g., `attribute.repository` for GitHub, `attribute.namespace_path` for GitLab), creating a narrow, visible security boundary. The `attribute_condition` on the provider provides defense-in-depth.
-- `repository_selector` must match the value of the attribute mapped in `attribute_mapping` (e.g., repository name for GitHub, group name for GitLab, UUID for Bitbucket).
-- `repository_attribute` must match the key in `attribute_mapping` exactly, including the `attribute.` prefix.
+- The `attribute_condition` is a required CEL expression evaluated against OIDC token assertions. It is the primary scoping mechanism — the SA IAM binding grants `roles/iam.workloadIdentityUser` to all identities in the Workload Identity Pool, so the condition on the provider is what restricts access.
 - `project_roles` should include at minimum `roles/container.developer` for GKE deploy access.
 - Workload Identity pools and providers are global resources within a project.
