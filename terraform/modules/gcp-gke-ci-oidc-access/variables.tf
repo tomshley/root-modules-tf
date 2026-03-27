@@ -96,6 +96,11 @@ variable "repository_attribute" {
 variable "repository_selector" {
   type        = string
   description = "Repository or namespace selector for explicit IAM binding scope (e.g., 'my-org/my-repo' for GitHub, 'my-group' for GitLab group, UUID for Bitbucket). This creates a narrow, explicit IAM binding instead of relying solely on provider attribute_condition."
+
+  validation {
+    condition     = trimspace(var.repository_selector) != ""
+    error_message = "repository_selector must be a non-empty string because it defines the explicit IAM binding scope for service account impersonation."
+  }
 }
 
 variable "project_roles" {
