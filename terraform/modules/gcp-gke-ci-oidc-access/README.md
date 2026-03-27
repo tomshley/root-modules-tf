@@ -2,7 +2,7 @@
 
 Provisions the full CI → GCP → GKE deploy path: creates a Workload Identity Pool and Provider for a CI platform, a GCP service account with federated access, and grants project-level roles for GKE deployment.
 
-CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are expressed through the generic `oidc_issuer_url`, `attribute_mapping`, and `attribute_condition` inputs — not through module branching. See examples for provider-specific configurations.
+CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are expressed through the generic `oidc_issuer_url`, `attribute_mapping`, `attribute_condition`, `repository_selector`, and `repository_attribute` inputs — not through module branching. See examples for provider-specific configurations.
 
 ## Inputs
 
