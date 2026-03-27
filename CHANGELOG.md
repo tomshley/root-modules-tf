@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.2.1] — 2026-03-27
+
+### Infrastructure
+
+- Version bump patch release.
+
+---
+
 ## [1.2.0] — 2026-03-26
 
 ### Features
