@@ -51,6 +51,7 @@ publish-terraform-modules:
           gcp-*)             MODULE_SYSTEM="google" ;;
           aws-*|eks-*)       MODULE_SYSTEM="aws" ;;
           cf-*|cloudflare-*) MODULE_SYSTEM="cloudflare" ;;
+          confluent-*)       MODULE_SYSTEM="confluent" ;;
           *)                 MODULE_SYSTEM="local" ;;
         esac
 
