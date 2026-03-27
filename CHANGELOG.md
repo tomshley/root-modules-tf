@@ -6,6 +6,50 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.2.0] — 2026-03-26
+
+### Features
+
+- **aws-eks-ci-oidc-access**: Add CI platform OIDC federation to EKS (IAM role, access entry)
+- **gcp-gke-ci-oidc-access**: Add CI platform OIDC federation to GKE (Workload Identity, service account)
+- **confluent-streaming-workload-access**: Add Confluent workload access module with service accounts, API keys, Kafka ACLs, and optional Schema Registry RBAC
+
+### Examples
+
+- **CI OIDC examples**: Add 6 examples covering GitHub Actions, GitLab CI, and Bitbucket Pipelines for both AWS/EKS and GCP/GKE
+- **Confluent examples**: Add examples for commercial Confluent Cloud and external Schema Registry scenarios
+
+### Security Fixes
+
+- **aws-eks-ci-oidc-access**: Fix critical issue where module always created new OIDC provider. Add support for reusing existing providers via `oidc_provider_arn` input. Only one provider per issuer URL is allowed per AWS account.
+- **gcp-gke-ci-oidc-access**: Fix Workload Identity IAM binding to use pool-scoped `principalSet` (the only valid GCP format). Provider-level restriction is handled by `attribute_condition` on the provider resource.
+- **gcp-gke-ci-oidc-access**: Remove dead `project_name_prefix` input that was unused in resources.
+- **aws-eks-ci-oidc-access**: Add validation to require `eks_access_scope_namespaces` when using namespace-scoped access.
+- **aws-eks-ci-oidc-access**: Add validation on `oidc_provider_arn` format to fail early on malformed ARNs.
+- **aws-eks-ci-oidc-access**: Add validation rejecting duplicate `test`+`claim` combinations in `trust_conditions` to prevent silent value loss from `merge()`.
+- **aws-eks-ci-oidc-access**: Guard `oidc_provider_host` local against null `oidc_issuer_url` to surface clear precondition error instead of confusing type error.
+- **confluent-streaming-workload-access**: Move `schema_subject_permissions` precondition to always-evaluated resource so permissions passed with `schema_registry = null` are rejected instead of silently ignored.
+- **gcp-gke-ci-oidc-access**: Fix `pool_id` and `provider_id` validation to reject trailing hyphens (GCP API requirement).
+
+### Infrastructure
+
+- Replace LICENSE.md with full Apache 2.0 LICENSE file for OSS compliance.
+
+### Documentation
+
+- **README.md**: Update module inventory and examples list with new CI OIDC modules
+- **Module READMEs**: Document security improvements and usage patterns for existing vs new providers
+
+---
+
+## [1.1.3] — 2026-03-24
+
+### Infrastructure
+
+- Update base containers reference to `0.4.3` in CI configuration.
+
+---
+
 ## [1.1.2] — 2026-03-24
 
 ### Fixes
