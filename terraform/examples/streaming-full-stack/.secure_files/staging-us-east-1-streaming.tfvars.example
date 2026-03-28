@@ -1,0 +1,73 @@
+# Confluent Cloud configuration for the streaming stack.
+# Copy to staging-us-east-1-streaming.tfvars and fill in the values.
+# This file is passed as -var-file to tofu plan/apply via the Makefile.
+
+confluent = {
+  environment_id          = "env-abc123"
+  environment_name        = "staging"
+  kafka_cluster_id        = "lkc-abc123"
+  kafka_rest_endpoint     = "https://pkc-abc123.us-east-1.aws.confluent.cloud:443/kafka/v3"
+  kafka_bootstrap_servers = "pkc-abc123.us-east-1.aws.confluent.cloud:9092"
+  kafka_admin_credentials = {
+    api_key    = "<admin-api-key>"
+    api_secret = "<admin-api-secret>"
+  }
+  schema_registry = {
+    cluster_id    = "lsrc-abc123"
+    resource_name = "crn://confluent.cloud/organization=abc/environment=env-abc123/schema-registry=lsrc-abc123"
+    url           = "https://psrc-abc123.us-east-1.aws.confluent.cloud"
+  }
+}
+
+workloads = {
+  service-a = {
+    service_account_display_name = "sa-myproject-staging-service-a"
+    topic_permissions = [
+      { topic = "topic-alpha",   pattern_type = "LITERAL", operations = ["WRITE", "DESCRIBE"] },
+      { topic = "topic-beta",    pattern_type = "LITERAL", operations = ["WRITE", "DESCRIBE"] },
+    ]
+    group_permissions            = []
+    transactional_id_permissions = []
+    cluster_permissions          = { operations = [] }
+    schema_subject_permissions = [
+      { subject = "topic-alpha-value",   role = "DeveloperWrite" },
+      { subject = "topic-beta-value",    role = "DeveloperWrite" },
+    ]
+  }
+  service-b = {
+    service_account_display_name = "sa-myproject-staging-service-b"
+    topic_permissions = [
+      { topic = "topic-alpha",   pattern_type = "LITERAL", operations = ["READ", "DESCRIBE"] },
+      { topic = "topic-gamma",   pattern_type = "LITERAL", operations = ["WRITE", "DESCRIBE"] },
+      { topic = "topic-gamma-dlq", pattern_type = "LITERAL", operations = ["WRITE", "DESCRIBE"] },
+    ]
+    group_permissions = [
+      { group = "service-b-", pattern_type = "PREFIXED", operations = ["READ"] },
+    ]
+    transactional_id_permissions = [
+      { transactional_id = "service-b-", pattern_type = "PREFIXED", operations = ["WRITE", "DESCRIBE"] },
+    ]
+    cluster_permissions = { operations = [] }
+    schema_subject_permissions = [
+      { subject = "topic-alpha-value",     role = "DeveloperRead" },
+      { subject = "topic-gamma-value",     role = "DeveloperWrite" },
+      { subject = "topic-gamma-dlq-value", role = "DeveloperWrite" },
+    ]
+  }
+  service-c = {
+    service_account_display_name = "sa-myproject-staging-service-c"
+    topic_permissions = [
+      { topic = "topic-gamma",   pattern_type = "LITERAL", operations = ["READ", "DESCRIBE"] },
+      { topic = "topic-delta",   pattern_type = "LITERAL", operations = ["WRITE", "DESCRIBE"] },
+    ]
+    group_permissions = [
+      { group = "service-c-", pattern_type = "PREFIXED", operations = ["READ"] },
+    ]
+    transactional_id_permissions = []
+    cluster_permissions          = { operations = [] }
+    schema_subject_permissions = [
+      { subject = "topic-gamma-value",   role = "DeveloperRead" },
+      { subject = "topic-delta-value",   role = "DeveloperWrite" },
+    ]
+  }
+}
