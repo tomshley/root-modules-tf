@@ -1,0 +1,9 @@
+# schema: schemas/kafka/topic-delta/TopicDelta.avsc
+# schema_registry: registered (topic-delta-value)
+topics:
+  - name: "topic-delta"
+    partitions: 3
+    retention_ms: 2592000000  # 30 days
+    cleanup_policy: "delete"
+    owner: "service-c"
+    notes: "Output events produced by service-c"

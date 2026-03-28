@@ -1,0 +1,17 @@
+# schema: schemas/kafka/topic-alpha/TopicAlpha.avsc
+# schema_registry: registered (topic-alpha-value)
+# schema: schemas/kafka/topic-beta/TopicBeta.avsc
+# schema_registry: registered (topic-beta-value)
+topics:
+  - name: "topic-alpha"
+    partitions: 6
+    retention_ms: 604800000  # 7 days
+    cleanup_policy: "delete"
+    owner: "service-a"
+    notes: "Primary inbound events produced by service-a"
+  - name: "topic-beta"
+    partitions: 6
+    retention_ms: 604800000  # 7 days
+    cleanup_policy: "delete"
+    owner: "service-a"
+    notes: "Secondary events produced by service-a"

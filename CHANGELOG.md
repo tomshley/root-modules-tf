@@ -6,6 +6,35 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.0] — 2026-03-27
+
+### Features
+
+- **confluent-streaming-topics**: Add overlay-driven Kafka topic provisioning module. Receives pre-parsed catalog entries and deployment overlays, filters by service/role inclusion and exclusion rules, and creates `confluent_kafka_topic` resources for the active set. Includes `prevent_destroy = true` lifecycle policy for production safety.
+
+### Fixes
+
+- **confluent-streaming-workload-access**: Strip inherited sensitivity from `schema_registry` using `nonsensitive()` so non-secret identifiers (cluster ID, CRN) can be used in `for_each` expressions without inheriting sensitivity from the parent variable.
+- **confluent-streaming-workload-access**: Add validation rule for `service_account_display_name` requiring alphanumeric start/end and restricting allowed characters.
+
+### Examples
+
+- **streaming-full-stack**: Add complete consumer implementation example with YAML service catalogs, deployment overlays, region exclusions, stack composition, environment wrappers, Makefile automation, secure file examples, and operator tools reference.
+- **streaming-topics-overlay**: Add reference example demonstrating 2 services, 2 roles, one excluded topic, and empty region exclusions.
+
+### Toolbox
+
+- **operator-tools**: Add reusable operator session scripts — `aws-session.sh`, `confluent-session.sh`, `k8s-session.sh` for credential loading and environment setup, and `render-streaming-bundle.sh` for rendering per-workload `.env` credential bundles from Terraform outputs.
+- **confluent-bootstrap.sh**: Add idempotent Confluent Cloud bootstrap script for environment, cluster, Schema Registry, admin service account, API keys, and ACL provisioning.
+
+### Documentation
+
+- **README.md**: Add `confluent-streaming-topics` to module inventory and examples list. Add `streaming-full-stack` and operator tools to examples and toolbox sections.
+- **Module README**: Document overlay filtering pipeline, topic lifecycle policy, inputs, outputs, usage, and known limitations.
+- **operator-tools README**: Document script usage, sourcing patterns, and credential bundle rendering.
+
+---
+
 ## [1.2.1] — 2026-03-27
 
 ### Infrastructure
