@@ -64,6 +64,25 @@ resource "aws_iam_role" "ci_deploy" {
   })
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+resource "aws_iam_role_policy" "eks_describe" {
+  name = "${var.project_name_prefix}-ci-eks-describe"
+  role = aws_iam_role.ci_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "eks:DescribeCluster"
+        Resource = "arn:aws:eks:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/${var.eks_cluster_name}"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "ci_deploy" {
   count      = length(var.policy_arns)
   policy_arn = var.policy_arns[count.index]
