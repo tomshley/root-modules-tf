@@ -1,0 +1,9 @@
+# schema: schemas/kafka/topic-gamma-dlq/TopicGammaDlq.avsc
+# schema_registry: registered (topic-gamma-dlq-value)
+topics:
+  - name: "topic-gamma-dlq"
+    partitions: 6
+    retention_ms: 2592000000  # 30 days
+    cleanup_policy: "delete"
+    owner: "service-b"
+    notes: "Dead letter queue for service-b processing failures"

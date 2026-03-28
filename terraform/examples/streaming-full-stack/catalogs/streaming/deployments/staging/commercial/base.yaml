@@ -1,0 +1,17 @@
+# Deployment overlay: staging/commercial
+#
+# Selects which service/role combinations are materialized as
+# confluent_kafka_topic resources in the staging environment.
+#
+# Topics not matched by any include rule remain catalog-only.
+# Topics matched by include but listed in exclude_topics are skipped.
+
+include:
+  - service: service-a
+    roles: [core]
+  - service: service-b
+    roles: [core, dlq]
+  - service: service-c
+    roles: [core]
+
+exclude_topics: []

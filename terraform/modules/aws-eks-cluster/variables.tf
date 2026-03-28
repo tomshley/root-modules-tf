@@ -48,6 +48,23 @@ variable "public_access_cidrs" {
   description = "Explicit CIDR blocks allowed to access the EKS public API endpoint. Must be provided."
 }
 
+variable "authentication_mode" {
+  type        = string
+  default     = "API_AND_CONFIG_MAP"
+  description = "EKS authentication mode. Must be API, API_AND_CONFIG_MAP, or CONFIG_MAP. API or API_AND_CONFIG_MAP is required for EKS access entries."
+
+  validation {
+    condition     = contains(["API", "API_AND_CONFIG_MAP", "CONFIG_MAP"], var.authentication_mode)
+    error_message = "authentication_mode must be one of: API, API_AND_CONFIG_MAP, CONFIG_MAP"
+  }
+}
+
+variable "bootstrap_cluster_creator_admin_permissions" {
+  type        = bool
+  default     = true
+  description = "Whether the cluster creator IAM principal gets admin access. ForceNew — must match the value used at cluster creation to avoid replacement."
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}

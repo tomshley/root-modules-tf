@@ -6,6 +6,13 @@ locals {
   sr_cluster_api_version    = "srcm/v2"
   sr_cluster_kind           = "Cluster"
 
+  # Strip inherited sensitivity from schema_registry so it can be used in
+  # for_each. The value contains only cluster_id and resource_name (IDs/CRNs),
+  # not secrets. Sensitivity is inherited when the caller's parent variable
+  # (e.g. var.confluent) is marked sensitive.
+  sr_configured = nonsensitive(var.schema_registry != null)
+  sr_for_each   = local.sr_configured ? { default = nonsensitive(var.schema_registry) } : {}
+
   # Principal and permission are fixed per plan
   principal  = "User:${confluent_service_account.this.id}"
   permission = "ALLOW"
@@ -116,7 +123,7 @@ resource "confluent_api_key" "kafka" {
 }
 
 resource "confluent_api_key" "schema_registry" {
-  for_each = var.schema_registry != null ? { default = var.schema_registry } : {}
+  for_each = local.sr_for_each
 
   display_name = "${var.name}-schema-registry-api-key"
   description  = "Schema Registry API key for ${var.name} workload in ${var.environment_name}."
@@ -161,7 +168,7 @@ resource "confluent_kafka_acl" "acl" {
 }
 
 resource "confluent_role_binding" "schema_subject" {
-  for_each = var.schema_registry != null ? {
+  for_each = local.sr_configured ? {
     for index, perm in var.schema_subject_permissions : "SR_SUBJECT:${perm.subject}:${perm.role}" => {
       subject = perm.subject
       role    = perm.role
@@ -170,5 +177,5 @@ resource "confluent_role_binding" "schema_subject" {
 
   principal   = local.principal
   role_name   = each.value.role
-  crn_pattern = "${var.schema_registry.resource_name}/subject=${each.value.subject}"
+  crn_pattern = "${nonsensitive(var.schema_registry.resource_name)}/subject=${each.value.subject}"
 }

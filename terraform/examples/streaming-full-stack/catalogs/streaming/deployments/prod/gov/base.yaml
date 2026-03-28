@@ -1,0 +1,12 @@
+# Deployment overlay: prod/gov
+#
+# Base overlay for gov profile production environments.
+# Gov environments typically have stricter topic inclusion rules.
+
+include:
+  - service: service-a
+    roles: [core]
+  - service: service-b
+    roles: [core]
+
+exclude_topics: []

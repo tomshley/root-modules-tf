@@ -1,0 +1,17 @@
+# Deployment overlay: prod/commercial
+#
+# Selects which service/role combinations are materialized as
+# confluent_kafka_topic resources in the production environment.
+#
+# Production typically includes core roles only; DLQ topics are
+# added per service as operational maturity increases.
+
+include:
+  - service: service-a
+    roles: [core]
+  - service: service-b
+    roles: [core]
+  - service: service-c
+    roles: [core]
+
+exclude_topics: []
