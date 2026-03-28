@@ -12,7 +12,7 @@ This repository is part of the **Tomshley – OSS IP Division** and is maintaine
 
 ## Overview
 
-Composable Terraform modules for multi-cloud Kubernetes provisioning. Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
+Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudflare edge/DNS composition. Modules are organized under `terraform/modules/` and designed to be composed via explicit output wiring — no data source lookups for intra-module dependencies, no flag-driven branching, no timing hacks.
 
 ### Design Principles
 
@@ -36,6 +36,13 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning. Modules ar
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-event-journal-db` | AWS | Aurora PostgreSQL Serverless v2 module for EKS-hosted event journal workloads | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
+| `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
+| `cloudflare-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
+| `cloudflare-preview-website` | Cloudflare | Tunnel-backed preview publication for an existing zone | **New** |
+| `cloudflare-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
+| `cloudflare-redirect-domain` | Cloudflare | Standalone redirect domain with owned zone lifecycle | **New** |
+| `cloudflare-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
+| `confluent-streaming-topics` | Confluent | Overlay-driven Kafka topic provisioning with deployment filtering | **New** |
 | `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
@@ -44,6 +51,16 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning. Modules ar
 
 - `terraform/examples/gcp-gke-full-stack/` — GKE cluster + system/workload pools + NAT
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
+- `terraform/examples/cloudflare-domain-baseline-minimal/` — baseline Cloudflare zone posture with curated DNS
+- `terraform/examples/cloudflare-domain-baseline-with-mail/` — baseline posture composed with mail DNS publication
+- `terraform/examples/cloudflare-public-website-standard/` — public website acceleration with the standard profile
+- `terraform/examples/cloudflare-public-website-aggressive/` — public website acceleration with the aggressive profile
+- `terraform/examples/cloudflare-preview-website-tunnel/` — tunnel-backed preview hostname publication
+- `terraform/examples/cloudflare-access-guard-standalone/` — standalone Access protection for an existing hostname
+- `terraform/examples/cloudflare-redirect-domain/` — redirect-only domain publication
+- `terraform/examples/cloudflare-mail-foundation/` — standalone mail DNS publication
+- `terraform/examples/streaming-full-stack/` — **Complete consumer implementation**: catalogs, stacks, environments, Makefiles, secure files, operator tools reference
+- `terraform/examples/streaming-topics-overlay/` — Overlay-driven topic provisioning with inclusion/exclusion filtering
 - `terraform/examples/streaming-workload-access-commercial/` — Confluent workload with Schema Registry access
 - `terraform/examples/streaming-workload-access-external-sr/` — Kafka-only workload (external SR)
 - `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access
@@ -54,11 +71,18 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning. Modules ar
 - `terraform/examples/gcp-gke-ci-oidc-gitlab/` — GitLab CI → GCP → GKE deploy access
 - `terraform/examples/gcp-gke-ci-oidc-bitbucket/` — Bitbucket Pipelines → GCP → GKE deploy access
 
-- `aws-eks-cluster` requires explicit `public_access_cidrs`
-- `gcp-gke-cluster` requires explicit `master_authorized_networks_cidr_blocks`
+### Toolbox
+
+- `toolbox/operator-tools/` — Reusable operator session scripts (AWS, Confluent, K8s, streaming bundle rendering). See [toolbox/operator-tools/README.md](toolbox/operator-tools/README.md).
+
+### Utilities
+
+- `tools/cloudflare-import/` — runnable read-only Cloudflare inventory, classification, scaffold, and review utility
 
 ### Security Posture Highlights
 
+- `aws-eks-cluster` requires explicit `public_access_cidrs`
+- `gcp-gke-cluster` requires explicit `master_authorized_networks_cidr_blocks`
 - **EKS API access** is restricted via required `public_access_cidrs`
 - **GKE control plane access** is restricted via required `master_authorized_networks_cidr_blocks`
 - **Outbound security group egress is open by default** for the EKS control plane; consumer root modules must further restrict it if required
