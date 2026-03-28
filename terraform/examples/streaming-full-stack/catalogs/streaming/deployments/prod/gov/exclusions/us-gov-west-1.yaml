@@ -1,0 +1,8 @@
+# Region exclusion: prod/gov/us-gov-west-1
+#
+# Topics listed here are excluded from the production gov deployment
+# in the us-gov-west-1 region.
+
+exclude_topics:
+  - "topic-gamma-dlq"
+  - "topic-delta"
