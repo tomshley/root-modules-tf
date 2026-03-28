@@ -60,6 +60,11 @@ variable "service_account_display_name" {
     condition     = trimspace(var.service_account_display_name) != ""
     error_message = "service_account_display_name must be non-empty."
   }
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9._:/-]*[a-zA-Z0-9]$", var.service_account_display_name))
+    error_message = "service_account_display_name must start and end with alphanumeric and contain only alphanumerics, hyphens, underscores, dots, or colons. Spaces are not allowed."
+  }
 }
 
 variable "topic_permissions" {

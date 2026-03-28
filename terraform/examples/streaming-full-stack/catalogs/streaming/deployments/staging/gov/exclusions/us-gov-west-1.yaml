@@ -1,0 +1,7 @@
+# Region exclusion: staging/gov/us-gov-west-1
+#
+# Topics listed here are excluded from the staging gov deployment
+# in the us-gov-west-1 region.
+
+exclude_topics:
+  - "topic-gamma-dlq"

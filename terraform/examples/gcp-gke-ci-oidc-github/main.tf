@@ -27,8 +27,6 @@ module "github_deploy" {
   provider_id           = "github-oidc"
   provider_display_name = "GitHub Actions OIDC"
   service_account_id    = "github-ci-deploy"
-  repository_selector   = "my-org/my-app"
-  repository_attribute  = "attribute.repository"
 
   # GitHub Actions OIDC
   oidc_issuer_url = "https://token.actions.githubusercontent.com"

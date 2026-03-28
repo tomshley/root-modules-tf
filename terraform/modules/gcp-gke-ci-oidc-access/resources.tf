@@ -28,7 +28,7 @@ resource "google_service_account" "ci_deploy" {
 resource "google_service_account_iam_member" "workload_identity" {
   service_account_id = google_service_account.ci_deploy.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.ci.name}/${var.repository_attribute}/${var.repository_selector}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.ci.name}/*"
 }
 
 resource "google_project_iam_member" "ci_deploy" {

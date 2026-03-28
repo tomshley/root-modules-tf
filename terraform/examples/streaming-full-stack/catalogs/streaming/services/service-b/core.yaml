@@ -1,0 +1,9 @@
+# schema: schemas/kafka/topic-gamma/TopicGamma.proto
+# schema_registry: registered (topic-gamma-value)
+topics:
+  - name: "topic-gamma"
+    partitions: 6
+    retention_ms: 15552000000  # 180 days
+    cleanup_policy: "delete"
+    owner: "service-b"
+    notes: "Enriched events produced by service-b"

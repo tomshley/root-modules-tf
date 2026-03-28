@@ -6,19 +6,40 @@ This project follows Semantic Versioning.
 
 ---
 
-## [1.2.1] — 2026-03-27
+## [1.3.0] — 2026-03-27
 
-### Security Fixes
+### Features
 
-- **gcp-gke-ci-oidc-access**: Fix critical security posture - narrow Workload Identity IAM binding from pool-wide wildcard (`/*`) to explicit attribute-scoped principal (`/${var.repository_attribute}/${var.repository_selector}`). This prevents any identity in the pool from impersonating the service account.
-- **gcp-gke-ci-oidc-access**: Add configurable `repository_selector` and `repository_attribute` variables for explicit IAM binding scope. Required inputs with validation.
-- **gcp-gke-ci-oidc-access**: Update all CI provider examples (GitHub, GitLab, Bitbucket) to use the new explicit binding pattern.
+- **confluent-streaming-topics**: Add overlay-driven Kafka topic provisioning module. Receives pre-parsed catalog entries and deployment overlays, filters by service/role inclusion and exclusion rules, and creates `confluent_kafka_topic` resources for the active set. Includes `prevent_destroy = true` lifecycle policy for production safety.
+
+### Fixes
+
+- **confluent-streaming-workload-access**: Strip inherited sensitivity from `schema_registry` using `nonsensitive()` so non-secret identifiers (cluster ID, CRN) can be used in `for_each` expressions without inheriting sensitivity from the parent variable.
+- **confluent-streaming-workload-access**: Add validation rule for `service_account_display_name` requiring alphanumeric start/end and restricting allowed characters.
+
+### Examples
+
+- **streaming-full-stack**: Add complete consumer implementation example with YAML service catalogs, deployment overlays, region exclusions, stack composition, environment wrappers, Makefile automation, secure file examples, and operator tools reference.
+- **streaming-topics-overlay**: Add reference example demonstrating 2 services, 2 roles, one excluded topic, and empty region exclusions.
+
+### Toolbox
+
+- **operator-tools**: Add reusable operator session scripts — `aws-session.sh`, `confluent-session.sh`, `k8s-session.sh` for credential loading and environment setup, and `render-streaming-bundle.sh` for rendering per-workload `.env` credential bundles from Terraform outputs.
+- **confluent-bootstrap.sh**: Add idempotent Confluent Cloud bootstrap script for environment, cluster, Schema Registry, admin service account, API keys, and ACL provisioning.
 
 ### Documentation
 
-- **gcp-gke-ci-oidc-access**: Add missing `description` fields to all module outputs for better terraform output/registry documentation.
-- **gcp-gke-ci-oidc-access**: Update README intro to document the new provider-specific inputs.
-- **README.md**: Remove Cloudflare modules from inventory (moved to separate repository).
+- **README.md**: Add `confluent-streaming-topics` to module inventory and examples list. Add `streaming-full-stack` and operator tools to examples and toolbox sections.
+- **Module README**: Document overlay filtering pipeline, topic lifecycle policy, inputs, outputs, usage, and known limitations.
+- **operator-tools README**: Document script usage, sourcing patterns, and credential bundle rendering.
+
+---
+
+## [1.2.1] — 2026-03-27
+
+### Infrastructure
+
+- Version bump patch release.
 
 ---
 
@@ -93,14 +114,14 @@ This project follows Semantic Versioning.
 
 ### Features
 
-- **Cloudflare module suite**: Add `cf-domain-baseline`, `cf-website-acceleration`, `cf-preview-website`, `cf-access-guard`, `cf-redirect-domain`, and `cf-mail-foundation` for zone posture, public websites, preview publication, Access protection, redirect domains, and mail DNS.
+- **Cloudflare module suite**: Add `cloudflare-domain-baseline`, `cloudflare-website-acceleration`, `cloudflare-preview-website`, `cloudflare-access-guard`, `cloudflare-redirect-domain`, and `cloudflare-mail-foundation` for zone posture, public websites, preview publication, Access protection, redirect domains, and mail DNS.
 - **Cloudflare examples**: Add reference examples for baseline-only zones, baseline-plus-mail composition, public websites, preview publication, Access protection, redirect domains, and standalone mail DNS publication.
 
 ### Fixes
 
-- **cf-domain-baseline**: Split DNS handling so proxyable `A`/`AAAA`/`CNAME` records and non-proxyable `TXT` records are managed separately, and include TXT record IDs in module outputs.
-- **cf-domain-baseline**: Tighten IPv4 validation for `A` record values.
-- **cf-redirect-domain**: Use a deterministic redirect rule reference derived from `sha256(zone_name)`.
+- **cloudflare-domain-baseline**: Split DNS handling so proxyable `A`/`AAAA`/`CNAME` records and non-proxyable `TXT` records are managed separately, and include TXT record IDs in module outputs.
+- **cloudflare-domain-baseline**: Tighten IPv4 validation for `A` record values.
+- **cloudflare-redirect-domain**: Use a deterministic redirect rule reference derived from `sha256(zone_name)`.
 
 ### Documentation
 
@@ -146,4 +167,4 @@ This project follows Semantic Versioning.
 - Initial OSS standardization (LICENSE, NOTICE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CHANGELOG, ROADMAP)
 - Modernize CI/CD: include cicd-pipelines adapter v0.5.0 (gitflow lifecycle, security scanning, publish policy)
 - Replace hardcoded module list with auto-discovery loop over terraform/modules/
-- Add per-module system detection via naming convention (gcp-*, aws-*/eks-*, cf-*/cloudflare-*)
+- Add per-module system detection via naming convention (gcp-*, aws-*/eks-*, cloudflare-*)
