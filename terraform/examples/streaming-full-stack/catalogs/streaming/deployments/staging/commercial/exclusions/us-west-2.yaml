@@ -1,0 +1,8 @@
+# Region exclusion: staging/commercial/us-west-2
+#
+# Topics listed here are excluded from the staging commercial deployment
+# in the us-west-2 region. Use this when a topic is not yet needed or
+# not supported in a particular region.
+
+exclude_topics:
+  - "topic-delta"
