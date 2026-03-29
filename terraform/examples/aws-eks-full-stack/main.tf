@@ -115,6 +115,17 @@ module "karpenter_prereqs" {
   oidc_provider_url   = module.cluster.oidc_provider_url
 }
 
+# --- Karpenter Controller (Helm) ---
+
+module "karpenter_controller" {
+  source = "../../modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = module.cluster.cluster_name
+  cluster_endpoint                  = module.cluster.cluster_endpoint
+  karpenter_controller_role_arn     = module.karpenter_prereqs.controller_role_arn
+  karpenter_interruption_queue_name = module.karpenter_prereqs.sqs_queue_name
+}
+
 # --- Sample IRSA Role (e.g., for external-dns) ---
 
 module "irsa_external_dns" {
