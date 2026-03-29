@@ -6,6 +6,33 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.1] — 2026-03-29
+
+### Features
+
+- **aws-eks-karpenter-controller**: Add new module for Karpenter controller deployment on EKS, including service account, controller deployment, and configuration for node provisioning.
+- **aws-eks-metrics-server**: Add new module for Metrics Server deployment on EKS, providing essential cluster metrics for HPA and other autoscaling components.
+- **HorizontalPodAutoscaler**: Add HPA components for CPU-based pod scaling in workload modules.
+- **Karpenter NodePool + EC2NodeClass**: Add components for AWS node provisioning with Karpenter, enabling elastic node-to-node autoscaling.
+- **EKS full-stack example**: Update to demonstrate complete scaling patterns combining HPA and Karpenter.
+
+### Fixes
+
+- **operator-tools**: Fix streaming workload service key mapping (ingress/structuring → ingress-server/structuring-server) for proper Kafka credential lookup.
+- **operator-tools**: Harden `sync-secure-files.sh` with backup/restore on failure, API call retries, and fail-fast error handling.
+
+### Toolbox
+
+- **aws-bundle helper**: Add new script for rendering Kubernetes workload bundles with AWS credentials.
+- **service-bundle helper**: Enhance with improved service mapping and credential handling.
+- **sync-secure-files.sh**: Add robust file synchronization with backup, retry, and recovery mechanisms.
+
+### Documentation
+
+- **operator-tools README**: Update documentation to reflect actual registry behavior and safer replacement flow.
+
+---
+
 ## [1.3.0] — 2026-03-27
 
 ### Features
