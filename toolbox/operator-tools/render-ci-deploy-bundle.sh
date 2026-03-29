@@ -36,19 +36,29 @@ OUTPUT_DIR="$STACK_DIR/.env-bundle"
 
 echo "Rendering CI deploy bundle for stack: $STACK_DIR"
 
-# Read outputs from the cloud stack
-cd "$STACK_DIR"
+# Helper: read a single output value via make output, falling back to raw tofu
+read_output() {
+  local dir="$1" key="$2" val=""
+  val=$(cd "$dir" && make output 2>/dev/null | grep "$key" | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
+  if [ -z "$val" ]; then
+    val=$(cd "$dir" && $TOFU output -raw "$key" 2>/dev/null || echo "")
+  fi
+  echo "$val"
+}
 
-CLUSTER_NAME=$($TOFU output -raw cluster_name 2>/dev/null || echo "")
+# Read outputs from the cloud stack
+CLUSTER_NAME=$(read_output "$STACK_DIR" cluster_name)
 if [ -z "$CLUSTER_NAME" ]; then
     echo "Error: cluster_name output is empty or missing. Has the cloud stack been applied?" >&2
+    echo "Try: make -C $STACK_DIR output" >&2
     exit 1
 fi
 
-CI_DEPLOY_ROLE_ARN=$($TOFU output -raw ci_deploy_role_arn 2>/dev/null || echo "")
+CI_DEPLOY_ROLE_ARN=$(read_output "$STACK_DIR" ci_deploy_role_arn)
 if [ -z "$CI_DEPLOY_ROLE_ARN" ] || [ "$CI_DEPLOY_ROLE_ARN" = "null" ]; then
     echo "Error: ci_deploy_role_arn output is empty or null." >&2
     echo "Ensure ci_oidc_access is configured in the cloud stack tfvars and the stack has been applied." >&2
+    echo "Try: make -C $STACK_DIR output" >&2
     exit 1
 fi
 
@@ -85,6 +95,6 @@ echo "Created: $ENV_FILE"
 echo ""
 echo "Next steps:"
 echo "  1. Review the file: cat $ENV_FILE"
-echo "  2. Copy to consumer project .secure_files/ (add K8S_NAMESPACE if not set)"
+echo "  2. Copy to consumer project .secure_files/ (K8S_NAMESPACE is set when namespace arg is provided)"
 echo "  3. Upload to GitLab Secure Files in the consumer project"
 echo "  4. Ensure the consumer CI pipeline uses id_tokens + assume-role-with-web-identity"
