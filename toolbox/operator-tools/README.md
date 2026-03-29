@@ -101,11 +101,13 @@ One-time bootstrap script that creates the Confluent Cloud service accounts, API
 
 Renders a CI deploy credential bundle from cloud stack Terraform outputs. The output file contains the OIDC role ARN, cluster name, and region needed by consumer CI pipelines to authenticate via GitLab OIDC → AWS IAM role.
 
+Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
+
 ```bash
 ./render-ci-deploy-bundle.sh [stack-dir] [namespace]
 ```
 
-**Requires:** `tofu` (or set `TOFU=terraform`), `jq`.
+**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
 
 **Arguments:**
 
@@ -121,9 +123,42 @@ Renders a CI deploy credential bundle from cloud stack Terraform outputs. The ou
 - `CI_DEPLOY_ROLE_ARN`
 - `K8S_NAMESPACE` (when provided)
 
-The rendered file is intended to be copied to consumer project `.secure_files/` directories (with `K8S_NAMESPACE` added per project) and uploaded to GitLab Secure Files as `staging-k8s-deploy.env`.
+The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `staging-k8s-deploy.env`. Pass the target namespace as the second argument to include `K8S_NAMESPACE` automatically.
 
 **Prerequisite:** The cloud stack must have been applied with `ci_oidc_access` configured. If `ci_deploy_role_arn` is not in the Terraform outputs, the script exits with an error.
+
+### `render-k8s-aws-bundle.sh`
+
+Renders per-service AWS resource `.env` files from Terraform outputs across multiple stacks (cloud, data, tls). The output file contains the exact variable names expected by CI deploy job `sed` placeholder substitution.
+
+Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
+
+```bash
+./render-k8s-aws-bundle.sh --service ingress \
+  --cloud-dir /path/to/environments/staging/us-east-1/cloud \
+  --data-dir  /path/to/environments/staging/us-east-1/data \
+  --tls-dir   /path/to/environments/staging/us-east-1/tls
+```
+
+**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
+
+**Arguments:**
+
+| Flag | Required | Description |
+|---|---|---|
+| `--service` | Yes | One of: `ingress`, `structuring` |
+| `--cloud-dir` | Yes | Path to the cloud stack directory (`karpenter_node_role_name`) |
+| `--data-dir` | Yes | Path to the data stack directory (`ingress_irsa_role_arn` or `structuring_irsa_role_arn`) |
+| `--tls-dir` | ingress only | Path to the tls stack directory (`certificate_arn`) |
+
+**Output:** `<cloud-dir>/.env-bundle/<service>-k8s-aws.env` (`chmod 600`) with:
+
+- **ingress**: `ACM_CERT_ARN`, `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
+- **structuring**: `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
+
+The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `<env>-k8s-aws.env`.
+
+**Prerequisite:** The cloud, data, and (for ingress) tls stacks must have been applied.
 
 ---
 
@@ -164,6 +199,7 @@ toolbox/operator-tools/
 ├── k8s-session.sh
 ├── render-streaming-bundle.sh
 ├── render-ci-deploy-bundle.sh
+├── render-k8s-aws-bundle.sh
 ├── vault-credentials/          # tofu apply → fetches from Vault → writes local .env
 │   └── main.tf
 ├── delinia-credentials/        # same pattern
