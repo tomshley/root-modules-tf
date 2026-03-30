@@ -51,6 +51,7 @@ resource "aws_iam_policy" "karpenter_controller" {
           "ec2:DescribeInstanceTypes",
           "ec2:DescribeLaunchTemplates",
           "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSpotPriceHistory",
           "ec2:DescribeSubnets",
         ]
         Resource = "*"
@@ -158,6 +159,12 @@ resource "aws_iam_instance_profile" "karpenter_node" {
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-karpenter-node"
   })
+}
+
+resource "aws_eks_access_entry" "karpenter_node" {
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.karpenter_node.arn
+  type          = "EC2_LINUX"
 }
 
 resource "aws_sqs_queue" "karpenter_interruption" {
