@@ -6,6 +6,15 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.3] — 2026-03-30
+
+### Fixes
+
+- **aws-eks-karpenter-prereqs**: Add `aws_eks_access_entry` (type `EC2_LINUX`) for the Karpenter node role. Without this, kubelet on Karpenter-launched instances cannot authenticate with the EKS API server, so nodes never register with the cluster and Karpenter enters a launch/terminate retry loop.
+- **aws-eks-karpenter-prereqs**: Add missing `ec2:DescribeSpotPriceHistory` permission to Karpenter controller policy. Required for spot instance pricing optimization.
+
+---
+
 ## [1.3.2] — 2026-03-30
 
 ### Fixes
