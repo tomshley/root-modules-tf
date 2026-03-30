@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.6] — 2026-03-30
+
+### Features
+
+- **aws-eks-nodegroup**: Add optional `kubernetes_version` variable to pin node group Kubernetes version. When `null` (default), inherits cluster version at creation time with no auto-upgrade on subsequent applies.
+
+---
+
 ## [1.3.5] — 2026-03-30
 
 ### Fixes

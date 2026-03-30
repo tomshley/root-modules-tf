@@ -69,3 +69,9 @@ variable "tags" {
   default     = {}
   description = "Additional tags to apply to all resources"
 }
+
+variable "kubernetes_version" {
+  type        = string
+  default     = null
+  description = "Kubernetes version for the node group. If null, inherits cluster version at creation time (no auto-upgrade on subsequent applies)."
+}
