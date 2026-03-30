@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.4] — 2026-03-30
+
+### Fixes
+
+- **aws-eks-cluster**: Tag the EKS-managed cluster security group with `karpenter.sh/discovery` so Karpenter-launched instances receive it via `securityGroupSelectorTerms`. Without this tag, Karpenter nodes only get the Terraform-created additional SG, which lacks the automatic node↔control-plane communication rules, preventing kubelet from registering with the API server.
+
+---
+
 ## [1.3.3] — 2026-03-30
 
 ### Fixes
