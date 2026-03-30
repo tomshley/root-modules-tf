@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.2] — 2026-03-30
+
+### Fixes
+
+- **aws-eks-karpenter-prereqs**: Add missing IAM instance profile permissions (`iam:*InstanceProfile`) to Karpenter controller policy. Required for Karpenter v1 auto-managed instance profiles per EC2NodeClass. Without these permissions, EC2NodeClasses remain in `Unknown` status and NodePools stay `not ready`, preventing node provisioning.
+
+---
+
 ## [1.3.1] — 2026-03-29
 
 ### Features
