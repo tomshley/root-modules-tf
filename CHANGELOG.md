@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.3.5] — 2026-03-30
+
+### Fixes
+
+- **aws-eks-cluster**: Update default `kubernetes_version` from `1.31` to `1.34`. Kubernetes 1.31 entered EKS Extended Support on November 26, 2025, adding $0.50/hr to the base $0.10/hr control plane cost (~$365/mo surcharge). Version 1.34 is in standard support until December 2, 2026.
+
+---
+
 ## [1.3.4] — 2026-03-30
 
 ### Fixes
