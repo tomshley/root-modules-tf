@@ -89,6 +89,19 @@ resource "aws_iam_policy" "karpenter_controller" {
         Action   = "eks:DescribeCluster"
         Resource = "arn:aws:eks:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/${var.cluster_name}"
       },
+      {
+        Sid    = "InstanceProfile"
+        Effect = "Allow"
+        Action = [
+          "iam:AddRoleToInstanceProfile",
+          "iam:CreateInstanceProfile",
+          "iam:DeleteInstanceProfile",
+          "iam:GetInstanceProfile",
+          "iam:RemoveRoleFromInstanceProfile",
+          "iam:TagInstanceProfile",
+        ]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/*"
+      },
     ]
   })
 
