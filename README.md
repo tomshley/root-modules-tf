@@ -33,6 +33,8 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-cluster` | AWS | EKS control plane with KMS, OIDC, CloudWatch | **New** |
 | `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times) | **New** |
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
+| `aws-eks-karpenter-controller` | AWS | Karpenter controller deployment on EKS with service account and configuration | **New** |
+| `aws-eks-metrics-server` | AWS | Metrics Server deployment on EKS for HPA and autoscaling metrics | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-event-journal-db` | AWS | Aurora PostgreSQL Serverless v2 module for EKS-hosted event journal workloads | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
