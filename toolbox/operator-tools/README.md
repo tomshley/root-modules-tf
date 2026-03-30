@@ -101,11 +101,13 @@ One-time bootstrap script that creates the Confluent Cloud service accounts, API
 
 Renders a CI deploy credential bundle from cloud stack Terraform outputs. The output file contains the OIDC role ARN, cluster name, and region needed by consumer CI pipelines to authenticate via GitLab OIDC → AWS IAM role.
 
+Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
+
 ```bash
 ./render-ci-deploy-bundle.sh [stack-dir] [namespace]
 ```
 
-**Requires:** `tofu` (or set `TOFU=terraform`), `jq`.
+**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
 
 **Arguments:**
 
@@ -121,9 +123,127 @@ Renders a CI deploy credential bundle from cloud stack Terraform outputs. The ou
 - `CI_DEPLOY_ROLE_ARN`
 - `K8S_NAMESPACE` (when provided)
 
-The rendered file is intended to be copied to consumer project `.secure_files/` directories (with `K8S_NAMESPACE` added per project) and uploaded to GitLab Secure Files as `staging-k8s-deploy.env`.
+The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `staging-k8s-deploy.env`. Pass the target namespace as the second argument to include `K8S_NAMESPACE` automatically.
 
 **Prerequisite:** The cloud stack must have been applied with `ci_oidc_access` configured. If `ci_deploy_role_arn` is not in the Terraform outputs, the script exits with an error.
+
+### `render-k8s-aws-bundle.sh`
+
+Renders per-service AWS resource `.env` files from Terraform outputs across multiple stacks (cloud, data, tls). The output file contains the exact variable names expected by CI deploy job `sed` placeholder substitution.
+
+Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
+
+```bash
+./render-k8s-aws-bundle.sh --service ingress \
+  --cloud-dir /path/to/environments/staging/us-east-1/cloud \
+  --data-dir  /path/to/environments/staging/us-east-1/data \
+  --tls-dir   /path/to/environments/staging/us-east-1/tls
+```
+
+**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
+
+**Arguments:**
+
+| Flag | Required | Description |
+|---|---|---|
+| `--service` | Yes | One of: `ingress`, `structuring` |
+| `--cloud-dir` | Yes | Path to the cloud stack directory (`karpenter_node_role_name`) |
+| `--data-dir` | Yes | Path to the data stack directory (`ingress_irsa_role_arn` or `structuring_irsa_role_arn`) |
+| `--tls-dir` | ingress only | Path to the tls stack directory (`certificate_arn`) |
+
+**Output:** `<cloud-dir>/.env-bundle/<service>-k8s-aws.env` (`chmod 600`) with:
+
+- **ingress**: `ACM_CERT_ARN`, `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
+- **structuring**: `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
+
+The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `<env>-k8s-aws.env`.
+
+**Prerequisite:** The cloud, data, and (for ingress) tls stacks must have been applied.
+
+### `render-service-bundle.sh`
+
+Orchestrator that renders **all** TF-derivable secure files for a service into the target project's `.secure_files/` directory in one command. Combines the work of `render-ci-deploy-bundle.sh`, `render-k8s-aws-bundle.sh`, `render-streaming-bundle.sh`, and adds db-config, db credentials (via Secrets Manager), s3-config, and RDS CA bundle.
+
+```bash
+./render-service-bundle.sh --service ingress \
+  --env staging --region us-east-1 \
+  --infra-dir /path/to/ami-infrastructure \
+  --target-dir /path/to/ami-platform-ingress-server
+```
+
+**Requires:** `tofu` (or set `TOFU=terraform`), `make`, `jq`, `curl`, `aws` CLI.
+
+**Arguments:**
+
+| Flag | Required | Description |
+|---|---|---|
+| `--service` | Yes | One of: `ingress`, `structuring` |
+| `--env` | Yes | Environment name (`staging`, `production`) |
+| `--region` | Yes | AWS region (e.g. `us-east-1`) |
+| `--infra-dir` | Yes | Path to `ami-infrastructure` repo root |
+| `--target-dir` | Yes | Path to target service repo root |
+
+**Output (both services):**
+
+- `<env>-k8s-deploy.env` — CI deploy credentials (cluster name, OIDC role, region, namespace)
+- `<env>-k8s-aws.env` — IRSA role, Karpenter node role, ACM cert (ingress only)
+- `<env>-k8s-kafka.env` — Kafka + Schema Registry credentials (hyphenated keys for k8s secret)
+- `<env>-k8s-s3-config.env` — S3 bucket name + region (hyphenated keys for k8s configmap)
+
+**Output (ingress only):**
+
+- `<env>-k8s-db-config.env` — Aurora endpoint, port, database (hyphenated keys for k8s configmap)
+- `<env>-k8s-db.env` — Aurora username + password from Secrets Manager (hyphenated keys for k8s secret)
+- `<env>-k8s-rds-ca-bundle.pem` — Amazon RDS root CA certificate (downloaded)
+- `<env>-k8s-rds-cert.env` — Pointer to the PEM file
+
+**NOT rendered (manual):** `<env>-k8s-registry.env` — GitLab container registry PAT. The script warns if this file is missing.
+
+**Prerequisite:** All stacks (cloud, data, tls, streaming) must have been applied. AWS credentials must be loaded for Secrets Manager access (ingress db password).
+
+### `sync-secure-files.sh`
+
+Uploads all files from a local `.secure_files/` directory to a GitLab project's CI/CD Secure Files store via the API. For each local file, replaces the existing remote copy (if any) with the current version. The script downloads a backup of the existing remote secure file before delete/recreate, retries API calls, restores the previous remote file if replacement upload fails, and stops on the first unrecoverable error.
+
+```bash
+./sync-secure-files.sh --project-id 76128095 --token "$GITLAB_TOKEN"
+```
+
+**Requires:** `curl`, `jq`.
+
+**Arguments:**
+
+| Flag | Required | Description |
+|---|---|---|
+| `--project-id` | Yes | Numeric GitLab project ID |
+| `--token` | No | GitLab PAT with `api` scope (falls back to `GITLAB_TOKEN` env var) |
+| `--secure-dir` | No | Path to local `.secure_files/` (default: `.secure_files`) |
+| `--gitlab-url` | No | GitLab API base URL (default: `https://gitlab.com`) |
+
+**Output:** Prints `UPD` (replaced), `ADD` (new), or `FAIL` per file. Exits non-zero on the first unrecoverable sync failure.
+
+---
+
+## Operator Workflow
+
+The complete secure-file provisioning workflow for a new environment or after infrastructure changes:
+
+```bash
+TOOLS=".tomshley-cicd-tmp/tomshley-oss/root-modules-tf/toolbox/operator-tools"
+
+# 1. Load AWS credentials
+source "$TOOLS/aws-session.sh" /path/to/ami-infrastructure/.secure_files/staging-us-east-1-cloud.env
+
+# 2. Render all secure files for a service
+"$TOOLS/render-service-bundle.sh" --service ingress \
+  --env staging --region us-east-1 \
+  --infra-dir /path/to/ami-infrastructure \
+  --target-dir /path/to/ami-platform-ingress-server
+
+# 3. Upload to GitLab Secure Files
+"$TOOLS/sync-secure-files.sh" --project-id 76128095 \
+  --secure-dir /path/to/ami-platform-ingress-server/.secure_files
+```
 
 ---
 
@@ -164,6 +284,9 @@ toolbox/operator-tools/
 ├── k8s-session.sh
 ├── render-streaming-bundle.sh
 ├── render-ci-deploy-bundle.sh
+├── render-k8s-aws-bundle.sh
+├── render-service-bundle.sh
+├── sync-secure-files.sh
 ├── vault-credentials/          # tofu apply → fetches from Vault → writes local .env
 │   └── main.tf
 ├── delinia-credentials/        # same pattern
