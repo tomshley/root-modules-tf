@@ -6,6 +6,45 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.4.0]
+
+### Breaking Changes
+
+- **aws-eks-event-journal-db** renamed to **aws-eks-aurora-cluster**. Consumers must update source paths and add `workload_name` and `database_name` (now required, no default).
+
+### Features
+
+- **aws-eks-aurora-cluster**: Generic Aurora PostgreSQL Serverless v2 module replacing the single-purpose `aws-eks-event-journal-db`.
+  - `workload_preset` variable with presets: `event-store`, `read-store`, `generic` — matching `cloudflare-website-acceleration` profile pattern.
+  - Per-field nullable overrides (`max_connections`, `wal_buffers`, `random_page_cost`, `work_mem`) resolved via nullable ternary (preset value used when override is null).
+  - `reader_instance_count` for read replicas (default 0).
+  - Always-on audit parameters: `log_connections`, `log_disconnections`.
+  - All resource names parameterized via `workload_name` — no hardcoded identifiers.
+  - Nullable `security_group_description` and `parameter_group_description` overrides for ForceNew-safe migration.
+  - `workload_name` validation tightened to reject consecutive hyphens (e.g. `my--thing`).
+  - Output names unchanged for backward compatibility.
+
+### Examples
+
+- **aws-eks-aurora-event-store**: Write-optimized cluster with event-store preset.
+- **aws-eks-aurora-read-store**: Read-optimized cluster with reader instance.
+- **aws-eks-aurora-generic**: No-preset cluster with individual override.
+- **aws-eks-aurora-cqrs-pair**: CQRS composition demonstrating two module calls.
+
+### Migration
+
+Existing consumers update by:
+1. Changing source path from `aws-eks-event-journal-db` to `aws-eks-aurora-cluster`
+2. Adding `workload_name = "event-journal"`
+3. Adding `workload_preset = "event-store"`
+4. Adding `database_name = "event_journal"` (previously defaulted)
+5. Adding `security_group_description = "Aurora PostgreSQL access for event journal workloads"` (preserves original ForceNew attribute)
+6. Adding `parameter_group_description = "Aurora PostgreSQL event journal tuning"` (preserves original ForceNew attribute)
+
+`moved` blocks in the module handle state migration automatically — `tofu plan` will show moves (not destroy/create) for all renamed resources. Steps 5–6 preserve ForceNew attribute values to prevent security group and parameter group recreation. No manual `tofu state mv` or CI changes required.
+
+---
+
 ## [1.3.6] — 2026-03-30
 
 ### Features
