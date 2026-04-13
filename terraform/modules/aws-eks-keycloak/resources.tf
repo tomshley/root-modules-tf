@@ -26,10 +26,13 @@ resource "kubernetes_namespace" "keycloak" {
 }
 
 locals {
-  namespace        = var.create_namespace ? kubernetes_namespace.keycloak[0].metadata[0].name : var.namespace
-  realm_import      = var.realm_json_path != null
-  realm_content_hash = local.realm_import ? sha256(file(var.realm_json_path)) : null
+  namespace          = var.create_namespace ? kubernetes_namespace.keycloak[0].metadata[0].name : var.namespace
+  realm_import       = var.realm_json_path != null
+  realm_content      = local.realm_import ? file(var.realm_json_path) : null
+  realm_content_hash = local.realm_import ? sha256(local.realm_content) : null
   image_tag_values   = var.keycloak_image_tag != null ? { image = { tag = var.keycloak_image_tag } } : {}
+  service_host = "${var.release_name}.${local.namespace}.svc.cluster.local"
+  port_suffix  = var.service_port != 80 ? ":${var.service_port}" : ""
   common_labels = merge({
     "app.kubernetes.io/managed-by" = "terraform"
     "app.kubernetes.io/part-of"    = "keycloak"
@@ -39,7 +42,7 @@ locals {
 
 resource "kubernetes_secret" "db_credentials" {
   metadata {
-    name      = "keycloak-db-credentials"
+    name      = "${var.release_name}-db-credentials"
     namespace = local.namespace
     labels    = local.common_labels
     annotations = {
@@ -64,7 +67,7 @@ resource "kubernetes_secret" "db_credentials" {
 
 resource "kubernetes_secret" "admin_credentials" {
   metadata {
-    name      = "keycloak-admin-credentials"
+    name      = "${var.release_name}-admin-credentials"
     namespace = local.namespace
     labels    = local.common_labels
     annotations = {
@@ -85,25 +88,25 @@ resource "kubernetes_config_map" "realm_import" {
   count = local.realm_import ? 1 : 0
 
   metadata {
-    name      = "keycloak-realm-import"
+    name      = "${var.release_name}-realm-import"
     namespace = local.namespace
     labels    = local.common_labels
   }
 
   data = {
-    "realm.json" = file(var.realm_json_path)
+    "realm.json" = local.realm_content
   }
 }
 
 resource "helm_release" "keycloak" {
-  name             = "keycloak"
+  name             = var.release_name
   namespace        = local.namespace
   create_namespace = false
   repository       = "oci://registry-1.docker.io/bitnamicharts"
   chart            = "keycloak"
   version          = var.keycloak_chart_version
 
-  values = [
+  values = concat([
     yamlencode(merge({
       replicaCount = var.replicas
       auth = {
@@ -124,6 +127,9 @@ resource "helm_release" "keycloak" {
       }
       service = {
         type = var.service_type
+        ports = {
+          http = var.service_port
+        }
       }
       resources = {
         requests = {
@@ -147,8 +153,8 @@ resource "helm_release" "keycloak" {
       podAnnotations = {
         "checksum/realm-config" = local.realm_content_hash
       }
-    } : {}))
-  ]
+    } : {})),
+  ], var.extra_helm_values)
 
   depends_on = [
     kubernetes_secret.db_credentials,
