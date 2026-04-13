@@ -37,6 +37,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-metrics-server` | AWS | Metrics Server deployment on EKS for HPA and autoscaling metrics | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic) and per-field overrides | **New** |
+| `aws-eks-keycloak` | AWS | Keycloak identity server on EKS via Bitnami Helm chart, DB credentials via Secrets Manager ARN, optional realm import | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
 | `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
 | `cloudflare-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
@@ -57,6 +58,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/aws-eks-aurora-read-store/` — Read-optimized Aurora cluster with reader instance
 - `terraform/examples/aws-eks-aurora-generic/` — Aurora cluster with no preset tuning, individual override
 - `terraform/examples/aws-eks-aurora-cqrs-pair/` — CQRS composition: event-store + read-store
+- `terraform/examples/aws-eks-keycloak-with-aurora/` — Keycloak identity server composed with Aurora (generic preset) database
 - `terraform/examples/cloudflare-domain-baseline-minimal/` — baseline Cloudflare zone posture with curated DNS
 - `terraform/examples/cloudflare-domain-baseline-with-mail/` — baseline posture composed with mail DNS publication
 - `terraform/examples/cloudflare-public-website-standard/` — public website acceleration with the standard profile
