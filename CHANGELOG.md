@@ -6,7 +6,26 @@ This project follows Semantic Versioning.
 
 ---
 
-## [1.4.0]
+## [1.5.0]
+
+### Features
+
+- **aws-eks-keycloak**: Keycloak identity server deployment on EKS via Bitnami Helm chart.
+  - Follows `aws-eks-karpenter-controller` / `aws-eks-metrics-server` Helm-on-EKS pattern.
+  - DB credentials injected via Secrets Manager ARN from `aws-eks-aurora-cluster` output — never plaintext.
+  - Admin credentials via separate Secrets Manager ARN.
+  - Optional realm JSON import via ConfigMap (`keycloakConfigCli`).
+  - Configurable replicas, resource limits, service type, image tag override.
+  - Kubernetes provider required alongside Helm (namespace, secrets, configmap management).
+  - Outputs: in-cluster base URL, JWKS URI template, admin console URL, release metadata.
+
+### Examples
+
+- **aws-eks-keycloak-with-aurora**: Composed example — `aws-eks-aurora-cluster` (generic preset, `workload_name = "keycloak"`) + `aws-eks-keycloak` wired via module outputs.
+
+---
+
+## [1.4.1]
 
 ### Breaking Changes
 
