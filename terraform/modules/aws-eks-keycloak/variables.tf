@@ -1,3 +1,14 @@
+variable "release_name" {
+  description = "Name of the Helm release and prefix for all K8s resources (secrets, configmap). Must be unique within the namespace when deploying multiple Keycloak instances."
+  type        = string
+  default     = "keycloak"
+
+  validation {
+    condition     = can(regex("^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$", var.release_name)) && length(var.release_name) <= 53
+    error_message = "release_name must be a valid DNS label (lowercase alphanumeric + hyphens, max 53 chars)."
+  }
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
@@ -92,6 +103,17 @@ variable "realm_json_path" {
 
 # --- Networking ---
 
+variable "service_port" {
+  description = "Kubernetes Service port for Keycloak HTTP. Reflects the Bitnami chart default (HTTP/80). Override if TLS termination or a non-standard port is configured via extra_helm_values."
+  type        = number
+  default     = 80
+
+  validation {
+    condition     = var.service_port >= 1 && var.service_port <= 65535
+    error_message = "service_port must be a valid TCP port (1-65535)."
+  }
+}
+
 variable "service_type" {
   description = "Kubernetes Service type for Keycloak (ClusterIP, LoadBalancer, NodePort)"
   type        = string
@@ -144,6 +166,12 @@ variable "helm_timeout" {
   description = "Helm release timeout in seconds. Keycloak runs DB migrations on first boot, so the default is higher than lightweight chart modules."
   type        = number
   default     = 600
+}
+
+variable "extra_helm_values" {
+  description = "Additional Helm values YAML strings appended after module-managed values. Last value wins (standard Helm merge semantics). Use for TLS, ingress, extra env vars, or any chart value not exposed as a module variable."
+  type        = list(string)
+  default     = []
 }
 
 variable "tags" {

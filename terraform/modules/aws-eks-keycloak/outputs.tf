@@ -24,21 +24,21 @@ output "keycloak_service_name" {
 }
 
 output "keycloak_service_port" {
-  description = "Kubernetes Service port for Keycloak HTTP. Reflects the Bitnami chart default (HTTP/80). If TLS is enabled via extra Helm values, consumers should override downstream references."
-  value       = 80
+  description = "Kubernetes Service port for Keycloak HTTP. Defaults to the Bitnami chart default (HTTP/80). Override via var.service_port if TLS or a non-standard port is configured."
+  value       = var.service_port
 }
 
 output "base_url" {
-  description = "Keycloak base URL (in-cluster). Append /realms/<realm> for the OIDC issuer URL, or /admin for the admin console."
-  value       = "http://${helm_release.keycloak.name}.${helm_release.keycloak.namespace}.svc.cluster.local"
+  description = "Keycloak base URL (in-cluster, HTTP). Append /realms/<realm> for the OIDC issuer URL, or /admin for the admin console. When TLS is configured via extra_helm_values, consumers must reconstruct the URL with https://."
+  value       = "http://${local.service_host}${local.port_suffix}"
 }
 
 output "jwks_uri_template" {
-  description = "JWKS URI template. Replace {realm} with the target realm name for the realm-specific JWKS endpoint."
-  value       = "http://${helm_release.keycloak.name}.${helm_release.keycloak.namespace}.svc.cluster.local/realms/{realm}/protocol/openid-connect/certs"
+  description = "JWKS URI template (in-cluster, HTTP). Replace {realm} with the target realm name. When TLS is configured via extra_helm_values, consumers must reconstruct the URL with https://."
+  value       = "http://${local.service_host}${local.port_suffix}/realms/{realm}/protocol/openid-connect/certs"
 }
 
 output "admin_console_url" {
-  description = "Keycloak admin console URL (in-cluster)"
-  value       = "http://${helm_release.keycloak.name}.${helm_release.keycloak.namespace}.svc.cluster.local/admin"
+  description = "Keycloak admin console URL (in-cluster, HTTP). When TLS is configured via extra_helm_values, consumers must reconstruct the URL with https://."
+  value       = "http://${local.service_host}${local.port_suffix}/admin"
 }
