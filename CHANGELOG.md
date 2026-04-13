@@ -6,7 +6,34 @@ This project follows Semantic Versioning.
 
 ---
 
-## [1.4.0]
+## [1.5.0] — 2026-04-13
+
+### Features
+
+- **aws-eks-keycloak**: Keycloak identity server deployment on EKS via Bitnami Helm chart.
+  - Follows `aws-eks-karpenter-controller` / `aws-eks-metrics-server` Helm-on-EKS pattern.
+  - DB credentials injected via Secrets Manager ARN from `aws-eks-aurora-cluster` output — never plaintext.
+  - Admin credentials via separate Secrets Manager ARN.
+  - Optional realm JSON import via ConfigMap (`keycloakConfigCli`).
+  - Configurable replicas, resource limits, service type, image tag override.
+  - Kubernetes provider required alongside Helm (namespace, secrets, configmap management).
+  - Outputs: in-cluster base URL, JWKS URI template, admin console URL, release metadata.
+  - `release_name` variable for multi-instance composition (K8s resource names and Helm release name derived from it).
+  - `service_port` variable wired into Helm `service.ports.http` and all URL outputs (`base_url`, `jwks_uri_template`, `admin_console_url`). Port suffix appended only when non-80.
+  - `extra_helm_values` escape hatch for TLS, ingress, extra env vars, or any chart value not exposed as a module variable.
+- **aws-eks-aurora-cluster**: Add `master_username` output for downstream consumers that need the admin username (e.g. Keycloak DB credential wiring).
+
+### Fixes
+
+- **aws-eks-keycloak**: Add `fullnameOverride` to Helm values so Kubernetes resource names match the release name consistently. Remove unused `db-user` secret key that was never referenced by the chart.
+
+### Examples
+
+- **aws-eks-keycloak-with-aurora**: Composed example — `aws-eks-aurora-cluster` (generic preset, `workload_name = "keycloak"`) + `aws-eks-keycloak` wired via module outputs.
+
+---
+
+## [1.4.1]
 
 ### Breaking Changes
 
