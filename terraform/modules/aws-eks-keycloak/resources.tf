@@ -56,7 +56,6 @@ resource "kubernetes_secret" "db_credentials" {
   # Store Driver syncs actual credentials from the Secrets Manager ARN
   # annotated above.
   data = {
-    db-user     = var.db_user
     db-password = var.db_password != null ? var.db_password : "placeholder-sync-from-secrets-manager"
   }
 
@@ -108,7 +107,8 @@ resource "helm_release" "keycloak" {
 
   values = concat([
     yamlencode(merge({
-      replicaCount = var.replicas
+      fullnameOverride = var.release_name
+      replicaCount     = var.replicas
       auth = {
         adminUser         = var.admin_user
         existingSecret    = kubernetes_secret.admin_credentials.metadata[0].name
