@@ -6,7 +6,7 @@ This project follows Semantic Versioning.
 
 ---
 
-## [1.5.0]
+## [1.5.0] — 2026-04-13
 
 ### Features
 
@@ -21,6 +21,11 @@ This project follows Semantic Versioning.
   - `release_name` variable for multi-instance composition (K8s resource names and Helm release name derived from it).
   - `service_port` variable wired into Helm `service.ports.http` and all URL outputs (`base_url`, `jwks_uri_template`, `admin_console_url`). Port suffix appended only when non-80.
   - `extra_helm_values` escape hatch for TLS, ingress, extra env vars, or any chart value not exposed as a module variable.
+- **aws-eks-aurora-cluster**: Add `master_username` output for downstream consumers that need the admin username (e.g. Keycloak DB credential wiring).
+
+### Fixes
+
+- **aws-eks-keycloak**: Add `fullnameOverride` to Helm values so Kubernetes resource names match the release name consistently. Remove unused `db-user` secret key that was never referenced by the chart.
 
 ### Examples
 
