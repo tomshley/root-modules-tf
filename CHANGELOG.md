@@ -18,6 +18,9 @@ This project follows Semantic Versioning.
   - Configurable replicas, resource limits, service type, image tag override.
   - Kubernetes provider required alongside Helm (namespace, secrets, configmap management).
   - Outputs: in-cluster base URL, JWKS URI template, admin console URL, release metadata.
+  - `release_name` variable for multi-instance composition (K8s resource names and Helm release name derived from it).
+  - `service_port` variable wired into Helm `service.ports.http` and all URL outputs (`base_url`, `jwks_uri_template`, `admin_console_url`). Port suffix appended only when non-80.
+  - `extra_helm_values` escape hatch for TLS, ingress, extra env vars, or any chart value not exposed as a module variable.
 
 ### Examples
 

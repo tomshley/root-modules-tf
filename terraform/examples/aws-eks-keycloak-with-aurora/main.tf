@@ -40,6 +40,11 @@ module "keycloak" {
   cluster_name = "${var.project_name_prefix}-cluster"
   namespace    = "identity"
 
+  # Multi-instance: release_name prefixes all K8s resources and the Helm
+  # release. Use a unique name per instance when deploying multiple Keycloaks
+  # in the same namespace.
+  release_name = "keycloak"
+
   db_secret_arn = module.keycloak_db.master_secret_arn
   db_endpoint   = module.keycloak_db.cluster_endpoint
   db_port       = module.keycloak_db.port
@@ -47,6 +52,24 @@ module "keycloak" {
   db_user       = "postgres"
 
   admin_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example-eks-keycloak-admin-AbCdEf"
+
+  # Override the Kubernetes Service port when using a non-standard port or TLS
+  # termination. Reflected in base_url, jwks_uri_template, and
+  # admin_console_url outputs. Port suffix is omitted when 80.
+  # service_port = 8443
+
+  # Escape hatch: append arbitrary Helm values after module-managed values.
+  # Last value wins (standard Helm merge semantics). Useful for TLS, ingress,
+  # extra env vars, or any chart value not exposed as a module variable.
+  # extra_helm_values = [
+  #   yamlencode({
+  #     ingress = {
+  #       enabled   = true
+  #       hostname  = "id.example.com"
+  #       tls       = true
+  #     }
+  #   })
+  # ]
 }
 
 # --- Outputs ---
