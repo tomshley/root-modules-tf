@@ -9,12 +9,35 @@
 # credentials before calling this module.
 ###############################################################################
 
-# --- Kubernetes Secret for DB credentials (ExternalSecret placeholder) ---
+# --- Kubernetes Secret for DB credentials ---
 #
-# In production, consumers should use ExternalSecretsOperator or CSI Secrets
-# Store Driver to sync from Secrets Manager. This module creates a placeholder
-# Kubernetes secret that the consumer's external-secrets controller populates
-# from var.db_secret_arn. The Helm release references this secret by name.
+# When var.db_password is provided it is used directly. When null, the module
+# resolves the real password from Secrets Manager (var.db_secret_arn) at plan
+# time — no ExternalSecretsOperator required. ignore_changes on data prevents
+# Terraform from overwriting ESO-managed rotations once the secret exists.
+
+# --- Resolve credentials from Secrets Manager when not explicitly provided ---
+#
+# This eliminates the ExternalSecretsOperator dependency for first-apply
+# bootstrap. The data sources are only created when the corresponding
+# password variable is null.
+
+data "aws_secretsmanager_secret_version" "db" {
+  count     = var.db_password == null ? 1 : 0
+  secret_id = var.db_secret_arn
+}
+
+data "aws_secretsmanager_secret_version" "admin" {
+  count     = var.admin_password == null && var.admin_secret_arn != null ? 1 : 0
+  secret_id = var.admin_secret_arn
+}
+
+locals {
+  resolved_db_password    = var.db_password != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
+  resolved_admin_password = var.admin_password != null ? var.admin_password : (
+    var.admin_secret_arn != null ? jsondecode(data.aws_secretsmanager_secret_version.admin[0].secret_string)["password"] : "placeholder-sync-from-secrets-manager"
+  )
+}
 
 resource "kubernetes_namespace" "keycloak" {
   count = var.create_namespace ? 1 : 0
@@ -50,13 +73,8 @@ resource "kubernetes_secret" "db_credentials" {
     }
   }
 
-  # When var.db_password is provided, the secret is populated with real
-  # credentials and the Helm release can connect on first apply. When null,
-  # placeholder values are written and ExternalSecretsOperator or CSI Secrets
-  # Store Driver syncs actual credentials from the Secrets Manager ARN
-  # annotated above.
   data = {
-    db-password = var.db_password != null ? var.db_password : "placeholder-sync-from-secrets-manager"
+    db-password = local.resolved_db_password
   }
 
   lifecycle {
@@ -75,7 +93,7 @@ resource "kubernetes_secret" "admin_credentials" {
   }
 
   data = {
-    admin-password = var.admin_password != null ? var.admin_password : "placeholder-sync-from-secrets-manager"
+    admin-password = local.resolved_admin_password
   }
 
   lifecycle {
