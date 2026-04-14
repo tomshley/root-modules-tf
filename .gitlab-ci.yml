@@ -4,13 +4,13 @@
 
 include:
   - project: 'tomshley/brands/global/tware/tech/products/provisioning/cicd-pipelines'
-    ref: 'v0.5.0'
+    ref: 'v0.5.5'
     file: '/adapters/gitlab/ci/adapter.yml'
 
 variables:
   BASE_CONTAINERS_REGISTRY: registry.gitlab.com/tomshley/brands/global/tware/tech/products/provisioning/base-containers
-  BASE_CONTAINERS_UPSTREAM_TAG: "0.4.3"
-  CICD_PIPELINES_RUNNER_TAG: "0.5.0"
+  BASE_CONTAINERS_UPSTREAM_TAG: "0.5.0"
+  CICD_PIPELINES_RUNNER_TAG: "0.5.5"
 
 # Disable mirror sync job (not needed for this project)
 tomshley-cicd-mirror-sync:
