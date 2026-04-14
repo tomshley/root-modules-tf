@@ -26,6 +26,7 @@ This project follows Semantic Versioning.
 ### Fixes
 
 - **aws-eks-keycloak**: Add `fullnameOverride` to Helm values so Kubernetes resource names match the release name consistently. Remove unused `db-user` secret key that was never referenced by the chart.
+- **aws-eks-keycloak**: Resolve DB and admin passwords from Secrets Manager when not explicitly provided. Eliminates ExternalSecretsOperator dependency for first-apply bootstrap — the module reads real credentials at plan time and populates Kubernetes secrets. `ignore_changes` on secret data preserves ESO-managed rotation support.
 
 ### Examples
 
