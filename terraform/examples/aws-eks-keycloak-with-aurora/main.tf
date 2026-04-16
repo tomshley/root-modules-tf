@@ -49,7 +49,7 @@ module "keycloak" {
   db_endpoint   = module.keycloak_db.cluster_endpoint
   db_port       = module.keycloak_db.port
   db_name       = module.keycloak_db.database_name
-  db_user       = "postgres"
+  db_user       = module.keycloak_db.master_username
 
   admin_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example-eks-keycloak-admin-AbCdEf"
 
