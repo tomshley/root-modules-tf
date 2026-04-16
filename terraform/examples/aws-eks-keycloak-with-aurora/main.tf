@@ -7,10 +7,10 @@
 #
 # Replace placeholder values before applying.
 #
-# This example assumes ExternalSecretsOperator (or CSI Secrets Store Driver)
-# syncs DB and admin credentials from Secrets Manager into K8s secrets. For
-# non-ESO deployments, also pass db_password and admin_password to the
-# keycloak module so Keycloak can connect on first apply.
+# The Keycloak module resolves DB and admin passwords from Secrets Manager
+# at plan time when db_password/admin_password are null — no ESO required
+# for first apply. ignore_changes on K8s secret data preserves ESO-managed
+# rotation if configured later.
 ###############################################################################
 
 variable "project_name_prefix" {
