@@ -38,7 +38,7 @@ variable "confluent_config" {
     environment_id          = string # e.g. "env-abc123"
     environment_name        = string # e.g. "staging"
     kafka_cluster_id        = string # e.g. "lkc-abc123"
-    kafka_rest_endpoint     = string # e.g. "https://pkc-abc123.us-east-1.aws.confluent.cloud:443/kafka/v3"
+    kafka_rest_endpoint     = string # e.g. "https://pkc-abc123.us-east-1.aws.confluent.cloud:443"
     kafka_bootstrap_servers = string # e.g. "pkc-abc123.us-east-1.aws.confluent.cloud:9092"
     schema_registry = optional(object({
       cluster_id    = string # e.g. "lsrc-abc123"
