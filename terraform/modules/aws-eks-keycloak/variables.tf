@@ -76,8 +76,9 @@ variable "db_password" {
 # --- Admin credentials ---
 
 variable "admin_secret_arn" {
-  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password)"
+  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password). Required when admin_password is null."
   type        = string
+  default     = null
 }
 
 variable "admin_user" {

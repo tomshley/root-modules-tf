@@ -7,4 +7,4 @@
 # - commercial_managed: Full Confluent Cloud managed streaming
 # - gov_hybrid: Scaffold for future hybrid deployment
 #
-# No resources are created when confluent = null.
+# No resources are created when confluent_config = null.
