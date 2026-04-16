@@ -10,9 +10,8 @@ output "topic_catalog_summary" {
   description = "Summary of all topics loaded from service catalogs."
   value = {
     by_role = {
-      core = length([for t in local.all_topics : t if t.role == "core"])
-      flat = length([for t in local.all_topics : t if t.role == "flat"])
-      dlq  = length([for t in local.all_topics : t if t.role == "dlq"])
+      for role in distinct([for t in local.all_topics : t.role]) :
+      role => length([for t in local.all_topics : t if t.role == role])
     }
     by_service = {
       for svc in distinct([for t in local.all_topics : t.service]) :
