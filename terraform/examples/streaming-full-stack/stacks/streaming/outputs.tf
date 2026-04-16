@@ -36,13 +36,11 @@ output "active_topic_summary" {
 output "kafka_bootstrap_servers" {
   description = "Kafka bootstrap servers for client connections. Null when unconfigured."
   value       = local.kafka_bootstrap_servers
-  sensitive   = true
 }
 
 output "schema_registry_url" {
   description = "Schema Registry URL for client connections. Null when SR is not configured."
   value       = local.schema_registry_url
-  sensitive   = true
 }
 
 output "workload_service_account_ids" {
