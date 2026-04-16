@@ -21,6 +21,16 @@ locals {
     api_key    = var.kafka_admin_api_key
     api_secret = var.kafka_admin_api_secret
   } : null
+}
+
+check "credentials_accompany_config" {
+  assert {
+    condition     = var.confluent_config == null || (var.kafka_admin_api_key != null && var.kafka_admin_api_secret != null)
+    error_message = "kafka_admin_api_key and kafka_admin_api_secret are required when confluent_config is set. Inject via TF_VAR_kafka_admin_api_key and TF_VAR_kafka_admin_api_secret in your .env secure file."
+  }
+}
+
+locals {
 
   # Split schema_registry: module gets only {cluster_id, resource_name};
   # url is a separate passthrough for bundle rendering.
