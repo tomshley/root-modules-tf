@@ -6,6 +6,18 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.5.3] — 2026-04-17
+
+### Fixes
+
+- **aws-eks-aurora-cluster**: Replace inline `ingress {}`/`egress {}` blocks in `aws_security_group.this` with standalone `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources. Inline blocks are authoritative and silently remove any standalone rules added by consumers on the same security group. This caused consumer-added standalone rules on the module-managed Aurora SG to be wiped on every apply.
+
+### Migration
+
+On first apply after upgrading from v1.5.2, the plan will show the security group updated in-place (inline rules removed) and new standalone rule resources created. The SG itself is not destroyed/recreated. There is a brief window (seconds) between inline rule removal and standalone rule creation — schedule during low-traffic if possible. See `moved.tf` for details.
+
+---
+
 ## [1.5.2] — 2026-04-16
 
 ### Breaking Changes (Example Only — No Module Changes)

@@ -17,24 +17,29 @@ resource "aws_security_group" "this" {
   description = local.resolved_sg_description
   vpc_id      = var.vpc_id
 
-  ingress {
-    description     = "PostgreSQL from allowed security groups"
-    from_port       = var.port
-    to_port         = var.port
-    protocol        = "tcp"
-    security_groups = var.allowed_security_group_ids
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-${var.workload_name}"
   })
+}
+
+# Standalone ingress rules — one per allowed security group.
+# Using aws_vpc_security_group_ingress_rule (not inline ingress {}) so that
+# consumers can safely add their own rules to this SG without conflicts.
+resource "aws_vpc_security_group_ingress_rule" "allowed" {
+  count                        = length(var.allowed_security_group_ids)
+  security_group_id            = aws_security_group.this.id
+  referenced_security_group_id = var.allowed_security_group_ids[count.index]
+  from_port                    = var.port
+  to_port                      = var.port
+  ip_protocol                  = "tcp"
+  description                  = "PostgreSQL from allowed security group"
+}
+
+resource "aws_vpc_security_group_egress_rule" "all" {
+  security_group_id = aws_security_group.this.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+  description       = "Allow all outbound"
 }
 
 resource "aws_rds_cluster_parameter_group" "this" {
