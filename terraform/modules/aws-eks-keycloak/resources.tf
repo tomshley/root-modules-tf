@@ -40,6 +40,9 @@ check "admin_credentials_provided" {
   }
 }
 
+# The check above is a warning. The precondition below is a hard gate —
+# plan fails if neither admin_password nor admin_secret_arn is set.
+
 locals {
   resolved_db_password    = var.db_password != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
   resolved_admin_password = var.admin_password != null ? var.admin_password : (
@@ -106,6 +109,11 @@ resource "kubernetes_secret" "admin_credentials" {
 
   lifecycle {
     ignore_changes = [data]
+
+    precondition {
+      condition     = var.admin_password != null || var.admin_secret_arn != null
+      error_message = "Either admin_password or admin_secret_arn must be provided. Without both, Keycloak would start with no usable admin credentials."
+    }
   }
 }
 
