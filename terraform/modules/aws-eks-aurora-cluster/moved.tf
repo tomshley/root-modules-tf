@@ -38,3 +38,23 @@ moved {
   from = aws_secretsmanager_secret_version.event_journal
   to   = aws_secretsmanager_secret_version.this
 }
+
+# v1.5.3 — Inline-to-standalone security group rule migration
+#
+# The inline ingress {} and egress {} blocks were removed from
+# aws_security_group.this and replaced with standalone resources:
+#   - aws_vpc_security_group_ingress_rule.allowed[*]
+#   - aws_vpc_security_group_egress_rule.all
+#
+# There is no moved {} block for inline→standalone because inline rules are
+# not individually addressable in Terraform state. On first apply after
+# upgrade the plan will show:
+#   ~ aws_security_group.this            (in-place update: inline rules removed)
+#   + aws_vpc_security_group_ingress_rule.allowed[0..N]  (created)
+#   + aws_vpc_security_group_egress_rule.all              (created)
+#
+# This is safe — the SG itself is NOT destroyed/recreated, only its inline
+# rules are replaced by standalone equivalents. There will be a brief window
+# (seconds) where the old inline rules are removed before the standalone rules
+# are created. To minimise exposure, run the upgrade during a maintenance
+# window or accept the brief connectivity blip.
