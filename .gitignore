@@ -7,10 +7,6 @@
 *.terraform-version
 *.terraform.lock.hcl
 
-# Allow committed terraform.tfvars in examples (non-sensitive config only).
-# Secrets are injected via TF_VAR_* env vars from .env secure files.
-!terraform/examples/**/terraform.tfvars
-
 
 # artifact files
 .bsp/

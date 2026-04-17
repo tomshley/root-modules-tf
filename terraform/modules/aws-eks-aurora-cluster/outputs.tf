@@ -15,8 +15,7 @@ output "database_name" {
 }
 
 output "master_username" {
-  description = "Aurora cluster master username for downstream consumers (e.g. Keycloak DB credential wiring)."
-  value       = var.master_username
+  value = var.master_username
 }
 
 output "security_group_id" {

@@ -33,7 +33,7 @@ module "streaming_topics" {
   catalog_entries         = local.catalog_entries
   base_overlay            = local.base_overlay
   region_exclusions       = local.region_exclusions
-  kafka_cluster_id        = var.confluent_config.kafka_cluster_id
-  kafka_rest_endpoint     = var.confluent_config.kafka_rest_endpoint
-  kafka_admin_credentials = local.kafka_admin_credentials
+  kafka_cluster_id        = var.confluent.kafka_cluster_id
+  kafka_rest_endpoint     = var.confluent.kafka_rest_endpoint
+  kafka_admin_credentials = var.confluent.kafka_admin_credentials
 }

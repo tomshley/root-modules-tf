@@ -35,13 +35,17 @@ variable "streaming_profile" {
   }
 }
 
-variable "confluent_config" {
+variable "confluent" {
   type = object({
     environment_id          = string # e.g. "env-abc123"
     environment_name        = string # e.g. "staging"
     kafka_cluster_id        = string # e.g. "lkc-abc123"
-    kafka_rest_endpoint     = string # e.g. "https://pkc-abc123.us-east-1.aws.confluent.cloud:443"
+    kafka_rest_endpoint     = string # e.g. "https://pkc-abc123.us-east-1.aws.confluent.cloud:443/kafka/v3"
     kafka_bootstrap_servers = string # e.g. "pkc-abc123.us-east-1.aws.confluent.cloud:9092"
+    kafka_admin_credentials = object({
+      api_key    = string
+      api_secret = string
+    })
     schema_registry = optional(object({
       cluster_id    = string # e.g. "lsrc-abc123"
       resource_name = string # CRN string
@@ -49,21 +53,8 @@ variable "confluent_config" {
     }))
   })
   default     = null
+  sensitive   = true
   description = "Confluent Cloud environment configuration. When null, no Confluent resources are created."
-}
-
-variable "kafka_admin_api_key" {
-  type        = string
-  default     = null
-  sensitive   = true
-  description = "Kafka cluster admin API key. Injected via TF_VAR_kafka_admin_api_key from .env secure file."
-}
-
-variable "kafka_admin_api_secret" {
-  type        = string
-  default     = null
-  sensitive   = true
-  description = "Kafka cluster admin API secret. Injected via TF_VAR_kafka_admin_api_secret from .env secure file."
 }
 
 variable "workloads" {
