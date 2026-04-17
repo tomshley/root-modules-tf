@@ -31,7 +31,6 @@ check "credentials_accompany_config" {
 }
 
 locals {
-
   # Split schema_registry: module gets only {cluster_id, resource_name};
   # url is a separate passthrough for bundle rendering.
   # The workload-access module's schema_registry type does NOT accept url.
