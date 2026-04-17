@@ -61,3 +61,11 @@ moved {
 # from state (unchanged during an in-place update) and parallelises the
 # standalone rule CREATEs with the SG inline-rule revocation, causing
 # InvalidPermission.Duplicate errors from the AWS API.
+#
+# v1.5.6 — Ingress rules switched from count to for_each = toset().
+# Resources are keyed by SG ID ("sg-xxx") instead of list index ([0]).
+# Existing deployments will see:
+#   - aws_vpc_security_group_ingress_rule.allowed[0..N]       (destroyed)
+#   + aws_vpc_security_group_ingress_rule.allowed["sg-xxx"]   (created)
+# This is a one-time destroy+create cycle (brief connectivity blip).
+# Deduplicates automatically and eliminates index-shift races.
