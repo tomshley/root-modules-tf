@@ -67,7 +67,7 @@ variable "db_user" {
 }
 
 variable "db_password" {
-  description = "Database password for Keycloak. Required for non-ESO deployments to avoid first-apply bootstrap failure. When null, the K8s secret is created with a placeholder for ExternalSecretsOperator to populate. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.db_credentials to rotate."
+  description = "Database password for Keycloak. When null, resolved from Secrets Manager via db_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.db_credentials to rotate."
   type        = string
   default     = null
   sensitive   = true
@@ -76,8 +76,9 @@ variable "db_password" {
 # --- Admin credentials ---
 
 variable "admin_secret_arn" {
-  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password)"
+  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password). Required when admin_password is null."
   type        = string
+  default     = null
 }
 
 variable "admin_user" {
@@ -87,7 +88,7 @@ variable "admin_user" {
 }
 
 variable "admin_password" {
-  description = "Keycloak admin password. Required for non-ESO deployments to avoid first-apply bootstrap failure. When null, the K8s secret is created with a placeholder for ExternalSecretsOperator to populate. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.admin_credentials to rotate."
+  description = "Keycloak admin password. When null, resolved from Secrets Manager via admin_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.admin_credentials to rotate."
   type        = string
   default     = null
   sensitive   = true

@@ -24,7 +24,7 @@ streaming-full-stack/
 │           └── gov/base.yaml
 ├── stacks/streaming/          # Shared infrastructure composition
 │   ├── main.tf                # Stack description and profile docs
-│   ├── locals.tf              # Derived values, null-safe access, SR split
+│   ├── locals.tf              # Derived values, credential reconstruction, SR split
 │   ├── topics.tf              # Catalog discovery, overlay filtering, topic module
 │   ├── access.tf              # Workload service accounts and ACLs
 │   ├── connectors.tf          # Connector scaffold (future)
@@ -42,8 +42,7 @@ streaming-full-stack/
 ├── .secure_files/             # Example credential files (not committed)
 │   ├── .env.example           # Shared backend settings
 │   ├── staging-us-east-1-cloud.env.example
-│   ├── staging-us-east-1-streaming.env.example
-│   └── staging-us-east-1-streaming.tfvars.example
+│   └── staging-us-east-1-streaming.env.example
 ├── scripts/
 │   └── README.md              # Operator tool usage reference
 └── README.md                  # This file
@@ -78,13 +77,19 @@ For release, swap to pinned Git refs:
 source = "github.com/tomshley/root-modules-tf//terraform/modules/confluent-streaming-topics?ref=v1.3.0"
 ```
 
-### Secure Files
+### Config and Credentials Separation
 
-- `.secure_files/.env` — shared backend settings (GitLab project ID, credentials)
-- `.secure_files/<env>-<region>-<area>.env` — per-wrapper Confluent/AWS credentials
-- `.secure_files/<env>-<region>-<area>.tfvars` — sensitive variable overrides (Confluent config, workloads)
+**Committed** (version-controlled, PR-reviewed):
+- `terraform.tfvars` — all non-sensitive configuration (`confluent_config`, `workloads`, project/env/region)
 
-None of these are committed. Example files with the `.example` suffix show the expected format.
+**Secure files** (not committed, uploaded to GitLab Secure Files):
+- `.secure_files/.env` — shared backend settings (GitLab project ID, TF state credentials)
+- `.secure_files/<env>-<region>-<area>.env` — Confluent/AWS provider credentials + `TF_VAR_*` secrets
+
+Secrets are injected as flat `TF_VAR_*` environment variables (e.g. `TF_VAR_kafka_admin_api_key`),
+automatically consumed by OpenTofu/Terraform. No `.tfvars` files are used for secrets.
+
+Example files with the `.example` suffix show the expected format.
 
 ### Operator Tools
 
@@ -96,18 +101,21 @@ Session setup and credential bundle rendering use the shared scripts in `toolbox
 # 1. Copy example secure files
 cp .secure_files/.env.example .secure_files/.env
 cp .secure_files/staging-us-east-1-streaming.env.example .secure_files/staging-us-east-1-streaming.env
-cp .secure_files/staging-us-east-1-streaming.tfvars.example .secure_files/staging-us-east-1-streaming.tfvars
 
-# 2. Fill in real credentials in the copied files
+# 2. Fill in real credentials in the .env files
+#    - .env: TF_PASSWORD, TOMSHLEY_CICD_FLOW_PUSH_TOKEN, etc.
+#    - streaming.env: CONFLUENT_CLOUD_API_KEY/SECRET, TF_VAR_kafka_admin_api_key/secret
 
-# 3. Plan
+# 3. Edit terraform.tfvars with your Confluent config (non-sensitive)
+
+# 4. Plan
 cd environments/staging/us-east-1/streaming
 make plan
 
-# 4. Apply
+# 5. Apply
 make apply
 
-# 5. Render credential bundles for workloads
+# 6. Render credential bundles for workloads
 ../../../../toolbox/operator-tools/render-streaming-bundle.sh .
 ```
 
@@ -117,5 +125,5 @@ make apply
 2. Replace `myproject` with your project name in `terraform.tfvars`, `Makefile`, and `variables.tf`
 3. Replace the example service catalogs with your actual topic definitions
 4. Adjust deployment overlays for your environments and profiles
-5. Create real `.secure_files/` from the examples
+5. Create real `.secure_files/` from the examples (secrets in `.env` files only)
 6. Swap module `source` paths from local to pinned Git refs

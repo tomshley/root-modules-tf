@@ -6,6 +6,42 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.5.2] — 2026-04-16
+
+### Breaking Changes (Example Only — No Module Changes)
+
+- **streaming-full-stack example**: Replace monolithic `confluent` sensitive variable with non-sensitive `confluent_config` + flat `kafka_admin_api_key` / `kafka_admin_api_secret` secret variables. Consumer repos using this pattern must update their variable definitions and module calls.
+
+### Fixes
+
+- **streaming-full-stack example**: Remove all `nonsensitive()` calls from `locals.tf`. Config fields (environment ID, cluster ID, endpoints) are no longer marked sensitive, eliminating `for_each` workarounds.
+- **streaming-full-stack example**: Remove `sensitive = true` from `kafka_bootstrap_servers` and `schema_registry_url` outputs — these are non-sensitive connection endpoints.
+
+### Documentation
+
+- **streaming-full-stack README**: Replace "Secure Files" section with "Config and Credentials Separation" documenting the committed `terraform.tfvars` + `TF_VAR_*` env var pattern. Remove `.tfvars.example` from tree listing.
+- **confluent-bootstrap.sh**: Output `TF_VAR_kafka_admin_api_key` / `TF_VAR_kafka_admin_api_secret` env var lines and `confluent_config` HCL block instead of monolithic `.tfvars` content.
+
+### Migration
+
+Consumer repos update by:
+1. Rename `confluent` variable to `confluent_config` (remove `kafka_admin_credentials` from the object, drop `sensitive = true`)
+2. Add `kafka_admin_api_key` and `kafka_admin_api_secret` as flat `string` variables with `sensitive = true`
+3. Add `local.kafka_admin_credentials` reconstruction in `locals.tf`
+4. Update module calls: `var.confluent.X` → `var.confluent_config.X`, `var.confluent.kafka_admin_credentials` → `local.kafka_admin_credentials`
+5. Move config to committed `terraform.tfvars`, secrets to `.env` as `TF_VAR_*` lines
+6. Delete secure `.tfvars` files
+
+---
+
+## [1.5.1] — 2026-04-13
+
+### Infrastructure
+
+- Bump cicd-pipelines adapter to v0.5.5 and base-containers to v0.5.0.
+
+---
+
 ## [1.5.0] — 2026-04-13
 
 ### Features
