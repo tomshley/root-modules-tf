@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.5.6] — 2026-04-17
+
+### Fixes
+
+- **aws-eks-aurora-cluster**: Replace `count` with `for_each = toset(var.allowed_security_group_ids)` on `aws_vpc_security_group_ingress_rule.allowed`. Resources are now keyed by SG ID instead of list index — deduplicates automatically, eliminates index-shift races on list changes, and makes add/remove surgical. Existing deployments will see a one-time destroy+create cycle on ingress rules (brief connectivity blip, same as v1.5.3 migration).
+
+---
+
 ## [1.5.5] — 2026-04-17
 
 ### Fixes
