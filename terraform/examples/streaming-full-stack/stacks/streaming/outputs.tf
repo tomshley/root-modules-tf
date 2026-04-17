@@ -10,9 +10,8 @@ output "topic_catalog_summary" {
   description = "Summary of all topics loaded from service catalogs."
   value = {
     by_role = {
-      core = length([for t in local.all_topics : t if t.role == "core"])
-      flat = length([for t in local.all_topics : t if t.role == "flat"])
-      dlq  = length([for t in local.all_topics : t if t.role == "dlq"])
+      for role in distinct([for t in local.all_topics : t.role]) :
+      role => length([for t in local.all_topics : t if t.role == role])
     }
     by_service = {
       for svc in distinct([for t in local.all_topics : t.service]) :
@@ -36,13 +35,15 @@ output "active_topic_summary" {
 output "kafka_bootstrap_servers" {
   description = "Kafka bootstrap servers for client connections. Null when unconfigured."
   value       = local.kafka_bootstrap_servers
-  sensitive   = true
+  precondition {
+    condition     = var.confluent_config == null || (var.kafka_admin_api_key != null && var.kafka_admin_api_secret != null)
+    error_message = "kafka_admin_api_key and kafka_admin_api_secret are required when confluent_config is set. Inject via TF_VAR_kafka_admin_api_key and TF_VAR_kafka_admin_api_secret in your .env secure file."
+  }
 }
 
 output "schema_registry_url" {
   description = "Schema Registry URL for client connections. Null when SR is not configured."
   value       = local.schema_registry_url
-  sensitive   = true
 }
 
 output "workload_service_account_ids" {
