@@ -34,6 +34,14 @@ Consumer repos update by:
 
 ---
 
+## [1.5.1] — 2026-04-13
+
+### Infrastructure
+
+- Bump cicd-pipelines adapter to v0.5.5 and base-containers to v0.5.0.
+
+---
+
 ## [1.5.0] — 2026-04-13
 
 ### Features
