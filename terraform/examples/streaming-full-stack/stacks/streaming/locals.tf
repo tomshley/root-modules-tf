@@ -17,7 +17,7 @@ locals {
   active_workloads     = local.confluent_configured ? var.workloads : {}
 
   # Reconstruct credential object from flat TF_VAR_* inputs for module calls.
-  kafka_admin_credentials = var.kafka_admin_api_key != null ? {
+  kafka_admin_credentials = (var.kafka_admin_api_key != null && var.kafka_admin_api_secret != null) ? {
     api_key    = var.kafka_admin_api_key
     api_secret = var.kafka_admin_api_secret
   } : null
