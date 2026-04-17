@@ -90,6 +90,13 @@ fi
 echo ""
 echo "→ Setting environment to $ENVIRONMENT_ID..."
 confluent environment use "$ENVIRONMENT_ID"
+ENV_NAME=$(confluent environment describe "$ENVIRONMENT_ID" --output json | jq -r '.display_name // empty' 2>/dev/null || echo "")
+if [[ -n "$ENV_NAME" ]]; then
+  echo "  Environment name: $ENV_NAME"
+else
+  ENV_NAME="<your-environment-name>"
+  echo "  WARNING: Could not resolve environment display name. Replace placeholder in output."
+fi
 
 # ── Step 3: Retrieve Schema Registry info (via CLI) ──────────────────────────
 # The CLI provides cluster ID and endpoint but NOT the CRN.
@@ -282,7 +289,7 @@ echo ""
 echo "── terraform.tfvars values (commit to version control) ──"
 echo "confluent_config = {"
 echo "  environment_id          = \"$ENVIRONMENT_ID\""
-echo "  environment_name        = \"<your-environment-name>\""
+echo "  environment_name        = \"$ENV_NAME\""
 echo "  kafka_cluster_id        = \"$CLUSTER_ID\""
 echo "  kafka_rest_endpoint     = \"$KAFKA_REST\""
 echo "  kafka_bootstrap_servers = \"$KAFKA_BOOTSTRAP\""
@@ -321,6 +328,7 @@ TF_VAR_kafka_admin_api_secret=$CLUSTER_API_SECRET
 #
 # ── terraform.tfvars config values (commit to version control) ──
 ENVIRONMENT_ID=$ENVIRONMENT_ID
+ENVIRONMENT_NAME=$ENV_NAME
 KAFKA_CLUSTER_ID=$CLUSTER_ID
 KAFKA_REST_ENDPOINT=$KAFKA_REST
 KAFKA_BOOTSTRAP_SERVERS=$KAFKA_BOOTSTRAP

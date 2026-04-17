@@ -35,6 +35,10 @@ output "active_topic_summary" {
 output "kafka_bootstrap_servers" {
   description = "Kafka bootstrap servers for client connections. Null when unconfigured."
   value       = local.kafka_bootstrap_servers
+  precondition {
+    condition     = var.confluent_config == null || (var.kafka_admin_api_key != null && var.kafka_admin_api_secret != null)
+    error_message = "kafka_admin_api_key and kafka_admin_api_secret are required when confluent_config is set. Inject via TF_VAR_kafka_admin_api_key and TF_VAR_kafka_admin_api_secret in your .env secure file."
+  }
 }
 
 output "schema_registry_url" {
