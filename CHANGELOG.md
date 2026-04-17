@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.5.5] — 2026-04-17
+
+### Fixes
+
+- **aws-eks-aurora-cluster**: Wrap `allowed_security_group_ids` with `distinct()` in the ingress rule `count` and index expressions. Prevents `InvalidPermission.Duplicate` when a caller passes the same SG ID more than once (e.g. when `cluster_security_group_id` and `eks_managed_security_group_id` resolve to the same SG).
+
+---
+
 ## [1.5.4] — 2026-04-17
 
 ### Fixes
