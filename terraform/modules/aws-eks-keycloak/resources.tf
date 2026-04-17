@@ -98,9 +98,9 @@ resource "kubernetes_secret" "admin_credentials" {
     name      = "${var.release_name}-admin-credentials"
     namespace = local.namespace
     labels    = local.common_labels
-    annotations = {
+    annotations = var.admin_secret_arn != null ? {
       "secrets-manager/arn" = var.admin_secret_arn
-    }
+    } : {}
   }
 
   data = {
