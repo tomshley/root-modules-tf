@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.5.4] — 2026-04-17
+
+### Fixes
+
+- **aws-eks-aurora-cluster**: Add explicit `depends_on = [aws_security_group.this]` to `aws_vpc_security_group_ingress_rule.allowed` and `aws_vpc_security_group_egress_rule.all`. Without this, OpenTofu resolves the SG ID from state (unchanged during the in-place update that removes inline rules) and parallelises standalone rule creation with inline rule revocation, causing `InvalidPermission.Duplicate` errors from the AWS API.
+
+---
+
 ## [1.5.3] — 2026-04-17
 
 ### Fixes
