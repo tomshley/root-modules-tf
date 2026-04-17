@@ -26,9 +26,9 @@ resource "aws_security_group" "this" {
 # Using aws_vpc_security_group_ingress_rule (not inline ingress {}) so that
 # consumers can safely add their own rules to this SG without conflicts.
 resource "aws_vpc_security_group_ingress_rule" "allowed" {
-  count                        = length(var.allowed_security_group_ids)
+  count                        = length(distinct(var.allowed_security_group_ids))
   security_group_id            = aws_security_group.this.id
-  referenced_security_group_id = var.allowed_security_group_ids[count.index]
+  referenced_security_group_id = distinct(var.allowed_security_group_ids)[count.index]
   from_port                    = var.port
   to_port                      = var.port
   ip_protocol                  = "tcp"
