@@ -6,16 +6,16 @@
 # names expected by CI deploy jobs in consumer service repos.
 #
 # Usage:
-#   ./render-k8s-aws-bundle.sh --service <ingress|structuring> \
+#   ./render-k8s-aws-bundle.sh --service <ingress|readserver|structuring> \
 #     --cloud-dir <path> --data-dir <path> [--tls-dir <path>]
 #
 # Arguments:
-#   --service     Required. One of: ingress, structuring.
+#   --service     Required. One of: ingress, readserver, structuring.
 #   --cloud-dir   Required. Path to the cloud stack directory (karpenter_node_role_name).
-#   --data-dir    Required. Path to the data stack directory (ingress_irsa_role_arn or
-#                 structuring_irsa_role_arn).
-#   --tls-dir     Optional. Path to the tls stack directory (certificate_arn).
-#                 Required for ingress, ignored for structuring.
+#   --data-dir    Required. Path to the data stack directory (ingress_irsa_role_arn,
+#                 readserver_irsa_role_arn, or structuring_irsa_role_arn).
+#   --tls-dir     Optional. Path to the tls stack directory (certificate_arn or
+#                 api_certificate_arn). Required for ingress and readserver.
 #
 # Output:
 #   Creates <cloud-dir>/.env-bundle/<service>-k8s-aws.env with the variables
@@ -24,6 +24,7 @@
 #
 # Variable contract (must match CI .gitlab-ci.yml):
 #   ingress:      ACM_CERT_ARN, IRSA_ROLE_ARN, KARPENTER_NODE_ROLE
+#   readserver:   ACM_CERT_ARN, IRSA_ROLE_ARN, KARPENTER_NODE_ROLE
 #   structuring:  IRSA_ROLE_ARN, KARPENTER_NODE_ROLE
 
 set -euo pipefail
@@ -44,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     --tls-dir)    TLS_DIR="$2";    shift 2 ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "Usage: $0 --service <ingress|structuring> --cloud-dir <path> --data-dir <path> [--tls-dir <path>]" >&2
+      echo "Usage: $0 --service <ingress|readserver|structuring> --cloud-dir <path> --data-dir <path> [--tls-dir <path>]" >&2
       exit 1
       ;;
   esac
@@ -52,10 +53,10 @@ done
 
 # --- Validate arguments ---
 if [[ -z "$SERVICE" ]]; then
-  echo "Error: --service is required (ingress or structuring)" >&2; exit 1
+  echo "Error: --service is required (ingress, readserver, or structuring)" >&2; exit 1
 fi
-if [[ "$SERVICE" != "ingress" && "$SERVICE" != "structuring" ]]; then
-  echo "Error: --service must be 'ingress' or 'structuring', got '$SERVICE'" >&2; exit 1
+if [[ "$SERVICE" != "ingress" && "$SERVICE" != "readserver" && "$SERVICE" != "structuring" ]]; then
+  echo "Error: --service must be 'ingress', 'readserver', or 'structuring', got '$SERVICE'" >&2; exit 1
 fi
 if [[ -z "$CLOUD_DIR" ]]; then
   echo "Error: --cloud-dir is required" >&2; exit 1
@@ -63,8 +64,8 @@ fi
 if [[ -z "$DATA_DIR" ]]; then
   echo "Error: --data-dir is required" >&2; exit 1
 fi
-if [[ "$SERVICE" == "ingress" && -z "$TLS_DIR" ]]; then
-  echo "Error: --tls-dir is required for ingress service (ACM certificate)" >&2; exit 1
+if [[ ("$SERVICE" == "ingress" || "$SERVICE" == "readserver") && -z "$TLS_DIR" ]]; then
+  echo "Error: --tls-dir is required for $SERVICE service (ACM certificate)" >&2; exit 1
 fi
 
 echo "Rendering $SERVICE k8s-aws bundle"
@@ -86,11 +87,11 @@ fi
 echo "  KARPENTER_NODE_ROLE=$KARPENTER_NODE_ROLE"
 
 # --- Read data stack outputs ---
-if [[ "$SERVICE" == "ingress" ]]; then
-  IRSA_OUTPUT_NAME="ingress_irsa_role_arn"
-else
-  IRSA_OUTPUT_NAME="structuring_irsa_role_arn"
-fi
+case "$SERVICE" in
+  ingress)     IRSA_OUTPUT_NAME="ingress_irsa_role_arn" ;;
+  readserver)  IRSA_OUTPUT_NAME="readserver_irsa_role_arn" ;;
+  structuring) IRSA_OUTPUT_NAME="structuring_irsa_role_arn" ;;
+esac
 
 IRSA_ROLE_ARN=$(cd "$DATA_DIR" && make output 2>/dev/null | grep "$IRSA_OUTPUT_NAME" | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
 if [[ -z "$IRSA_ROLE_ARN" ]]; then
@@ -103,15 +104,21 @@ if [[ -z "$IRSA_ROLE_ARN" ]]; then
 fi
 echo "  IRSA_ROLE_ARN=$IRSA_ROLE_ARN"
 
-# --- Read tls stack outputs (ingress only) ---
+# --- Read tls stack outputs (ingress and readserver) ---
 ACM_CERT_ARN=""
-if [[ "$SERVICE" == "ingress" && -n "$TLS_DIR" ]]; then
-  ACM_CERT_ARN=$(cd "$TLS_DIR" && make output 2>/dev/null | grep 'certificate_arn' | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
+if [[ ("$SERVICE" == "ingress" || "$SERVICE" == "readserver") && -n "$TLS_DIR" ]]; then
+  # ingress uses certificate_arn; readserver uses api_certificate_arn
+  if [[ "$SERVICE" == "readserver" ]]; then
+    TLS_OUTPUT_NAME="api_certificate_arn"
+  else
+    TLS_OUTPUT_NAME="certificate_arn"
+  fi
+  ACM_CERT_ARN=$(cd "$TLS_DIR" && make output 2>/dev/null | grep "$TLS_OUTPUT_NAME" | head -1 | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
   if [[ -z "$ACM_CERT_ARN" ]]; then
-    ACM_CERT_ARN=$(cd "$TLS_DIR" && $TOFU output -raw certificate_arn 2>/dev/null || echo "")
+    ACM_CERT_ARN=$(cd "$TLS_DIR" && $TOFU output -raw "$TLS_OUTPUT_NAME" 2>/dev/null || echo "")
   fi
   if [[ -z "$ACM_CERT_ARN" ]]; then
-    echo "Error: certificate_arn output is empty or missing from tls stack." >&2
+    echo "Error: $TLS_OUTPUT_NAME output is empty or missing from tls stack." >&2
     echo "Has the tls stack been applied? Run: make -C $TLS_DIR output" >&2
     exit 1
   fi
@@ -123,8 +130,9 @@ OUTPUT_DIR="$CLOUD_DIR/.env-bundle"
 mkdir -p "$OUTPUT_DIR"
 ENV_FILE="$OUTPUT_DIR/${SERVICE}-k8s-aws.env"
 
-if [[ "$SERVICE" == "ingress" ]]; then
-  cat > "$ENV_FILE" <<EOF
+case "$SERVICE" in
+  ingress)
+    cat > "$ENV_FILE" <<EOF
 # AWS resource ARNs and Karpenter node role for ingress
 # Rendered by render-k8s-aws-bundle.sh from tls, data, cloud stack outputs
 # Variable names must match CI deploy job placeholder substitution
@@ -132,15 +140,27 @@ ACM_CERT_ARN=$ACM_CERT_ARN
 IRSA_ROLE_ARN=$IRSA_ROLE_ARN
 KARPENTER_NODE_ROLE=$KARPENTER_NODE_ROLE
 EOF
-else
-  cat > "$ENV_FILE" <<EOF
+    ;;
+  readserver)
+    cat > "$ENV_FILE" <<EOF
+# AWS resource ARNs and Karpenter node role for readserver
+# Rendered by render-k8s-aws-bundle.sh from tls, data, cloud stack outputs
+# Variable names must match CI deploy job placeholder substitution
+ACM_CERT_ARN=$ACM_CERT_ARN
+IRSA_ROLE_ARN=$IRSA_ROLE_ARN
+KARPENTER_NODE_ROLE=$KARPENTER_NODE_ROLE
+EOF
+    ;;
+  structuring)
+    cat > "$ENV_FILE" <<EOF
 # IRSA role ARN and Karpenter node role for structuring
 # Rendered by render-k8s-aws-bundle.sh from data, cloud stack outputs
 # Variable names must match CI deploy job placeholder substitution
 IRSA_ROLE_ARN=$IRSA_ROLE_ARN
 KARPENTER_NODE_ROLE=$KARPENTER_NODE_ROLE
 EOF
-fi
+    ;;
+esac
 
 chmod 600 "$ENV_FILE"
 
