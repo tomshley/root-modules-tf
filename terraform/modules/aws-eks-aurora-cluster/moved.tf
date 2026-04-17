@@ -54,7 +54,10 @@ moved {
 #   + aws_vpc_security_group_egress_rule.all              (created)
 #
 # This is safe — the SG itself is NOT destroyed/recreated, only its inline
-# rules are replaced by standalone equivalents. There will be a brief window
-# (seconds) where the old inline rules are removed before the standalone rules
-# are created. To minimise exposure, run the upgrade during a maintenance
-# window or accept the brief connectivity blip.
+# rules are replaced by standalone equivalents.
+#
+# v1.5.4 — The standalone rule resources now carry an explicit depends_on
+# on aws_security_group.this. Without this, OpenTofu resolves the SG ID
+# from state (unchanged during an in-place update) and parallelises the
+# standalone rule CREATEs with the SG inline-rule revocation, causing
+# InvalidPermission.Duplicate errors from the AWS API.

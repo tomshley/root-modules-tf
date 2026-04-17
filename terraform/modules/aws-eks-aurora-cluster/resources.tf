@@ -33,6 +33,8 @@ resource "aws_vpc_security_group_ingress_rule" "allowed" {
   to_port                      = var.port
   ip_protocol                  = "tcp"
   description                  = "PostgreSQL from allowed security group"
+
+  depends_on = [aws_security_group.this]
 }
 
 resource "aws_vpc_security_group_egress_rule" "all" {
@@ -40,6 +42,8 @@ resource "aws_vpc_security_group_egress_rule" "all" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
   description       = "Allow all outbound"
+
+  depends_on = [aws_security_group.this]
 }
 
 resource "aws_rds_cluster_parameter_group" "this" {
