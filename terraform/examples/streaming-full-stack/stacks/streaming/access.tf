@@ -5,11 +5,11 @@ module "workload_access" {
   for_each = local.active_workloads
 
   name                         = each.key
-  environment_id               = var.confluent.environment_id
-  environment_name             = var.confluent.environment_name
-  kafka_cluster_id             = var.confluent.kafka_cluster_id
-  kafka_rest_endpoint          = var.confluent.kafka_rest_endpoint
-  kafka_admin_credentials      = var.confluent.kafka_admin_credentials
+  environment_id               = var.confluent_config.environment_id
+  environment_name             = var.confluent_config.environment_name
+  kafka_cluster_id             = var.confluent_config.kafka_cluster_id
+  kafka_rest_endpoint          = var.confluent_config.kafka_rest_endpoint
+  kafka_admin_credentials      = local.kafka_admin_credentials
   service_account_display_name = each.value.service_account_display_name
   topic_permissions            = each.value.topic_permissions
   group_permissions            = each.value.group_permissions
