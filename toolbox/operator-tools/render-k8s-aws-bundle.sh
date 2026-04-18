@@ -113,7 +113,7 @@ if [[ ("$SERVICE" == "ingress" || "$SERVICE" == "readserver") && -n "$TLS_DIR" ]
   else
     TLS_OUTPUT_NAME="certificate_arn"
   fi
-  ACM_CERT_ARN=$(cd "$TLS_DIR" && make output 2>/dev/null | grep "$TLS_OUTPUT_NAME" | head -1 | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
+  ACM_CERT_ARN=$(cd "$TLS_DIR" && make output 2>/dev/null | grep "^${TLS_OUTPUT_NAME} " | head -1 | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
   if [[ -z "$ACM_CERT_ARN" ]]; then
     ACM_CERT_ARN=$(cd "$TLS_DIR" && $TOFU output -raw "$TLS_OUTPUT_NAME" 2>/dev/null || echo "")
   fi
