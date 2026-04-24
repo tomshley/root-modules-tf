@@ -6,6 +6,107 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased] — hotfix/aurora-multi-tenant-secrets
+
+### Features
+
+- **aws-eks-aurora-cluster**: Add optional `tenants` map input for multi-tenant clusters that host per-service logical databases behind a single Aurora cluster. For each tenant, the module provisions:
+  - One empty Secrets Manager secret `"<prefix>-<workload>-<tenant>-app-db"`, intentionally not populated by Terraform (the tenant's k8s migrate Job writes the per-service credentials after bootstrapping the Postgres role + logical database).
+  - One IAM policy `"...-<tenant>-app-read"` granting `secretsmanager:GetSecretValue` + `secretsmanager:DescribeSecret` on the tenant's app secret only — intended for the tenant's runtime IRSA role. `DescribeSecret` is included so External Secrets Operator and the Secrets Manager CSI driver work without additional wiring.
+  - One IAM policy `"...-<tenant>-migrate"` granting master-secret read (`GetSecretValue` + `DescribeSecret`) + tenant-app-secret read+write (`GetSecretValue` + `DescribeSecret` + `PutSecretValue` + `UpdateSecretVersionStage`) — intended for the tenant's migrate-Job IRSA role, explicitly NOT the runtime role. `DescribeSecret` on both secrets is included so migrate Jobs that pull credentials via External Secrets Operator or the Secrets Manager CSI driver work without additional wiring.
+- **aws-eks-aurora-cluster**: New outputs `tenant_secret_arns`, `tenant_app_read_policy_arns`, `tenant_migrate_policy_arns`, `tenant_database_names`, `tenant_role_names` (all keyed by tenant name, empty maps when `tenants = {}`). Consumers compose these with `aws-eks-irsa` per-tenant without further boilerplate.
+- **aws-eks-aurora-cluster**: Add `tenant_secret_recovery_window_in_days` variable (default 30) to control AWS recovery window for deleted tenant secrets. Set to 0 for immediate deletion in staging environments with frequent tenant churn.
+- **aws-eks-aurora-cluster**: Add `master_secret_recovery_window_in_days` variable (default 30) to control AWS recovery window for the cluster master secret. Previously hardcoded to AWS's 30-day default, blocking same-name recreation in staging tear-down/rebuild cycles.
+- **aws-eks-aurora-cluster**: The runtime `tenant_app_read` IAM policy now grants both `secretsmanager:GetSecretValue` AND `secretsmanager:DescribeSecret`. `DescribeSecret` is required by External Secrets Operator and the Secrets Manager CSI driver — the previous single-action policy silently broke those integrations.
+- **aws-eks-aurora-cluster**: The migrate IAM policy now grants `secretsmanager:GetSecretValue` on the tenant's own app secret (in addition to `DescribeSecret`/`PutSecretValue`/`UpdateSecretVersionStage`). This lets idempotent migrate Jobs short-circuit credential regeneration when the secret is already populated, avoiding password-rotation storms on every re-apply.
+- **aws-eks-aurora-cluster**: The migrate IAM policy's `ReadMasterForBootstrap` statement now grants `secretsmanager:DescribeSecret` alongside `secretsmanager:GetSecretValue`. Same rationale as `tenant_app_read`: ESO / Secrets Manager CSI driver issue `DescribeSecret` unconditionally and would silently fail without it. Consistent with the action list the module already applies to tenant app secrets.
+- **aws-eks-aurora-cluster**: Add validation for `database_name`, `tenants[*].database_name`, `tenants[*].db_role_name`, and `master_username` to ensure valid unquoted Postgres identifiers (lowercase letters/digits/underscores, starting with letter or underscore). All also validated against the Postgres NAMEDATALEN 63-byte limit.
+- **aws-eks-aurora-cluster**: Add validation that resolved `tenants[*].db_role_name` (after applying the hyphen→underscore default derivation) does not equal `var.master_username`. Without this, a tenant key like `postgres` passes plan and the migrate Job fails at run time with `ERROR: role "postgres" already exists` — far from the plan signal. Closes the last naming-collision gap (tenant-vs-tenant and tenant-vs-cluster DB are already guarded).
+- **aws-eks-aurora-cluster**: Add TCP port range validation on `var.port` (1-65535). Catches typos at plan time. Note that `var.port` deliberately does NOT auto-sync into the master Secrets Manager secret; see the port-change runbook in `var.port`'s description and the three-scenario runbook in `resources.tf` next to `aws_secretsmanager_secret_version.this`.
+- **aws-eks-aurora-cluster**: Add denylist validation on resolved `tenants[*].db_role_name` against Aurora/Postgres reserved role names (`postgres`, `rdsadmin`, `rds_superuser`, `rds_replication`, `rds_iam`, `rds_password`, `public`) and the `pg_*` Postgres-reserved prefix. Catches reserved-role collisions at plan time rather than at migrate-Job `CREATE ROLE` run time. `public` is explicitly included because it is the Postgres implicit pseudo-role and is NOT matched by the `pg_*` prefix check. Complements the pass-10 `db_role_name != master_username` cross-variable check; closes the gap for operators who set a custom `master_username`.
+- **aws-eks-aurora-cluster**: Add validation that generated IAM policy names (project_name_prefix + workload_name + tenant + suffix) do not exceed the 128-byte AWS IAM limit. The check uses the longest per-tenant suffix (`-app-read`, 9 bytes) as the worst case — if it fits, `-migrate` (8 bytes) fits too.
+- **aws-eks-aurora-cluster**: Add validation that generated RDS identifiers (project_name_prefix + workload_name + suffix) do not exceed the 63-byte AWS RDS identifier limit. The check uses the longest generated suffix `-db-reader-15` (13 bytes, upper bound of `reader_instance_count`); if that fits, cluster/writer/subnet-group/security-group/parameter-group identifiers fit too.
+- **aws-eks-aurora-cluster**: Add `lifecycle { ignore_changes = [secret_string], replace_triggered_by = [aws_rds_cluster.this.arn] }` to `aws_secretsmanager_secret_version.this`. `ignore_changes = [secret_string]` lets operators rotate the master password out-of-band (AWS console, psql `ALTER ROLE`, scheduled Lambda) without subsequent applies silently reverting the rotation and breaking every tenant migrate Job (**Scenario A** in the three-scenario runbook inlined next to the resource in `resources.tf`). `replace_triggered_by = [aws_rds_cluster.this.arn]` fires only when the cluster ARN actually changes — i.e. cluster force-replacement: identifier rename via `project_name_prefix`/`workload_name` change, `db_subnet_group_name` recreation, or operator-driven `-replace=aws_rds_cluster.this`. Note that Aurora engine major-version bumps with `allow_major_version_upgrade = true` are in-place via `ModifyDBCluster` and do NOT flip `.arn`; without that flag the provider rejects the plan entirely. On the cases this DOES catch, the secret's `host` is genuinely stale AND `random_password.master_password.result` is freshly written to the new cluster anyway, so rewriting the secret stays consistent with Postgres. The cluster reference is specifically to `.arn` (not the bare resource) so routine in-place cluster updates — backup retention bumps, `deletion_protection` toggles, serverlessv2 scaling edits, tag churn — do NOT trigger replacement and do NOT clobber out-of-band rotations. Terraform-driven password rotation (**Scenario B**) requires temporarily bypassing both this and the cluster's `ignore_changes = [master_password]` and running `-replace=random_password.master_password` alone (data-preserving; no `-replace` of the cluster). Cluster rebuild / disaster recovery (**Scenario C**) is explicitly destructive and documented separately — see the inline runbook.
+- **aws-eks-aurora-cluster**: Add `lifecycle { ignore_changes = [master_password] }` to `aws_rds_cluster.this`, symmetric with the `ignore_changes = [secret_string]` on the secret version. Without this, any future regeneration of `random_password.master_password.result` (e.g. length bump, resource replacement) would plan an in-place `master_password` update on the cluster and silently clobber any Postgres-side out-of-band rotation.
+- **aws-eks-aurora-cluster**: Add `description` to the cluster master `aws_secretsmanager_secret.this` resource warning against attaching read access to runtime roles. The per-tenant secrets already carried descriptions; this brings the master to parity in the AWS console.
+- **aws-eks-aurora-cluster**: Broaden `master_username` output description to reflect that it is useful to any consumer that needs to read the master secret (e.g. Keycloak wiring, per-tenant migrate Jobs), with an explicit "do not expose to runtime workloads" warning.
+- **aws-eks-irsa**: Add validation that generated IAM role name (`${project_name_prefix}-irsa-${role_name_suffix}`) does not exceed the 64-byte AWS IAM role name limit. Multi-tenant consumers with long tenant keys would previously fail at apply with a cryptic AWS `ValidationError`; they now fail at plan with an actionable message. Requires Terraform 1.9+ / OpenTofu 1.8+ for the cross-variable reference in the validation block.
+- **aws-eks-irsa**: Declare `required_version = ">= 1.9"` in `provider.tf` to enforce the Terraform 1.9 / OpenTofu 1.8 floor required by the cross-variable validation above. Without this declaration, older CLIs emit a cryptic `Variables not allowed` parse error pointed at the validation block rather than an actionable "upgrade your CLI" message.
+- **aws-eks-aurora-cluster**: Declare `required_version = ">= 1.9"` in `provider.tf` for the same reason as above — multiple new validation blocks in this MR use cross-variable references (RDS identifier length check spans `project_name_prefix` + `workload_name`; cluster-vs-tenant `database_name` overlap check; tenant-role-vs-`master_username` collision check; per-tenant IAM policy name length check spans `project_name_prefix` + `workload_name` + tenant key). Also used by the `startswith` function in the `pg_*` reserved-prefix denylist (Terraform 1.5+).
+- **aws-eks-aurora-cluster**: Default `tenant_role_names` now transform hyphens to underscores so omitted `db_role_name` values produce valid unquoted Postgres identifiers (e.g. tenant key `device-profile` → role name `device_profile`). The derivation lives in `local.resolved_tenant_role_names` in `locals.tf`; the output simply echoes it, and the uniqueness validation duplicates the expression inline because Terraform validation blocks cannot reference locals.
+- **aws-eks-aurora-cluster**: New outputs `tenant_secret_recovery_window_in_days` and `master_secret_recovery_window_in_days` echoing the respective input values, for audit/plan visibility.
+- **examples/aws-eks-aurora-multi-tenant**: New example showing a shared cluster with two tenants and per-tenant migrate + runtime IRSA wiring.
+
+### Rationale
+
+Previously, consumers wanting multiple services on one cluster had to hand-roll per-tenant Secrets Manager secrets and the two matching IAM policies per tenant. The path of least resistance — cloning the single-tenant IRSA pattern that granted access to the cluster master secret — gave every tenant's runtime service account read access to that superuser secret, which breaks minimum-necessary and cross-tenant isolation once N>1 services share a cluster. This change moves the multi-tenant machinery into the module so the secure shape is the default shape.
+
+**Note**: This is an additive feature that provides the infrastructure primitives for secure multi-tenant Aurora clusters. Existing consumers with hand-rolled multi-tenant wiring must migrate their consumer-side IRSA bindings to use the new `tenant_app_read_policy_arns` and `tenant_migrate_policy_arns` outputs to realize the security benefits. The module itself does not enforce this migration.
+
+### Backward Compatibility
+
+Fully additive at the resource-creation level. `tenants` defaults to `{}`, in which case no per-tenant Secrets Manager secrets or IAM policies are created.
+
+Existing single-tenant consumers (`journal_db`, `readmodel_db`, `keycloak_db`, etc.) will see the following minor in-place metadata updates on the first apply after upgrade:
+
+- `aws_secretsmanager_secret.this` gains a `description` field (previously unset) → visible `~ description` in-place update, one-time.
+- `aws_secretsmanager_secret.this` gains an explicit `recovery_window_in_days = 30` tracking the new `master_secret_recovery_window_in_days` variable. Terraform state will gain the explicit value; no AWS API-side mutation occurs on apply because `recovery_window_in_days` is a `DeleteSecret`-time argument only (AWS does not persist it or return it from `DescribeSecret`, so Terraform cannot reconcile it against AWS state). The value only takes effect on the next `DeleteSecret` for this resource.
+- `aws_secretsmanager_secret_version.this` gains a `lifecycle` block (`ignore_changes = [secret_string]` + `replace_triggered_by = [aws_rds_cluster.this.arn]`). Lifecycle blocks themselves don't produce provider-visible diffs, but the first apply will reconcile any existing drift in `secret_string` that Terraform was previously reverting (this is intentional — it stops the revert behavior that was silently breaking out-of-band rotation).
+- `aws_rds_cluster.this` gains a `lifecycle { ignore_changes = [master_password] }` block, symmetric with the secret-version treatment above. This prevents future in-place `master_password` updates on the cluster from silently clobbering an out-of-band rotation whenever `random_password.master_password` is regenerated (length bump, resource replacement, etc.). Terraform-driven password rotation (Scenario B in the inline runbook) requires temporarily bypassing both `ignore_changes` blocks and `-replacing` `random_password.master_password` alone — no cluster replacement, no data loss.
+
+### Behavior Changes
+
+- **aws-eks-aurora-cluster**: Added validation requiring `database_name` to be a valid unquoted Postgres identifier (lowercase letters/digits/underscores, starting with letter or underscore). Consumers using uppercase, hyphens, or other characters will fail validation on upgrade.
+
+### Important Operational Notes
+
+**Tenant Removal Ordering**: If you wire IRSA attachments via `for_each` over `tenant_app_read_policy_arns` / `tenant_migrate_policy_arns` outputs (recommended pattern, see `examples/aws-eks-aurora-multi-tenant`), Terraform will automatically sequence attachment destroy → policy destroy in a single apply when you remove a tenant from the `tenants` map.
+
+If you instead use hand-rolled `aws_iam_role_policy_attachment` resources that reference policy ARNs as string literals or data lookups (not via module outputs), you must remove those attachments first, apply, THEN remove the tenant from the map to avoid AWS `DeleteConflict` errors.
+
+**Secret Recovery Window**: Deleted tenant secrets enter a recovery window (default 30 days, configurable via `tenant_secret_recovery_window_in_days`). Re-adding a tenant with the same key within this window will fail with `InvalidRequestException`. For staging environments with frequent tenant churn, set `tenant_secret_recovery_window_in_days = 0` to force immediate deletion.
+
+**Bootstrap Database Naming**: The cluster-level `database_name` must NOT equal any tenant's `database_name`. Tenant migrate Jobs execute `CREATE DATABASE` unconditionally and will fail if the database already exists. Use a dedicated placeholder such as `${workload_name}_bootstrap`.
+
+### Residual Threat Model — Migrate-Job Pod Is a Cluster-Superuser Trust Boundary
+
+The per-tenant `tenant_migrate` policy grants `secretsmanager:GetSecretValue` on the cluster master secret so the migrate Job can bootstrap the per-tenant Postgres role + logical database. This means **a compromised migrate-Job pod for any tenant is equivalent to a compromise of the entire cluster** (and every co-tenant's logical DB). This is a deliberate tradeoff to avoid a bootstrap chicken-and-egg problem, but it shifts rather than eliminates the cross-tenant risk.
+
+Consumers wiring migrate Jobs MUST apply the following controls. These are operational requirements of the module, not optional:
+
+1. **Restricted PodSecurityStandard**: migrate Job namespaces MUST enforce the `restricted` Pod Security Standard (`pod-security.kubernetes.io/enforce: restricted`). This enforces `runAsNonRoot`, `readOnlyRootFilesystem`, dropped capabilities, `seccompProfile: RuntimeDefault`.
+2. **Pinned image by digest**: migrate Job `image:` MUST use an immutable `@sha256:...` digest, never a mutable tag.
+3. **No shell / debug endpoints**: migrate Job container image MUST NOT ship `sh`, `bash`, `busybox`, or network-debug tooling. Use distroless or minimal base images.
+4. **Short-lived Jobs**: migrate Jobs run as Kubernetes `Job` (not `Deployment`) with `backoffLimit <= 3` and `activeDeadlineSeconds`. Complete and terminate — do not keep the pod warm.
+5. **Dedicated namespace / ServiceAccount**: the migrate-Job IRSA role must bind to a ServiceAccount used ONLY by the migrate Job, in a namespace hosting NO long-running workloads. NetworkPolicy should restrict egress to AWS Secrets Manager endpoints + the Aurora cluster SG only.
+6. **Master-secret rotation after bootstrap**: consider rotating the cluster master password out-of-band after each successful tenant bootstrap. This is an operational runbook, not module behavior. The canonical runbook is inlined as a comment block next to `aws_secretsmanager_secret_version.this` in `terraform/modules/aws-eks-aurora-cluster/resources.tf`; prefer it as the authoritative reference when this CHANGELOG drifts. In summary, the module distinguishes three scenarios:
+
+   - **Scenario A — Out-of-band rotation (no data loss, documented default).** `ALTER USER ... WITH PASSWORD '...'` via psql, then `aws secretsmanager put-secret-value` on the master secret ARN. The module's `ignore_changes = [secret_string]` on the secret version AND `ignore_changes = [master_password]` on the cluster together ensure subsequent `terraform apply` runs do NOT revert this. After rotation, `random_password.master_password.result` in Terraform state is no longer authoritative — that is expected.
+   - **Scenario B — Terraform-driven rotation (no data loss, opt-in).** Temporarily comment out both `ignore_changes` blocks, run `terraform apply -replace=random_password.master_password` (prefix module-path if called as a submodule, e.g. `-replace='module.product_db.random_password.master_password'`), then restore the `ignore_changes` blocks. Terraform drives an in-place `ModifyDBCluster` and overwrites the secret version. The cluster itself is NOT replaced.
+   - **Scenario C — Cluster rebuild / disaster recovery (DESTRUCTIVE).** `-replace=aws_rds_cluster.this` forces `DeleteDBCluster + CreateDBCluster`, which **destroys every logical database on the cluster, including every tenant's data**. Use only for deliberate rebuilds from backup or staging tear-downs. Preconditions: `deletion_protection = false`, valid `final_snapshot_identifier` (or `skip_final_snapshot = true`), acceptable tenant backups, every tenant migrate Job will re-bootstrap. The destructive command is `terraform apply -replace=random_password.master_password -replace=aws_rds_cluster.this -replace=aws_secretsmanager_secret_version.this` (prefix every address with the module path when called as a submodule).
+
+   `replace_triggered_by = [aws_rds_cluster.this.arn]` on the secret version ensures that cluster force-replacement (identifier rename via `project_name_prefix`/`workload_name` change, `db_subnet_group_name` recreation, or operator-driven `-replace=aws_rds_cluster.this` — the events that legitimately invalidate the secret's `host`) automatically produces a fresh secret version aligned with the new cluster. Aurora engine major-version bumps with `allow_major_version_upgrade = true` are in-place via `ModifyDBCluster` and deliberately do NOT flip `.arn`; the stored `host` remains correct across such upgrades. `.arn` (not the bare resource) is used so routine in-place cluster updates (backup retention, deletion_protection toggle, serverlessv2 scaling, tag churn) do NOT trigger replacement and do NOT clobber a Scenario A rotation. `var.port` edits are NOT wired into the trigger chain by design — any automation rewriting `secret_string` while the cluster stays in place would re-introduce the stale-state-password-overwrites-live-Postgres failure mode that `ignore_changes = [secret_string]` was added to prevent. Operators who change `var.port` must run `aws secretsmanager put-secret-value` manually; the procedure is documented in `var.port`'s description and the inline runbook.
+
+A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may introduce a dedicated per-cluster bootstrap role (non-superuser, granted `CREATEROLE`/`CREATEDB` only), which would narrow the migrate-Job blast radius without reintroducing the chicken-and-egg problem.
+
+---
+
+## [1.5.8] — 2026-04-18
+
+### Fixes
+
+- **operator-tools**: Anchor grep pattern in `render-k8s-aws-bundle.sh` to prevent `certificate_arn` matching `api_certificate_arn` when extracting Terraform output values.
+
+---
+
+## [1.5.7] — 2026-04-17
+
+### Infrastructure
+
+- Version bump patch release (no functional changes).
+
+---
+
 ## [1.5.6] — 2026-04-17
 
 ### Fixes
