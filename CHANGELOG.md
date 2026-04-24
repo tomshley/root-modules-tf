@@ -6,7 +6,7 @@ This project follows Semantic Versioning.
 
 ---
 
-## [Unreleased] — hotfix/aurora-multi-tenant-secrets
+## [1.6.0] — 2026-04-24
 
 ### Features
 
