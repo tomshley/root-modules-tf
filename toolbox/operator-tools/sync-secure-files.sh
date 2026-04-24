@@ -129,6 +129,8 @@ for f in "$SECURE_DIR"/* "$SECURE_DIR"/.*; do
   fname=$(basename "$f")
   [[ "$fname" == "." || "$fname" == ".." ]] && continue
   [[ "$fname" == *.example ]] && continue
+  [[ "$fname" == ".gitkeep" ]] && continue
+  [[ ! -s "$f" ]] && continue  # skip zero-byte files (GitLab Secure Files API returns 500)
   LOCAL_FILES+=("$f")
 done
 
