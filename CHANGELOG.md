@@ -8,6 +8,16 @@ This project follows Semantic Versioning.
 
 ## [1.6.0] — 2026-04-24
 
+### Documentation
+
+- Reconcile CHANGELOG with actual tagged release contents. The previous `[Unreleased] — hotfix/aurora-multi-tenant-secrets` section shipped as `v1.5.9` and is now titled accordingly. The former `[1.5.6]` section described content that was actually tagged as `v1.5.7` (no `v1.5.6` tag exists); its content has been merged into `[1.5.7]`. Sections `[1.5.0]` through `[1.5.4]` have been enriched with module and toolbox changes that were present in the tagged diffs but omitted from the original release notes. The `aws-eks-keycloak` Secrets Manager fallback fix has been moved from `[1.5.0]` (where it was misattributed) to `[1.5.1]` (where it actually shipped).
+
+No Terraform module or example code changes in `v1.6.0`.
+
+---
+
+## [1.5.9] — 2026-04-24
+
 ### Features
 
 - **aws-eks-aurora-cluster**: Add optional `tenants` map input for multi-tenant clusters that host per-service logical databases behind a single Aurora cluster. For each tenant, the module provisions:
@@ -36,6 +46,10 @@ This project follows Semantic Versioning.
 - **aws-eks-aurora-cluster**: Default `tenant_role_names` now transform hyphens to underscores so omitted `db_role_name` values produce valid unquoted Postgres identifiers (e.g. tenant key `device-profile` → role name `device_profile`). The derivation lives in `local.resolved_tenant_role_names` in `locals.tf`; the output simply echoes it, and the uniqueness validation duplicates the expression inline because Terraform validation blocks cannot reference locals.
 - **aws-eks-aurora-cluster**: New outputs `tenant_secret_recovery_window_in_days` and `master_secret_recovery_window_in_days` echoing the respective input values, for audit/plan visibility.
 - **examples/aws-eks-aurora-multi-tenant**: New example showing a shared cluster with two tenants and per-tenant migrate + runtime IRSA wiring.
+
+### Toolbox
+
+- **sync-secure-files.sh**: Minor comment tidy (no behavior change).
 
 ### Rationale
 
@@ -101,17 +115,11 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 
 ## [1.5.7] — 2026-04-17
 
-### Infrastructure
-
-- Version bump patch release (no functional changes).
-
----
-
-## [1.5.6] — 2026-04-17
-
 ### Fixes
 
-- **aws-eks-aurora-cluster**: Replace `count` with `for_each = toset(var.allowed_security_group_ids)` on `aws_vpc_security_group_ingress_rule.allowed`. Resources are now keyed by SG ID instead of list index — deduplicates automatically, eliminates index-shift races on list changes, and makes add/remove surgical. Existing deployments will see a one-time destroy+create cycle on ingress rules (brief connectivity blip, same as v1.5.3 migration).
+- **aws-eks-aurora-cluster**: Replace `count` with `for_each = toset(var.allowed_security_group_ids)` on `aws_vpc_security_group_ingress_rule.allowed`. Resources are now keyed by SG ID instead of list index — deduplicates automatically, eliminates index-shift races on list changes, and makes add/remove surgical. Existing deployments will see a one-time destroy+create cycle on ingress rules (brief connectivity blip, same as v1.5.3 migration). `moved.tf` documents the state-migration path from count-indexed to SG-ID-keyed resources.
+
+> Note: no `v1.5.6` tag was published. The refactor commit references `v1.5.6` in its subject line, but the actual tag cut against this work was `v1.5.7`.
 
 ---
 
@@ -129,6 +137,10 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 
 - **aws-eks-aurora-cluster**: Add explicit `depends_on = [aws_security_group.this]` to `aws_vpc_security_group_ingress_rule.allowed` and `aws_vpc_security_group_egress_rule.all`. Without this, OpenTofu resolves the SG ID from state (unchanged during the in-place update that removes inline rules) and parallelises standalone rule creation with inline rule revocation, causing `InvalidPermission.Duplicate` errors from the AWS API.
 
+### Toolbox
+
+- **render-k8s-aws-bundle.sh**: Expand service/credential handling (~70 lines added) for improved k8s workload bundle rendering.
+
 ---
 
 ## [1.5.3] — 2026-04-17
@@ -141,11 +153,15 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 
 On first apply after upgrading from v1.5.2, the plan will show the security group updated in-place (inline rules removed) and new standalone rule resources created. The SG itself is not destroyed/recreated. There is a brief window (seconds) between inline rule removal and standalone rule creation — schedule during low-traffic if possible. See `moved.tf` for details.
 
+### Toolbox
+
+- **render-service-bundle.sh**: Expand service mapping and credential handling (~175 lines added).
+
 ---
 
 ## [1.5.2] — 2026-04-16
 
-### Breaking Changes (Example Only — No Module Changes)
+### Breaking Changes (Streaming Example)
 
 - **streaming-full-stack example**: Replace monolithic `confluent` sensitive variable with non-sensitive `confluent_config` + flat `kafka_admin_api_key` / `kafka_admin_api_secret` secret variables. Consumer repos using this pattern must update their variable definitions and module calls.
 
@@ -153,11 +169,16 @@ On first apply after upgrading from v1.5.2, the plan will show the security grou
 
 - **streaming-full-stack example**: Remove all `nonsensitive()` calls from `locals.tf`. Config fields (environment ID, cluster ID, endpoints) are no longer marked sensitive, eliminating `for_each` workarounds.
 - **streaming-full-stack example**: Remove `sensitive = true` from `kafka_bootstrap_servers` and `schema_registry_url` outputs — these are non-sensitive connection endpoints.
+- **streaming-full-stack example**: Require both `kafka_admin_api_key` and `kafka_admin_api_secret` for credential reconstruction (either both set or both null — no partial credentials).
+- **streaming-full-stack example**: Add streaming credentials precondition and fix stale `kafka_rest_endpoint` comment (the Confluent provider appends `/kafka/v3` internally).
+- **aws-eks-keycloak**: Guard null `admin_secret_arn` annotation and add admin credentials validation preconditions.
+- **aws-eks-keycloak**: Fix hardcoded `db-user` secret lookup and dynamic role grouping in Helm values.
+- **aws-eks-aurora-cluster**: Broaden `master_username` output description to reflect general consumer-side usefulness (e.g. Keycloak DB credential wiring, per-tenant migrate-Job usage).
 
 ### Documentation
 
 - **streaming-full-stack README**: Replace "Secure Files" section with "Config and Credentials Separation" documenting the committed `terraform.tfvars` + `TF_VAR_*` env var pattern. Remove `.tfvars.example` from tree listing.
-- **confluent-bootstrap.sh**: Output `TF_VAR_kafka_admin_api_key` / `TF_VAR_kafka_admin_api_secret` env var lines and `confluent_config` HCL block instead of monolithic `.tfvars` content.
+- **confluent-bootstrap.sh**: Output `TF_VAR_kafka_admin_api_key` / `TF_VAR_kafka_admin_api_secret` env var lines and `confluent_config` HCL block instead of monolithic `.tfvars` content. Auto-populate `environment_name` from the CLI context.
 
 ### Migration
 
@@ -172,6 +193,10 @@ Consumer repos update by:
 ---
 
 ## [1.5.1] — 2026-04-13
+
+### Fixes
+
+- **aws-eks-keycloak**: Resolve DB and admin passwords from Secrets Manager when not explicitly provided. Eliminates ExternalSecretsOperator dependency for first-apply bootstrap — the module reads real credentials at plan time and populates Kubernetes secrets. `ignore_changes` on secret data preserves ESO-managed rotation support.
 
 ### Infrastructure
 
@@ -199,7 +224,6 @@ Consumer repos update by:
 ### Fixes
 
 - **aws-eks-keycloak**: Add `fullnameOverride` to Helm values so Kubernetes resource names match the release name consistently. Remove unused `db-user` secret key that was never referenced by the chart.
-- **aws-eks-keycloak**: Resolve DB and admin passwords from Secrets Manager when not explicitly provided. Eliminates ExternalSecretsOperator dependency for first-apply bootstrap — the module reads real credentials at plan time and populates Kubernetes secrets. `ignore_changes` on secret data preserves ESO-managed rotation support.
 
 ### Examples
 
