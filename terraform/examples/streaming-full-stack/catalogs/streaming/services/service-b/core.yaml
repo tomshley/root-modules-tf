@@ -7,3 +7,17 @@ topics:
     cleanup_policy: "delete"
     owner: "service-b"
     notes: "Enriched events produced by service-b"
+
+  # Demonstrates the optional compaction-tuning fields. A compact+delete
+  # state-changelog topic with a 7-day tombstone window so a paused
+  # downstream consumer (CDC sink, change-log reader) can recover within
+  # a week without missing delete markers; Kafka's 24h default is too
+  # short for that workload.
+  - name: "topic-gamma-state"
+    partitions: 6
+    retention_ms: 2592000000  # 30 days
+    cleanup_policy: "compact,delete"
+    delete_retention_ms: 604800000  # 7 days tombstone grace
+    min_compaction_lag_ms: 60000    # delay compaction by 1 min so changelog-restore consumers observe the producer's record-then-tombstone sequence rather than a pre-compacted view (Kafka default of 0 is too aggressive for changelog-style restore)
+    owner: "service-b"
+    notes: "Compacted state changelog for service-b enriched entities"
