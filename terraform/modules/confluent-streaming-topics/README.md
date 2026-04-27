@@ -16,7 +16,7 @@ Use this module when you manage Kafka topics declaratively via YAML service cata
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `catalog_entries` | `list(object)` | yes | — | Pre-parsed topic entries. Each entry: `name`, `partitions`, `retention_ms`, `cleanup_policy`, `service`, `role`. |
+| `catalog_entries` | `list(object)` | yes | — | Pre-parsed topic entries. Each entry: `name`, `partitions`, `retention_ms`, `cleanup_policy`, `service`, `role`; optional `delete_retention_ms`, `min_compaction_lag_ms`. |
 | `base_overlay` | `object` | yes | — | Deployment overlay with `include` (list of `{service, roles}`) and `exclude_topics` (list of topic names). |
 | `region_exclusions` | `object` | no | `{ exclude_topics = [] }` | Optional region-specific topic exclusions. |
 | `kafka_cluster_id` | `string` | yes | — | Confluent Kafka cluster ID. Must start with `lkc-`. |
@@ -27,16 +27,24 @@ Use this module when you manage Kafka topics declaratively via YAML service cata
 
 ```hcl
 list(object({
-  name           = string
-  partitions     = number
-  retention_ms   = number
-  cleanup_policy = string
-  service        = string
-  role           = string
+  name                  = string
+  partitions            = number
+  retention_ms          = number
+  cleanup_policy        = string
+  service               = string
+  role                  = string
+  delete_retention_ms   = optional(number)
+  min_compaction_lag_ms = optional(number)
 }))
 ```
 
 Additional fields (`owner`, `notes`) may be present in the consumer's YAML but are not used by this module.
+
+#### Optional compaction-tuning fields
+
+`delete_retention_ms` and `min_compaction_lag_ms` are optional knobs only meaningful on topics whose `cleanup_policy` includes `"compact"` (i.e. `"compact"` or `"compact,delete"`). When non-null they emit Kafka's `delete.retention.ms` and `min.compaction.lag.ms` config keys; when null they are omitted and Kafka's defaults apply (24h tombstone retention, 0ms minimum compaction lag).
+
+A common combination is `cleanup_policy = "compact,delete"` + `delete_retention_ms = 604800000` (7 days), which keeps tombstones long enough that change-log readers / CDC sinks can pause for up to a week without missing delete markers — Kafka's 24h default is often too short for those workloads. Plan-time validation rejects either field on a pure `cleanup_policy = "delete"` topic, since the broker silently ignores both there.
 
 ### `base_overlay` shape
 
