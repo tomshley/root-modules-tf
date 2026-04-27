@@ -6,7 +6,7 @@ This project follows Semantic Versioning.
 
 ---
 
-## [Unreleased] — feature/aws-eks-elasticache-redis-module
+## [1.7.0] — 2026-04-27
 
 ### Features
 
