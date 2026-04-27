@@ -32,10 +32,30 @@ resource "confluent_kafka_topic" "managed" {
   partitions_count = each.value.partitions
   rest_endpoint    = var.kafka_rest_endpoint
 
-  config = {
-    "cleanup.policy" = each.value.cleanup_policy
-    "retention.ms"   = tostring(each.value.retention_ms)
-  }
+  # Conditionally emit delete.retention.ms / min.compaction.lag.ms so
+  # consumers that omit the optional fields land Kafka's defaults
+  # (24h / 0ms) without an explicit "" or "0" override surfacing in the
+  # broker config. The merge() pattern keeps the always-on
+  # cleanup.policy + retention.ms in a single literal block so the
+  # required-config shape stays obvious to readers, with the two
+  # optional knobs layered as one-key maps that drop to {} when null.
+  # tostring() is required because confluent_kafka_topic.config is
+  # map(string); omitting it would supply a number where a string is
+  # expected, surfacing as a "string required" coercion failure when
+  # the merged map(any) result is assigned to the resource's
+  # map(string)-typed config attribute.
+  config = merge(
+    {
+      "cleanup.policy" = each.value.cleanup_policy
+      "retention.ms"   = tostring(each.value.retention_ms)
+    },
+    each.value.delete_retention_ms != null ? {
+      "delete.retention.ms" = tostring(each.value.delete_retention_ms)
+    } : {},
+    each.value.min_compaction_lag_ms != null ? {
+      "min.compaction.lag.ms" = tostring(each.value.min_compaction_lag_ms)
+    } : {},
+  )
 
   credentials {
     key    = var.kafka_admin_credentials.api_key
