@@ -44,7 +44,7 @@ check "admin_credentials_provided" {
 # plan fails if neither admin_password nor admin_secret_arn is set.
 
 locals {
-  resolved_db_password    = var.db_password != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
+  resolved_db_password = var.db_password != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
   resolved_admin_password = var.admin_password != null ? var.admin_password : (
     var.admin_secret_arn != null ? jsondecode(data.aws_secretsmanager_secret_version.admin[0].secret_string)["password"] : null
   )
@@ -65,8 +65,8 @@ locals {
   realm_content      = local.realm_import ? file(var.realm_json_path) : null
   realm_content_hash = local.realm_import ? sha256(local.realm_content) : null
   image_tag_values   = var.keycloak_image_tag != null ? { image = { tag = var.keycloak_image_tag } } : {}
-  service_host = "${var.release_name}.${local.namespace}.svc.cluster.local"
-  port_suffix  = var.service_port != 80 ? ":${var.service_port}" : ""
+  service_host       = "${var.release_name}.${local.namespace}.svc.cluster.local"
+  port_suffix        = var.service_port != 80 ? ":${var.service_port}" : ""
   common_labels = merge({
     "app.kubernetes.io/managed-by" = "terraform"
     "app.kubernetes.io/part-of"    = "keycloak"
@@ -149,12 +149,12 @@ resource "helm_release" "keycloak" {
         passwordSecretKey = "admin-password"
       }
       externalDatabase = {
-        host     = var.db_endpoint
-        port     = var.db_port
-        user     = var.db_user
-        database = var.db_name
+        host                      = var.db_endpoint
+        port                      = var.db_port
+        user                      = var.db_user
+        database                  = var.db_name
         existingSecret            = kubernetes_secret.db_credentials.metadata[0].name
-        existingSecretPasswordKey  = "db-password"
+        existingSecretPasswordKey = "db-password"
       }
       postgresql = {
         enabled = false
@@ -176,17 +176,17 @@ resource "helm_release" "keycloak" {
         }
       }
       keycloakConfigCli = local.realm_import ? {
-        enabled = true
+        enabled           = true
         existingConfigmap = kubernetes_config_map.realm_import[0].metadata[0].name
-      } : {
+        } : {
         enabled = false
       }
-    },
-    local.image_tag_values,
-    local.realm_import ? {
-      podAnnotations = {
-        "checksum/realm-config" = local.realm_content_hash
-      }
+      },
+      local.image_tag_values,
+      local.realm_import ? {
+        podAnnotations = {
+          "checksum/realm-config" = local.realm_content_hash
+        }
     } : {})),
   ], var.extra_helm_values)
 

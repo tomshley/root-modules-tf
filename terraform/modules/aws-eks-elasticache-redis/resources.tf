@@ -202,18 +202,18 @@ resource "aws_secretsmanager_secret_version" "auth" {
   #   `terraform output -raw replication_group_id` and
   #   `terraform output -raw auth_token_secret_arn` resolve against the
   #   ROOT module's outputs. When this module is invoked as a submodule
-  #   (the normal case, e.g. `module.portal_redis`), consumer stacks must
+  #   (the normal case, e.g. `module.app_redis`), consumer stacks must
   #   re-export the values they want operators to be able to read at the
   #   root, e.g.
-  #     output "portal_redis_replication_group_id" {
-  #       value = module.portal_redis.replication_group_id
+  #     output "app_redis_replication_group_id" {
+  #       value = module.app_redis.replication_group_id
   #     }
-  #     output "portal_redis_auth_token_secret_arn" {
-  #       value = module.portal_redis.auth_token_secret_arn
+  #     output "app_redis_auth_token_secret_arn" {
+  #       value = module.app_redis.auth_token_secret_arn
   #     }
   #   and operators substitute those re-exported names into the snippets.
   #   Alternatively, fetch via:
-  #     terraform output -json | jq -r '.portal_redis_replication_group_id.value'
+  #     terraform output -json | jq -r '.app_redis_replication_group_id.value'
   #   The same submodule-prefix rule applies to `-replace=...` addresses
   #   in scenarios B and C (already documented inline below).
   #
