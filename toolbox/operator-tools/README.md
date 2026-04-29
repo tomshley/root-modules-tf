@@ -1,297 +1,328 @@
 # Operator Tools
 
-Reusable shell scripts for operator session setup and post-apply credential rendering.
-
-These tools are **repo-agnostic** — they accept explicit file paths as arguments rather than deriving paths from a repository root. Consumer infrastructure repos invoke them via workspace-local relative paths or by downloading a release artifact.
+Reusable shell scripts for operator session setup, post-apply credential rendering, and GitLab Secure Files sync. Repo-agnostic — every script accepts explicit file paths and TF output names as arguments rather than baking in a layout.
 
 ---
 
-## Scripts
+## Layout
 
-### `aws-session.sh`
+```
+toolbox/operator-tools/
+├── aws-session.sh                # source: AWS env + sts get-caller-identity
+├── k8s-session.sh                # source: discover EKS + update kubeconfig
+├── confluent-session.sh          # source: load Confluent Cloud creds
+├── confluent-bootstrap.sh        # one-time Confluent service-account + key bootstrap
+├── render-streaming-bundle.sh    # render per-workload Kafka/SR .env files
+├── render-ci-deploy-bundle.sh    # render CI deploy .env from cloud stack
+├── render-bundle.sh              # render a single credential bundle (subcommand-based)
+├── sync-secure-files.sh          # upload .secure_files/ to GitLab Secure Files
+├── lib/
+│   └── render-helpers.sh         # sourceable bash library (low-level)
+└── README.md
+```
 
-Source this to load AWS credentials from an env file and verify connectivity.
+---
+
+## Sessions and one-shot helpers
+
+### `aws-session.sh` *(source)*
 
 ```bash
 source /path/to/operator-tools/aws-session.sh /path/to/.secure_files/staging-us-east-1-cloud.env
 ```
 
-**Expects in env file:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` (or `AWS_REGION`).
+Loads AWS credentials from an env file (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` / `AWS_REGION`), unsets `AWS_PROFILE`/`AWS_SESSION_TOKEN` so static credentials take effect, and verifies via `aws sts get-caller-identity`.
 
-**Actions:** Sources the env file, unsets `AWS_PROFILE` and `AWS_SESSION_TOKEN` so static credentials take effect, then runs `aws sts get-caller-identity` to verify.
-
-### `confluent-session.sh`
-
-Source this to load Confluent Cloud credentials from an env file and verify connectivity.
+### `confluent-session.sh` *(source)*
 
 ```bash
 source /path/to/operator-tools/confluent-session.sh /path/to/.secure_files/staging-us-east-1-streaming.env
 ```
 
-**Expects in env file:** `CONFLUENT_CLOUD_API_KEY`, `CONFLUENT_CLOUD_API_SECRET`.
+Loads Confluent Cloud credentials (`CONFLUENT_CLOUD_API_KEY`, `CONFLUENT_CLOUD_API_SECRET`) and optionally verifies with the `confluent` CLI.
 
-**Actions:** Parses the env file for Confluent credentials (handles quoted values), exports them, and optionally verifies with the `confluent` CLI if installed.
+### `k8s-session.sh` *(source)*
 
-### `k8s-session.sh`
-
-Source this to auto-discover the EKS cluster and update kubeconfig.
+Auto-discovers the EKS cluster and updates kubeconfig. Requires AWS session loaded first.
 
 ```bash
-# Requires AWS credentials to be loaded first
-source /path/to/operator-tools/aws-session.sh /path/to/.secure_files/staging-us-east-1-cloud.env
+source /path/to/operator-tools/aws-session.sh .secure_files/staging-us-east-1-cloud.env
 source /path/to/operator-tools/k8s-session.sh
 ```
 
-**Requires:** `AWS_REGION` must be set (via `aws-session.sh` or manually).
+### `confluent-bootstrap.sh`
 
-**Actions:** Lists EKS clusters in the region, picks the first, runs `aws eks update-kubeconfig`, and verifies with `kubectl cluster-info`.
+One-time script that creates the Confluent Cloud service accounts, API keys, and ACLs Terraform needs. Operator's personal Confluent Cloud login is used; once bootstrap is done, Terraform authenticates with the created service-account keys.
+
+```bash
+./confluent-bootstrap.sh \
+  --environment   env-XXXXX \
+  --cluster       lkc-XXXXX \
+  --tf-sa-name    tf-my-infrastructure \
+  --admin-sa-name my-staging-kafka-admin \
+  --output-dir    /path/to/.secure_files
+```
+
+Idempotent. Outputs values for `.env` / `.tfvars` files; if `--output-dir` is given, writes `bootstrap-output.env` (chmod 600).
 
 ### `render-streaming-bundle.sh`
 
-Run this after a streaming stack apply to render per-workload credential `.env` files.
+Renders per-workload Kafka + SR credential `.env` files from a streaming-stack's outputs. Workload set is data-driven — discovered from the `workload_kafka_api_key_ids` map output.
 
 ```bash
 ./render-streaming-bundle.sh /path/to/environments/staging/us-east-1/streaming
 ```
 
-**Requires:** `tofu` (or set `TOFU=terraform`), `jq`. The stack directory must have been initialized and applied.
-
-**Output:** Creates `<stack-dir>/.env-bundle/<workload>.env` for each workload with Kafka and Schema Registry credentials. All files are `chmod 600`.
-
-### `confluent-bootstrap.sh`
-
-One-time bootstrap script that creates the Confluent Cloud service accounts, API keys, and ACLs that Terraform needs to manage a streaming stack. Uses the operator's personal Confluent Cloud login — once bootstrap is complete, Terraform authenticates with the created service account keys.
-
-```bash
-./confluent-bootstrap.sh \
-  --environment  env-XXXXX \
-  --cluster      lkc-XXXXX \
-  --tf-sa-name   tf-my-infrastructure \
-  --admin-sa-name my-staging-kafka-admin \
-  --output-dir   /path/to/.secure_files
-```
-
-**Requires:** `confluent` CLI (v3+), `jq`, `curl`. The operator must have a Confluent Cloud user account with permissions to create service accounts and API keys.
-
-**Arguments:**
-
-| Flag | Required | Description |
-|---|---|---|
-| `--environment` | Yes | Confluent Cloud environment ID (`env-XXXXX`) |
-| `--cluster` | Yes | Kafka cluster ID (`lkc-XXXXX`) |
-| `--tf-sa-name` | Yes | Name for the Terraform provider service account |
-| `--admin-sa-name` | Yes | Name for the Kafka admin service account |
-| `--output-dir` | No | Directory to write `bootstrap-output.env` with all values |
-
-**Creates:**
-
-1. **Terraform provider service account** + EnvironmentAdmin role binding + **Cloud API key** (for `.env`)
-2. **Kafka admin service account** + **Cluster API key** + cluster admin ACLs — topic CRUD, consumer-group CRUD, and ALTER on cluster-scope for ACL creation (for `.tfvars`)
-3. Retrieves **Schema Registry CRN** (not visible in the Confluent Cloud UI)
-4. Retrieves **Kafka bootstrap servers** and **REST endpoint**
-5. Verifies the Cloud API key with the Confluent Cloud REST API
-
-**Output:** Prints all values needed for the `.env` and `.tfvars` files. If `--output-dir` is specified, writes a `bootstrap-output.env` file (`chmod 600`) with all values in parseable `KEY=value` format.
-
-**Idempotent:** If the service accounts already exist, they are reused. New API keys are always created (old keys are not deleted — revoke them manually if replacing).
-
----
+Output: `<stack-dir>/.env-bundle/<workload>.env` per workload, chmod 600.
 
 ### `render-ci-deploy-bundle.sh`
 
-Renders a CI deploy credential bundle from cloud stack Terraform outputs. The output file contains the OIDC role ARN, cluster name, and region needed by consumer CI pipelines to authenticate via GitLab OIDC → AWS IAM role.
-
-Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
+Renders the CI OIDC deploy bundle (cluster name, region, role) from a cloud-stack's outputs.
 
 ```bash
-./render-ci-deploy-bundle.sh [stack-dir] [namespace]
+./render-ci-deploy-bundle.sh /path/to/cloud-stack my-app-staging
 ```
 
-**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
-
-**Arguments:**
-
-| Argument | Required | Description |
-|---|---|---|
-| `stack-dir` | No (default: `pwd`) | Path to the cloud stack directory with Terraform state |
-| `namespace` | No | Kubernetes namespace to include in the output file |
-
-**Output:** `<stack-dir>/.env-bundle/ci-deploy.env` (`chmod 600`) with:
-
-- `AWS_DEFAULT_REGION` / `AWS_REGION`
-- `K8S_CLUSTER_NAME`
-- `CI_DEPLOY_ROLE_ARN`
-- `K8S_NAMESPACE` (when provided)
-
-The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `staging-k8s-deploy.env`. Pass the target namespace as the second argument to include `K8S_NAMESPACE` automatically.
-
-**Prerequisite:** The cloud stack must have been applied with `ci_oidc_access` configured. If `ci_deploy_role_arn` is not in the Terraform outputs, the script exits with an error.
-
-### `aws-bundle helper`
-
-Renders per-service AWS resource `.env` files from Terraform outputs across multiple stacks (cloud, data, tls). The output file contains the exact variable names expected by CI deploy job `sed` placeholder substitution.
-
-Reads outputs via `make output` (Makefile wrapper convention), falling back to raw `tofu output` if no Makefile is present.
-
-```bash
-./aws-bundle helper --service ingress \
-  --cloud-dir /path/to/environments/staging/us-east-1/cloud \
-  --data-dir  /path/to/environments/staging/us-east-1/data \
-  --tls-dir   /path/to/environments/staging/us-east-1/tls
-```
-
-**Requires:** `tofu` (or set `TOFU=terraform`), `make`.
-
-**Arguments:**
-
-| Flag | Required | Description |
-|---|---|---|
-| `--service` | Yes | One of: `ingress`, `structuring` |
-| `--cloud-dir` | Yes | Path to the cloud stack directory (`karpenter_node_role_name`) |
-| `--data-dir` | Yes | Path to the data stack directory (`ingress_irsa_role_arn` or `structuring_irsa_role_arn`) |
-| `--tls-dir` | ingress only | Path to the tls stack directory (`certificate_arn`) |
-
-**Output:** `<cloud-dir>/.env-bundle/<service>-k8s-aws.env` (`chmod 600`) with:
-
-- **ingress**: `ACM_CERT_ARN`, `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
-- **structuring**: `IRSA_ROLE_ARN`, `KARPENTER_NODE_ROLE`
-
-The rendered file is intended to be copied to consumer project `.secure_files/` directories and uploaded to GitLab Secure Files as `<env>-k8s-aws.env`.
-
-**Prerequisite:** The cloud, data, and (for ingress) tls stacks must have been applied.
-
-### `service-bundle helper`
-
-Orchestrator that renders **all** TF-derivable secure files for a service into the target project's `.secure_files/` directory in one command. Combines the work of `render-ci-deploy-bundle.sh`, `aws-bundle helper`, `render-streaming-bundle.sh`, and adds db-config, db credentials (via Secrets Manager), s3-config, and RDS CA bundle.
-
-```bash
-./service-bundle helper --service ingress \
-  --env staging --region us-east-1 \
-  --infra-dir /path/to/your-infra-repo \
-  --target-dir /path/to/your-ingress-service
-```
-
-**Requires:** `tofu` (or set `TOFU=terraform`), `make`, `jq`, `curl`, `aws` CLI.
-
-**Arguments:**
-
-| Flag | Required | Description |
-|---|---|---|
-| `--service` | Yes | One of: `ingress`, `structuring` |
-| `--env` | Yes | Environment name (`staging`, `production`) |
-| `--region` | Yes | AWS region (e.g. `us-east-1`) |
-| `--infra-dir` | Yes | Path to `your-infra-repo` repo root |
-| `--target-dir` | Yes | Path to target service repo root |
-
-**Output (both services):**
-
-- `<env>-k8s-deploy.env` — CI deploy credentials (cluster name, OIDC role, region, namespace)
-- `<env>-k8s-aws.env` — IRSA role, Karpenter node role, ACM cert (ingress only)
-- `<env>-k8s-kafka.env` — Kafka + Schema Registry credentials (hyphenated keys for k8s secret)
-- `<env>-k8s-s3-config.env` — S3 bucket name + region (hyphenated keys for k8s configmap)
-
-**Output (ingress only):**
-
-- `<env>-k8s-db-config.env` — Aurora endpoint, port, database (hyphenated keys for k8s configmap)
-- `<env>-k8s-db.env` — Aurora username + password from Secrets Manager (hyphenated keys for k8s secret)
-- `<env>-k8s-rds-ca-bundle.pem` — Amazon RDS root CA certificate (downloaded)
-- `<env>-k8s-rds-cert.env` — Pointer to the PEM file
-
-**NOT rendered (manual):** `<env>-k8s-registry.env` — GitLab container registry PAT. The script warns if this file is missing.
-
-**Prerequisite:** All stacks (cloud, data, tls, streaming) must have been applied. AWS credentials must be loaded for Secrets Manager access (ingress db password).
+Output: `<stack-dir>/.env-bundle/ci-deploy.env`, chmod 600.
 
 ### `sync-secure-files.sh`
 
-Uploads all files from a local `.secure_files/` directory to a GitLab project's CI/CD Secure Files store via the API. For each local file, replaces the existing remote copy (if any) with the current version. The script downloads a backup of the existing remote secure file before delete/recreate, retries API calls, restores the previous remote file if replacement upload fails, and stops on the first unrecoverable error.
+Uploads `.secure_files/` to a GitLab project's Secure Files store with backup/restore on failure.
 
 ```bash
 ./sync-secure-files.sh --project-id 76128095 --token "$GITLAB_TOKEN"
 ```
 
-**Requires:** `curl`, `jq`.
+---
 
-**Arguments:**
+## `render-bundle.sh` — single-bundle command-line renderer
 
-| Flag | Required | Description |
+`render-bundle.sh` is a subcommand-based command-line tool. It knows the *shape* of every credential bundle that root-modules-tf modules typically produce; the customer passes the *data* (which TF stack, which output names, which secret ARN, which tenant key). Each bundle invocation writes one chmod-600 `.env` (or `.pem`) at a path the customer chooses.
+
+```bash
+./render-bundle.sh --list
+./render-bundle.sh <bundle> --help
+./render-bundle.sh <bundle> [flags...]
+```
+
+### Available bundles
+
+Each bundle maps 1:1 to a root-modules-tf module's outputs. Run `--list` to see them.
+
+| Bundle | Anchored to | Produces |
 |---|---|---|
-| `--project-id` | Yes | Numeric GitLab project ID |
-| `--token` | No | GitLab PAT with `api` scope (falls back to `GITLAB_TOKEN` env var) |
-| `--secure-dir` | No | Path to local `.secure_files/` (default: `.secure_files`) |
-| `--gitlab-url` | No | GitLab API base URL (default: `https://gitlab.com`) |
+| `ci-deploy` | `aws-eks-cluster` + `aws-eks-ci-oidc-access` | CI deploy `.env` (cluster, region, role, namespace) |
+| `aurora-config` | `aws-eks-aurora-cluster` | Aurora connection `.env` (host, port, database) |
+| `aurora-master` | `aws-eks-aurora-cluster` | Aurora creds from cluster master secret |
+| `aurora-tenant` | `aws-eks-aurora-cluster` | Aurora creds from a tenant secret (multi-tenant pattern) |
+| `redis-config` | `aws-eks-elasticache-redis` | Redis connection metadata (AUTH stays in Secrets Manager) |
+| `keycloak` | `aws-eks-keycloak` | Cluster-internal JWKS / issuer / token URLs |
+| `s3-config` | `aws-eks-secure-s3` | Bucket name + region |
+| `kafka-workload` | `confluent-streaming-workload-access` | Per-workload Kafka + SR credentials |
+| `rds-ca-pair` | (Amazon RDS bundle) | RDS root CA PEM + pointer `.env` |
+| `aws-arns` | (generic) | Project N TF outputs from N stacks into a single `.env` |
+| `registry` | (Tomshley CI convention) | GitLab container registry creds from `.credentials.gitlab` |
 
-**Output:** Prints `UPD` (replaced), `ADD` (new), or `FAIL` per file. Exits non-zero on the first unrecoverable sync failure.
+Each bundle defaults its TF output keys to the names the matching root-modules-tf module ships. Override per-bundle via flags like `--cluster-output`, `--host-output`, `--secret-arn-output` if your stack renames them.
+
+### Examples
+
+CI deploy bundle from a cloud stack:
+
+```bash
+./render-bundle.sh ci-deploy \
+  --out /tmp/secure/staging-k8s-deploy.env \
+  --cloud-dir environments/staging/us-east-1/cloud \
+  --region us-east-1 \
+  --namespace my-app-staging
+```
+
+Aurora master credentials, fetching the secret ARN from a TF output:
+
+```bash
+./render-bundle.sh aurora-master \
+  --out /tmp/secure/staging-k8s-db.env \
+  --region us-east-1 \
+  --secret-arn-output aurora_master_secret_arn \
+  --data-dir environments/staging/us-east-1/data
+```
+
+Multi-stack ARN projection (the most flexible bundle — pass any keys + outputs you want):
+
+```bash
+./render-bundle.sh aws-arns \
+  --out /tmp/secure/staging-k8s-aws.env \
+  --stack tls=environments/staging/us-east-1/tls \
+  --stack data=environments/staging/us-east-1/data \
+  --stack cloud=environments/staging/us-east-1/cloud \
+  --emit ACM_CERT_ARN=tls:certificate_arn \
+  --emit IRSA_ROLE_ARN=data:my_service_irsa_role_arn \
+  --emit KARPENTER_NODE_ROLE=cloud:karpenter_node_role_name
+```
+
+Multi-tenant Aurora secret with map[key] lookup:
+
+```bash
+./render-bundle.sh aurora-tenant \
+  --out /tmp/secure/staging-k8s-db.env \
+  --region us-east-1 \
+  --secret-arn-output 'tenant_secret_arns[my-tenant]' \
+  --data-dir environments/staging/us-east-1/data
+```
+
+Cert resolution with fallback (prefer dedicated cert, fall back to shared):
+
+```bash
+./render-bundle.sh aws-arns \
+  --out /tmp/secure/staging-k8s-aws.env \
+  --stack tls=environments/staging/us-east-1/tls \
+  --emit ACM_CERT_ARN=tls:portal_certificate_arn \
+  --emit-fallback ACM_CERT_ARN=tls:certificate_arn
+```
+
+### Per-service composition (the "right way")
+
+Render multiple bundles for a single service by sequencing `render-bundle.sh` calls in a small per-service shell script. The customer's per-service file is *declarative* — TF output names + tenant keys + namespaces, no rendering logic. Skeleton:
+
+```bash
+#!/usr/bin/env bash
+# my-service.sh — render every bundle my-service needs
+set -euo pipefail
+
+# Adjust the path to wherever you've checked out root-modules-tf
+# (e.g. a git submodule under vendor/, a relative sibling repo, etc).
+OPERATOR_TOOLS=/path/to/root-modules-tf/toolbox/operator-tools
+RENDER_BUNDLE="$OPERATOR_TOOLS/render-bundle.sh"
+
+INFRA_DIR=$1
+TARGET_DIR=$2
+ENV=staging
+REGION=us-east-1
+SECURE_DIR="$TARGET_DIR/.secure_files"
+PREFIX="$ENV-k8s"
+NS="my-platform-my-service-$ENV"
+
+CLOUD_DIR="$INFRA_DIR/environments/$ENV/$REGION/cloud"
+DATA_DIR="$INFRA_DIR/environments/$ENV/$REGION/data"
+TLS_DIR="$INFRA_DIR/environments/$ENV/$REGION/tls"
+STREAMING_DIR="$INFRA_DIR/environments/$ENV/$REGION/streaming"
+
+"$RENDER_BUNDLE" ci-deploy \
+  --out "$SECURE_DIR/$PREFIX-deploy.env" \
+  --cloud-dir "$CLOUD_DIR" --region "$REGION" --namespace "$NS"
+
+"$RENDER_BUNDLE" aws-arns \
+  --out "$SECURE_DIR/$PREFIX-aws.env" \
+  --stack tls="$TLS_DIR" --stack data="$DATA_DIR" --stack cloud="$CLOUD_DIR" \
+  --emit ACM_CERT_ARN=tls:certificate_arn \
+  --emit IRSA_ROLE_ARN=data:my_service_irsa_role_arn \
+  --emit KARPENTER_NODE_ROLE=cloud:karpenter_node_role_name
+
+"$RENDER_BUNDLE" aurora-config \
+  --out "$SECURE_DIR/$PREFIX-db-config.env" \
+  --data-dir "$DATA_DIR" \
+  --host-output aurora_cluster_endpoint --port-output aurora_port
+
+"$RENDER_BUNDLE" aurora-master \
+  --out "$SECURE_DIR/$PREFIX-db.env" --region "$REGION" \
+  --secret-arn-output aurora_master_secret_arn --data-dir "$DATA_DIR"
+
+"$RENDER_BUNDLE" rds-ca-pair --secure-dir "$SECURE_DIR" --prefix "$PREFIX"
+
+"$RENDER_BUNDLE" registry \
+  --out "$SECURE_DIR/$PREFIX-registry.env" --secure-dir "$SECURE_DIR"
+```
+
+That's the entire customer-side render flow for a typical service. To add another service, copy the file and edit which bundles + which TF output names. To add a new bundle to an existing service, add one `"$RENDER_BUNDLE" <name>` line.
 
 ---
 
-## Operator Workflow
+## Cookbook: mixing OSS bundles with custom (non-root-modules-tf) bundle shapes
 
-The complete secure-file provisioning workflow for a new environment or after infrastructure changes:
+If your service needs a bundle shape that isn't on the OSS list — say, a Vault token, a Doppler secret pull, an in-house rotation pattern — write your own renderer alongside the OSS calls. Use `lib/render-helpers.sh` for the lower-level mechanics (TF output reads, Secrets Manager reads, chmod-600 file writes).
 
 ```bash
-TOOLS=".tomshley-cicd-tmp/tomshley-oss/root-modules-tf/toolbox/operator-tools"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 1. Load AWS credentials
-source "$TOOLS/aws-session.sh" /path/to/your-infra-repo/.secure_files/staging-us-east-1-cloud.env
+OPERATOR_TOOLS=/path/to/root-modules-tf/toolbox/operator-tools
+RENDER_BUNDLE="$OPERATOR_TOOLS/render-bundle.sh"
+# shellcheck disable=SC1091
+source "$OPERATOR_TOOLS/lib/render-helpers.sh"
 
-# 2. Render all secure files for a service
-"$TOOLS/service-bundle helper" --service ingress \
-  --env staging --region us-east-1 \
-  --infra-dir /path/to/your-infra-repo \
-  --target-dir /path/to/your-ingress-service
+# 1. Standard OSS bundles for the standard shapes
+"$RENDER_BUNDLE" ci-deploy --out "$OUT/deploy.env" --cloud-dir "$CLOUD_DIR" \
+  --region "$REGION" --namespace "$NS"
 
-# 3. Upload to GitLab Secure Files
-"$TOOLS/sync-secure-files.sh" --project-id 76128095 \
-  --secure-dir /path/to/your-ingress-service/.secure_files
+"$RENDER_BUNDLE" aws-arns --out "$OUT/aws.env" \
+  --stack data="$DATA_DIR" \
+  --emit IRSA_ROLE_ARN=data:my_irsa_role_arn
+
+# 2. Custom: read a Vault token via your own helper
+init_render_counters
+VAULT_TOKEN=$(get_secret_field "$VAULT_SECRET_ARN" "$REGION" token)
+if [[ -n "$VAULT_TOKEN" ]]; then
+  write_file_secure "$OUT/vault.env" 600 <<EOF
+VAULT_TOKEN=$VAULT_TOKEN
+EOF
+  emit_ok "$OUT/vault.env"
+else
+  emit_skip "vault.env (token not yet seeded)"
+fi
+print_render_summary
 ```
+
+The boundary is: OSS bundles cover the modules in this repo. Anything outside that — Vault, Doppler, your private rotation tool, your private DB instead of Aurora — is your renderer, calling into `lib/render-helpers.sh` for the plumbing.
+
+---
+
+## `lib/render-helpers.sh` — sourceable low-level library
+
+`render-bundle.sh` is built on top of this library. Source it directly if you're writing a custom renderer (see Cookbook above) and don't want to spawn a subprocess per file.
+
+| Category | Functions |
+|---|---|
+| Counters & logging | `init_render_counters`, `emit_ok FILE`, `emit_skip MSG`, `emit_info MSG`, `print_render_summary` |
+| Validation | `require_command CMD...`, `require_directory DIR [LABEL]`, `require_env_var VAR [LABEL]` |
+| TF outputs | `read_tf_output DIR KEY`, `read_tf_output_required DIR KEY [LABEL]`, `read_tf_output_json DIR KEY`, `read_tf_output_map_value DIR KEY MAP_KEY` |
+| Secrets Manager | `get_secret_string ARN REGION`, `get_secret_field ARN REGION FIELD` |
+| File writers | `write_file_secure PATH MODE` (reads stdin), `download_rds_ca_bundle OUTFILE [URL]` |
+
+Set `TOFU=terraform` to use Terraform instead of OpenTofu. Bash 3.2+ compatible (macOS default).
 
 ---
 
 ## Consumer Usage
 
-### Workspace-Local Invocation (Current)
-
-From a consumer infrastructure repo (e.g. `your-infra-repo`):
+### Workspace-local invocation
 
 ```bash
-# Relative path to root-modules-tf in the same workspace
-TOOLS=../../../../tomshley-oss-dependencies/root-modules-tf/toolbox/operator-tools
+TOOLS=/path/to/root-modules-tf/toolbox/operator-tools
 
 source "$TOOLS/aws-session.sh" .secure_files/staging-us-east-1-cloud.env
 source "$TOOLS/k8s-session.sh"
-source "$TOOLS/confluent-session.sh" .secure_files/staging-us-east-1-streaming.env
+
+"$TOOLS/render-bundle.sh" ci-deploy --out ... --cloud-dir ... --region us-east-1 --namespace ...
 ```
 
-### Release Artifact (Future)
-
-Download the operator-tools directory from a GitHub/GitLab release:
+### Release artifact (future)
 
 ```bash
-curl -sL https://github.com/tomshley/root-modules-tf/releases/download/v1.4.0/operator-tools.tar.gz | tar xz
-source operator-tools/aws-session.sh .secure_files/staging-us-east-1-cloud.env
+curl -sL https://github.com/tomshley/root-modules-tf/releases/download/vX.Y.Z/operator-tools.tar.gz | tar xz
+operator-tools/render-bundle.sh --list
 ```
 
 ---
 
-## Future Expansion
+## Future expansion
 
-Terraform-based credential fetchers can be added as subdirectories:
+Terraform-based credential fetchers can be added as subdirectories that use `tofu apply` with local-only state (`.gitignore`d) to fetch short-lived credentials from external secret stores. The state file is ephemeral — it captures no real infrastructure.
 
 ```
 toolbox/operator-tools/
-├── aws-session.sh
-├── confluent-session.sh
-├── k8s-session.sh
-├── render-streaming-bundle.sh
-├── render-ci-deploy-bundle.sh
-├── aws-bundle helper
-├── service-bundle helper
-├── sync-secure-files.sh
-├── vault-credentials/          # tofu apply → fetches from Vault → writes local .env
+├── ... (existing)
+├── vault-credentials/
 │   └── main.tf
-├── delinia-credentials/        # same pattern
-│   └── main.tf
-└── README.md
+└── delinia-credentials/
+    └── main.tf
 ```
-
-These would use `tofu apply` with local-only state (`.gitignore`d) to fetch short-lived credentials from external secret stores. The state file is ephemeral — it captures no real infrastructure.
