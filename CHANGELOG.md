@@ -6,6 +6,27 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.8.1] — 2026-04-29
+
+### Added
+
+- **operator-tools/render-bundle.sh**: New subcommand-based renderer anchored to root-modules-tf modules. Each subcommand renders one credential bundle from Terraform/OpenTofu outputs and AWS Secrets Manager state. Bundle catalog: `ci-deploy`, `aurora-config`, `aurora-master`, `aurora-tenant`, `redis-config`, `keycloak`, `s3-config`, `kafka-workload`, `rds-ca-pair`, `aws-arns`, `registry`. Consumers compose subcommands declaratively in their own per-service shell scripts. Bash 3.2 compatible (macOS default shell).
+- **operator-tools/lib/render-helpers.sh**: Reusable shell library exposing primitives for Terraform output reads, Secrets Manager value fetches, and chmod-600 file writes. Sourced by `render-bundle.sh` and available to consumers writing custom bundle shapes alongside the OSS catalog.
+
+### Changed
+
+- **operator-tools README**: Rewritten around the bundle catalog and per-service composition pattern. New cookbook section shows how to mix OSS bundles with consumer-specific custom-shape renderers (Vault tokens, Doppler secret pulls, in-house rotation patterns) in a single per-service script.
+- **aws-eks-elasticache-redis**: Submodule invocation runbook comments use generic `app_redis` naming so the rotation runbook reads cleanly regardless of consumer-side module instance name.
+- **aws-eks-keycloak**: `tofu fmt` whitespace alignment in `resources.tf` (no functional change).
+- **CHANGELOG**: Trimmed consumer-specific renderer narrative from the [1.7.0] toolbox section now that those scripts have moved to consumer infrastructure repos.
+
+### Removed
+
+- **operator-tools/render-service-bundle.sh**: Consumer-specific service-enum renderer removed from the OSS toolbox. Consumers compose `render-bundle.sh` subcommands per service in their own infrastructure repos with their own TF output names and tenant keys.
+- **operator-tools/render-k8s-aws-bundle.sh**: Superseded by `render-bundle.sh aws-arns`, which renders generic `K8S_*=arn:...` env files from any combination of TF stacks/outputs the consumer projects together.
+
+---
+
 ## [1.8.0] — 2026-04-27
 
 ### Features
