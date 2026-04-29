@@ -45,13 +45,8 @@ Fully additive on the `catalog_entries` schema — the two new fields are `optio
 - **examples/aws-eks-elasticache-redis-standalone**: New example showing a single-node Redis replication group sized for development and smoke tests, with `auth_secret_recovery_window_in_days = 0` to permit immediate workload-name recreation during frequent tear-down cycles.
 - **examples/aws-eks-elasticache-redis-multi-az**: New example showing a two-node Multi-AZ replication group with automatic failover, 7-day snapshot retention, optional SNS event notifications, optional CloudWatch slow-log delivery, and per-workload IRSA composition via `for_each` over a workloads map — mirroring the `aws-eks-aurora-multi-tenant` pattern so operators familiar with one example can read the other.
 
-### Toolbox
-
-- **service-bundle helper**: Add `portal` service branch. Portal uses the multi-tenant product-cluster Aurora pattern (one DB per service on a shared cluster), so its `aws.env` ships APP and MIGRATE IRSA separately (read from the `product_tenant_app_role_arns` / `product_tenant_migrate_role_arns` / `product_tenant_secret_arns` map outputs via `tofu output -json` + `jq`) alongside `REDIS_AUTH_SECRET_ARN`, `APPSTREAM_ROLE_ARN`, and the ACM cert ARN (preferring a portal-specific `portal_certificate_arn` when the consumer provisioned one, falling back to the shared ingress `certificate_arn` when portal is attached as a SAN). The portal branch also writes `db-config.env` (product-cluster endpoint, portal tenant DB name, `ssl=require`), `db.env` (populated from the portal tenant app secret — NOT the cluster master — with a clear skip-with-warning when the secret is empty because the migrate Job has not yet run; using the master secret would grant portal runtime cluster-superuser access and violate the multi-tenant threat model), `redis.env` (connection metadata only; the AUTH token stays in Secrets Manager and is injected at runtime via ExternalSecrets / Secrets Manager CSI using `REDIS_AUTH_SECRET_ARN`), and the standard `rds-ca-bundle.pem` + `rds-cert.env` pair. Portal skips the `kafka.env` and `s3-config.env` branches (no Kafka or S3 interaction).
-
 ### Fixed (code-review pass 6)
 
-- **service-bundle helper** (MEDIUM): Correct the failure-mode messaging on the portal `db.env` rendering branch. Pre-pass-6 the inline comment block claimed the inner `if/else` ("portal tenant secret not populated yet — run the portal migrate Job first") handled the migrate-Job-has-not-yet-run case while the outer `else` ("could not read Secrets Manager: $APP_SECRET_ARN") handled IAM/network failures, but the runtime mapping was the reverse: the Aurora module creates `aws_secretsmanager_secret.tenant` with no `aws_secretsmanager_secret_version`, so until the migrate Job runs `aws secretsmanager get-secret-value` returns `ResourceNotFoundException` ("can't find the specified secret value for staging label: AWSCURRENT"), `SECRET_JSON` is rescued to an empty string by `2>/dev/null || echo ""`, and the **outer** `else` fires — surfacing a message that suggests an IAM/network problem when the actual cause is just "the migrate Job hasn't run yet". The first time portal is rendered post-cluster-bootstrap and pre-first-migrate (the most common bootstrap order), an operator following the previous message would chase phantom IRSA/VPCE/SCP issues. The outer-else message now leads with the most likely cause (migrate not yet run, secret has no version) and lists the rarer IAM/network/KMS Decrypt causes after; the inner-else message clarifies that it covers the atypical "version exists but missing username/password" defense-in-depth shape only. The comment block above the `aws secretsmanager get-secret-value` invocation was rewritten with an accurate failure-mode mapping table cross-referencing the Aurora module's tenant-secret bootstrap shape.
 - **CHANGELOG.md** (NIT): Reorder the `[Unreleased]` block's `Fixed (code-review pass …)` headers into reverse-chronological order (6, 5, 4, 3, 2, 1). Pre-pass-6 the order was `5, 4, 1, 3, 2`, which inverted the convention used everywhere else in this file. A reviewer scanning by descending pass number was thrown by the dip-and-recover; the rearranged ordering makes the chronology unambiguous.
 
 ### Fixed (code-review pass 5)
@@ -65,8 +60,6 @@ Fully additive on the `catalog_entries` schema — the two new fields are `optio
 - **aws-eks-elasticache-redis** (LOW): Tighten the Scenario A out-of-band rotation runbook to use a `NEW_TOKEN` shell variable instead of typing `<new>` in two places (`aws elasticache modify-replication-group --auth-token` and `jq --arg p`). The previous shape silently desynced Redis from the secret if the operator typed different values in the two spots — Redis would accept the modify-replication-group token while the secret stored whatever was passed to `--arg p`, and consumers would then fail auth against Redis with no plan-time signal. Added an inline note explaining the failure mode so future maintainers do not "simplify" the variable back out.
 - **aws-eks-elasticache-redis** (LOW): Soften the `subnet_ids` validation error message so it no longer claims to enforce "distinct AZs" — the validation only checks subnet count (the inline comment above already documents that AWS owns the same-AZ-twice failure mode at apply time, since Terraform cannot enumerate subnet AZs without a data lookup). The new wording flags the AZ requirement to operators while accurately scoping what the rule does and does not catch at plan time.
 - **examples/aws-eks-elasticache-redis-standalone** (LOW): Switch the standalone example's `vpc_id` / `subnet_ids` / `allowed_security_group_ids` from fake-but-realistic-looking IDs (`vpc-0123456789abcdef0`, `subnet-aaa`, `sg-workload`) to clear `REPLACE_WITH_*` placeholders, matching the multi-az example. A user copy-pasting the standalone example as-is now gets an obvious "you forgot to replace this" failure shape instead of a cryptic "VPC vpc-0123456789abcdef0 does not exist" against AWS minutes into apply.
-- **service-bundle helper** (NIT): Drop the dead `else` branch on the portal `db.env` block that handled "APP_SECRET_ARN missing" — the earlier `require_output "$APP_SECRET_ARN" "product_tenant_secret_arns[$PORTAL_TENANT_KEY]" "data"` already exits the script if the ARN is empty, so the inner branch was unreachable. Replaced with a comment documenting the invariant for future maintainers; the two real failure modes (Secrets-Manager read failure and tenant-secret-not-yet-populated) are unchanged.
-- **service-bundle helper** (NIT): Surface in CI logs which ACM cert the portal `aws.env` heredoc resolved to. The block already prefers `portal_certificate_arn` and falls back to the shared ingress `certificate_arn` when only the SAN approach is configured, but the choice was previously silent — operators auditing renderer output had to re-run `tofu output` to answer "which cert is portal using?". The new echoes (`ⓘ portal ACM cert: using portal_certificate_arn ...` / `ⓘ ... using certificate_arn (shared ingress cert with portal SAN ...)`) make the decision visible without changing the resolution order.
 
 ### Fixed (code-review pass 3)
 
@@ -79,7 +72,6 @@ Fully additive on the `catalog_entries` schema — the two new fields are `optio
 - **aws-eks-elasticache-redis** (LOW): Tighten the `engine_version` regex from `^7(\.([0-9]+|x))?$` to `^7\.([0-9]+|x)$` so a bare `"7"` is rejected at plan time. AWS ElastiCache requires either a pinned minor (`7.0`, `7.1`, ...) or the `7.x` alias and rejects the major-only form with a cryptic `InvalidParameterValue` minutes into `apply` -- the earlier regex defeated the point of plan-time validation for that one input.
 - **aws-eks-elasticache-redis** (LOW): Correct the name-budget comment above the `replication_group_id` length validation in `variables.tf`. The previous comment claimed Secrets Manager secret names "can be 255 / 64+ bytes"; the actual AWS limit is 512 bytes. The 40-byte replication-group budget remains the binding constraint, so the validation logic is unchanged -- only the comment was wrong, and only future maintainers were at risk of being misled.
 - **aws-eks-elasticache-redis** (NIT): Add a "submodule invocation note" preamble to the three-scenario rotation runbook in `resources.tf`. The embedded shell snippets reference `terraform output -raw replication_group_id` and `terraform output -raw auth_token_secret_arn`, which resolve against the root module's outputs -- not the submodule's. Consumer stacks invoking this as a submodule (the normal case) must re-export those values at the root before operators can copy-paste the snippets during an incident. The note documents the re-export pattern and a `terraform output -json | jq` alternative.
-- **service-bundle helper** (NIT): Wrap the streaming-stack `cd "$STREAMING_DIR"` lookup in an explicit subshell so the working-directory mutation does not leak into the portal/registry blocks below. The earlier form embedded the `cd` in the `if` test clause, which technically worked because every later `read_output` re-establishes its own CWD via its own subshell -- but any future helper that resolved a relative path against `$PWD` would have silently bound against `STREAMING_DIR` after this block ran. Behaviour is unchanged for the existing `ingress` / `structuring` paths.
 
 ### Fixed (code-review pass 1)
 
@@ -89,13 +81,12 @@ Fully additive on the `catalog_entries` schema — the two new fields are `optio
 - **aws-eks-elasticache-redis** (LOW): Add an inline comment on `random_password.auth_token` explaining that the absence of `keepers` is deliberate — rotation is operator-driven via `-replace` so that routine config churn cannot silently regenerate the AUTH token.
 - **aws-eks-elasticache-redis** (MEDIUM): Expand the Scenario A runbook in `resources.tf` to document the rename-vs-prior-Scenario-A-rotation interaction. An identifier rename flips the replication group's ARN, replaces the entire AWS resource, and returns both Redis-side and secret-side credentials to the Terraform-state value of `random_password.auth_token.result`. A prior Scenario A rotation is discarded, which is correct because the cluster the rotation applied to no longer exists. Operators who want to carry a specific token across a rename should run Scenario B first to land the value in state, then do the rename.
 - **aws-eks-elasticache-redis** (NIT): Sharpen the `depends_on = [aws_security_group.this]` comment on the standalone ingress/egress rules to cite the Aurora module (v1.5.4) precedent explicitly and document that ElastiCache has not been observed to hit the same `InvalidPermission` race; the edge is retained for symmetry and low cost.
-- **service-bundle helper** (MEDIUM): Remove the silent hardcoded portal-tenant `DB_NAME` fallback in the portal branch; the earlier `require_output` on `product_tenant_app_role_arns[portal]` already proves the tenant is registered, so a missing entry in `product_tenant_database_names` is a data-stack output-set mismatch that must surface rather than silently pointing portal at a non-existent DB.
-- **service-bundle helper** (MEDIUM): Add an inline comment explaining why portal's `db-config.env` sources `host`/`port` from the stack output (`product_cluster_endpoint` / `product_port`) rather than from the portal tenant app secret: the cluster endpoint is AWS-authoritative and survives blue-green cut-overs, and the tenant secret may not exist before the first migrate Job has run.
-- **service-bundle helper** (LOW): Add an IRSA-wiring reminder to the portal `aws.env` heredoc noting that attaching the Redis `app_read_policy_arn` to the portal APP IRSA role is the responsibility of the consumer's infrastructure data stack, not this renderer.
+
+> **Note on toolbox shape:** prior drafts of this release carried several entries against a service-specific renderer that has since been superseded by the module-anchored, subcommand-based `render-bundle.sh` in `toolbox/operator-tools/`. The module work above (Redis, Aurora, IRSA) is unaffected by that toolbox reshape; consumers compose `render-bundle.sh` subcommands per service in their own infrastructure repos.
 
 ### Backward Compatibility
 
-Fully additive. New module, new examples, new operator-tool branch. Existing consumers of `aws-eks-aurora-cluster`, `aws-eks-irsa`, and the other `service-bundle helper` service branches are unaffected.
+Fully additive. New module, new examples. Existing consumers of `aws-eks-aurora-cluster`, `aws-eks-irsa`, and the rest of the module set are unaffected.
 
 **Breaking-within-unreleased-scope:** consumers that had already started calling the unreleased `aws-eks-elasticache-redis` module with `engine_version = "6.x"` / `"6.2"` or `parameter_group_family = "redis6.x"` will now fail plan-time validation. No tagged release ships Redis-6.x support, so nothing published is broken.
 
@@ -204,7 +195,7 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 
 ### Fixes
 
-- **operator-tools**: Anchor grep pattern in `aws-bundle helper` to prevent `certificate_arn` matching `api_certificate_arn` when extracting Terraform output values.
+- **operator-tools**: Anchor grep pattern in the AWS-ARN rendering helper (later consolidated into `render-bundle.sh aws-arns`) to prevent `certificate_arn` matching `api_certificate_arn` when extracting Terraform output values.
 
 ---
 
@@ -232,10 +223,6 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 
 - **aws-eks-aurora-cluster**: Add explicit `depends_on = [aws_security_group.this]` to `aws_vpc_security_group_ingress_rule.allowed` and `aws_vpc_security_group_egress_rule.all`. Without this, OpenTofu resolves the SG ID from state (unchanged during the in-place update that removes inline rules) and parallelises standalone rule creation with inline rule revocation, causing `InvalidPermission.Duplicate` errors from the AWS API.
 
-### Toolbox
-
-- **aws-bundle helper**: Expand service/credential handling (~70 lines added) for improved k8s workload bundle rendering.
-
 ---
 
 ## [1.5.3] — 2026-04-17
@@ -247,10 +234,6 @@ A follow-up module change tracked in `hotfix/aurora-bootstrap-delegate` may intr
 ### Migration
 
 On first apply after upgrading from v1.5.2, the plan will show the security group updated in-place (inline rules removed) and new standalone rule resources created. The SG itself is not destroyed/recreated. There is a brief window (seconds) between inline rule removal and standalone rule creation — schedule during low-traffic if possible. See `moved.tf` for details.
-
-### Toolbox
-
-- **service-bundle helper**: Expand service mapping and credential handling (~175 lines added).
 
 ---
 
@@ -418,13 +401,11 @@ Existing consumers update by:
 
 ### Fixes
 
-- **operator-tools**: Fix streaming workload service key mapping (ingress/structuring → ingress-server/structuring-server) for proper Kafka credential lookup.
+- **operator-tools**: Fix streaming workload service-key mapping (short-name-to-full-name) for proper per-workload Kafka credential lookup.
 - **operator-tools**: Harden `sync-secure-files.sh` with backup/restore on failure, API call retries, and fail-fast error handling.
 
 ### Toolbox
 
-- **aws-bundle helper**: Add new script for rendering Kubernetes workload bundles with AWS credentials.
-- **service-bundle helper**: Enhance with improved service mapping and credential handling.
 - **sync-secure-files.sh**: Add robust file synchronization with backup, retry, and recovery mechanisms.
 
 ### Documentation
