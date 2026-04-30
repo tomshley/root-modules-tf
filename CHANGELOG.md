@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.8.2] — 2026-04-30
+
+### Fixed
+
+- **operator-tools/render-bundle.sh** (`aurora-config`): Fix silent exit-1 when `--ssl-require` is not passed and `database` output is unset. The trailing `[[ ... ]] && echo` lines inside the `{ ... } | write_file_secure` group returned 1 when their condition was false, and `set -o pipefail` propagated that as the pipeline exit code; `set -e` in the calling consumer scripts (e.g. `rotate-tokens.sh`) then aborted the surrounding loop with no diagnostic. Operationally observed as a token-rotation script that processed only the first service in `projects.conf` and silently returned exit 1 with no rendered files for any subsequent project. Replaced both optional-emit lines with `if [[ ... ]]; then echo ...; fi` so the group always returns 0 when an optional line is omitted.
+
+---
+
 ## [1.8.1] — 2026-04-29
 
 ### Added
