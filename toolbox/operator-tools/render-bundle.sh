@@ -240,11 +240,15 @@ _run_aurora_config() {
     fi
   fi
 
+  # The trailing [[ ]] && echo pattern would return 1 when the condition is
+  # false; under set -o pipefail that propagates as the pipeline exit and
+  # set -e silently kills the script. Wrap in if/then/fi so the group always
+  # returns 0 when no optional line is emitted.
   {
     echo "host=$host"
     echo "port=$port"
-    [[ -n "$db_name" ]] && echo "database=$db_name"
-    [[ "$ssl_require" == "true" ]] && echo "ssl=require"
+    if [[ -n "$db_name" ]]; then echo "database=$db_name"; fi
+    if [[ "$ssl_require" == "true" ]]; then echo "ssl=require"; fi
   } | write_file_secure "$out" 600
   emit_ok "$out"
 }
