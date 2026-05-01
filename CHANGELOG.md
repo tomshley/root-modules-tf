@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.8.3] — 2026-04-30
+
+### Fixed
+
+- **operator-tools/lib/render-helpers.sh** (`read_tf_output`): Coerce the literal string `"null"` to empty. The two read paths (`make output` vs `tofu output -raw`) disagree on how they render TF null outputs — `make output` (which greps a `key = value` table) yields the 4-character string `"null"`, whereas `tofu output -raw` yields empty. Without coercion, a null stack output like `keycloak_public_url` would emit `KEYCLOAK_PUBLIC_URL=null` into consumer `.env` files, causing downstream Spring `${KEYCLOAK_PUBLIC_URL}` resolution to resolve to the literal string `"null"` rather than failing fast on an unset property. Caller-side guards (`if [[ -n "$val" ]]`) are now trustworthy against either read path. Three-line addition after the existing `make output` / `tofu output -raw` fallback chain.
+
+---
+
 ## [1.8.2] — 2026-04-30
 
 ### Fixed
