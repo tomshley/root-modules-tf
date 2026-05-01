@@ -18,7 +18,8 @@
 #   aurora-config    Aurora connection: host, port, database
 #   aurora-master    Aurora master credentials from Secrets Manager
 #   aurora-tenant    Aurora tenant credentials from Secrets Manager
-#   redis-config     ElastiCache Redis connection metadata (AUTH stays in SM)
+#   redis-config     ElastiCache Redis connection metadata (host/port/tls)
+#   redis-auth       ElastiCache Redis AUTH credentials from Secrets Manager
 #   keycloak         Keycloak cluster-internal URLs
 #   s3-config        S3 bucket name + region
 #   kafka-workload   Confluent Cloud workload credentials
@@ -43,7 +44,8 @@ BUNDLE_CATALOG=(
   "aurora-config:aws-eks-aurora-cluster:Aurora connection config (host, port, database)"
   "aurora-master:aws-eks-aurora-cluster:Aurora credentials from cluster master secret"
   "aurora-tenant:aws-eks-aurora-cluster:Aurora credentials from a tenant secret (multi-tenant)"
-  "redis-config:aws-eks-elasticache-redis:Redis connection metadata (AUTH stays in Secrets Manager)"
+  "redis-config:aws-eks-elasticache-redis:Redis connection metadata (host/port/tls; non-secret)"
+  "redis-auth:aws-eks-elasticache-redis:Redis AUTH credentials from the AUTH-token Secrets Manager secret"
   "keycloak:aws-eks-keycloak:Keycloak cluster-internal URLs (JWKS, issuer, token)"
   "s3-config:aws-eks-secure-s3:S3 bucket name + region"
   "kafka-workload:confluent-streaming-workload-access:Per-workload Kafka + Schema Registry credentials"
@@ -415,7 +417,7 @@ EOF
 
 _help_redis_config() {
   cat <<'EOF'
-redis-config — Redis connection metadata (AUTH stays in Secrets Manager).
+redis-config — Redis connection metadata (host/port/tls; non-secret).
 Anchored to: aws-eks-elasticache-redis.
 
 Usage:
@@ -434,9 +436,11 @@ Optional flags:
 Output file format:
   host=..., port=..., tls=...
 
-Note: AUTH token is NOT written here. The token lives in Secrets Manager
-and is injected at runtime via ExternalSecrets / Secrets Manager CSI using
-the secret ARN (use `aws-arns` bundle to surface the ARN to consumers).
+Note: AUTH token is NOT written here. Use the redis-auth bundle (parallel
+to aurora-tenant) to render the AUTH password into a sibling file when the
+consumer needs deploy-time file-based credential injection. For runtime
+ESO / Secrets Manager CSI patterns, surface the secret ARN via aws-arns
+instead.
 EOF
 }
 
@@ -465,6 +469,85 @@ _run_redis_config() {
 host=$host
 port=$port
 tls=$tls
+EOF
+  emit_ok "$out"
+}
+
+# ========================================================================
+# Bundle: redis-auth
+# ========================================================================
+
+_help_redis_auth() {
+  cat <<'EOF'
+redis-auth — Redis AUTH credentials from the AUTH-token Secrets Manager secret.
+Anchored to: aws-eks-elasticache-redis (auth_token_secret_arn).
+
+Usage:
+  render-bundle.sh redis-auth --out FILE --region REGION
+                             (--secret-arn ARN | --secret-arn-output KEY --data-dir DIR)
+
+Required flags:
+  --out FILE              Output .env file path
+  --region REGION         AWS region
+  Either --secret-arn ARN OR --secret-arn-output KEY --data-dir DIR
+
+Output file format:
+  password=<auth-token>
+
+The aws-eks-elasticache-redis module emits a JSON secret with shape
+{ host, port, password }. Only `password` is written here so the file
+can be consumed via `kubectl create secret generic --from-env-file=...`
+without polluting the Secret with non-credential keys (host/port belong
+in the redis-config ConfigMap).
+
+Skip behaviour: if the secret cannot be read or the password field is
+empty, this bundle skips with a diagnostic rather than writing an empty
+file. Mirrors aurora-tenant's failure handling — keeps consumer CI from
+silently propagating empty credentials.
+EOF
+}
+
+_run_redis_auth() {
+  local out="" region="" secret_arn="" secret_arn_key="" data_dir=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)               out="$2";            shift 2 ;;
+      --region)            region="$2";         shift 2 ;;
+      --secret-arn)        secret_arn="$2";     shift 2 ;;
+      --secret-arn-output) secret_arn_key="$2"; shift 2 ;;
+      --data-dir)          data_dir="$2";       shift 2 ;;
+      --help)              _help_redis_auth; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]    && { echo "redis-auth: --out is required" >&2; exit 1; }
+  [[ -z "$region" ]] && { echo "redis-auth: --region is required" >&2; exit 1; }
+
+  if [[ -z "$secret_arn" ]]; then
+    [[ -z "$secret_arn_key" ]] && { echo "redis-auth: provide --secret-arn or --secret-arn-output" >&2; exit 1; }
+    [[ -z "$data_dir" ]] && { echo "redis-auth: --data-dir is required when using --secret-arn-output" >&2; exit 1; }
+    secret_arn=$(read_tf_output "$data_dir" "$secret_arn_key")
+  fi
+
+  if [[ -z "$secret_arn" ]]; then
+    emit_skip "$(basename "$out") (redis AUTH secret ARN not in stack outputs — Redis cluster likely not provisioned for this env)"
+    return
+  fi
+
+  local secret_json redis_pass
+  secret_json=$(get_secret_string "$secret_arn" "$region")
+  if [[ -z "$secret_json" ]]; then
+    emit_skip "$(basename "$out") (could not read Secrets Manager: $secret_arn — likely IAM permission denied, KMS Decrypt denied, or network failure)"
+    return
+  fi
+  redis_pass=$(echo "$secret_json" | jq -r '.password // empty')
+  if [[ -z "$redis_pass" ]]; then
+    emit_skip "$(basename "$out") (redis AUTH secret has a version but is missing the password field)"
+    return
+  fi
+
+  write_file_secure "$out" 600 <<EOF
+password=$redis_pass
 EOF
   emit_ok "$out"
 }
@@ -922,6 +1005,7 @@ case "$bundle" in
   aurora-master)      _run_aurora_master "$@" ;;
   aurora-tenant)      _run_aurora_tenant "$@" ;;
   redis-config)       _run_redis_config "$@" ;;
+  redis-auth)         _run_redis_auth "$@" ;;
   keycloak)           _run_keycloak "$@" ;;
   s3-config)          _run_s3_config "$@" ;;
   kafka-workload)     _run_kafka_workload "$@" ;;
