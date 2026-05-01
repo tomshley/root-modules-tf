@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.8.4] — 2026-05-01
+
+### Added
+
+- **operator-tools/render-bundle.sh** (`redis-auth`): New bundle rendering the Redis AUTH token from a Secrets Manager secret (single-key `password=` env file), parallel to `aurora-tenant`'s role in the Aurora pair. The existing `redis-config` bundle covered host/port/tls only (non-secret connection metadata, ConfigMap-shaped); the missing AUTH bundle forced consumers to inline `aws secretsmanager get-secret-value` calls in their per-service scripts, breaking the "render-bundle.sh is the single boundary to Secrets Manager" contract established by the aurora-tenant / aurora-master pair. The new bundle reads the `password` field from the secret written by the `aws-eks-elasticache-redis` module (see v1.7.0 Features) via `--secret-arn-output`, mirrors the `--secret-arn-stdin` shape of `aurora-tenant` for parity, and emits a 0600-permission env file. Paired-bundle usage: call `redis-config` for host/port/tls ConfigMap payload and `redis-auth` for password Secret payload in the same service render step. Catalog list updated in the subcommand index + help text.
+
+---
+
 ## [1.8.3] — 2026-04-30
 
 ### Fixed
