@@ -130,13 +130,22 @@ require_env_var() {
 #   Echo the raw value of a single TF output, or empty string on failure.
 #   Tries `make output` first (consumers commonly wrap tofu via Makefile)
 #   and falls back to `tofu output -raw`.
+#   Coerces the literal string "null" to empty: `make output` grep of a
+#   `key = value` table returns the 4-char string "null" for TF null
+#   outputs, whereas `tofu output -raw` returns empty. Without this
+#   normalisation, caller-side guards like `if [[ -n "$val" ]]` would
+#   treat "null" as a populated value and emit `KEY=null` into `.env`
+#   files instead of omitting the line.
 read_tf_output() {
   local dir="$1" key="$2" val=""
   val=$(cd "$dir" && make output 2>/dev/null \
     | grep -E "^${key}\\s" \
-    | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
+    | awk -F'= ' '{print $2}' | tr -d '"' | tr -d ' ')
   if [[ -z "$val" ]]; then
     val=$(cd "$dir" && $TOFU output -raw "$key" 2>/dev/null || echo "")
+  fi
+  if [[ "$val" == "null" ]]; then
+    val=""
   fi
   echo "$val"
 }
