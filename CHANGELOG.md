@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.8.3] — 2026-04-30
+
+### Fixed
+
+- **operator-tools/lib/render-helpers.sh** (`read_tf_output`): Coerce the literal string `"null"` to empty. The two read paths (`make output` vs `tofu output -raw`) disagree on how they render TF null outputs — `make output` (which greps a `key = value` table) yields the 4-character string `"null"`, whereas `tofu output -raw` yields empty. Without coercion, downstream caller-side guards like `if [[ -n "$val" ]]` would treat `"null"` as a populated value and emit `KEY=null` into `.env` files instead of omitting the line. The normalisation makes `read_tf_output` behave consistently regardless of which read path the consumer's stack directory exposes.
+
+---
+
 ## [1.8.2] — 2026-04-30
 
 ### Fixed
