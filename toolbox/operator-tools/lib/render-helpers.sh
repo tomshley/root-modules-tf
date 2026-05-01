@@ -130,6 +130,8 @@ require_env_var() {
 #   Echo the raw value of a single TF output, or empty string on failure.
 #   Tries `make output` first (consumers commonly wrap tofu via Makefile)
 #   and falls back to `tofu output -raw`.
+#   Coerces literal string "null" to empty (TF null outputs render as the
+#   4-char string "null" via make output but as empty via tofu -raw).
 read_tf_output() {
   local dir="$1" key="$2" val=""
   val=$(cd "$dir" && make output 2>/dev/null \
@@ -137,6 +139,9 @@ read_tf_output() {
     | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' || echo "")
   if [[ -z "$val" ]]; then
     val=$(cd "$dir" && $TOFU output -raw "$key" 2>/dev/null || echo "")
+  fi
+  if [[ "$val" == "null" ]]; then
+    val=""
   fi
   echo "$val"
 }
