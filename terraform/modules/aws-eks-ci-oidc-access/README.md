@@ -49,6 +49,39 @@ module "ci_deploy" {
 }
 ```
 
+## Use case: CI-rendered credential bundles
+
+`policy_arns` accepts arbitrary IAM managed-policy ARNs and attaches each to the deploy role, supporting an additional pattern beyond plain CI deploys: **CI-rendered credential bundles**.
+
+Pattern: an infrastructure repository's CI provisions resources via `tofu apply`, then in a follow-on `bundle` stage reads the just-created Secrets Manager secrets, renders credential bundles (env files, ConfigMap payloads, k8s Secret payloads), and uploads them to consumer projects' secure file stores. No human operator AWS credentials needed; bundle generation runs entirely under CI's OIDC-federated short-lived session.
+
+To enable this, the consumer composes a `secretsmanager:GetSecretValue` + `DescribeSecret` policy over the explicit list of bundle-relevant secret ARNs and passes the policy ARN via `policy_arns`. The module remains domain-neutral; the policy composition stays at the consumer layer.
+
+```hcl
+data "aws_iam_policy_document" "bundle_read" {
+  statement {
+    actions = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = [
+      module.tenant_db.tenant_secret_arn,
+      module.cache.auth_secret_arn,
+    ]
+  }
+}
+
+resource "aws_iam_policy" "bundle_read" {
+  name   = "example-staging-ci-bundle-read"
+  policy = data.aws_iam_policy_document.bundle_read.json
+}
+
+module "ci_deploy" {
+  source = "./modules/aws-eks-ci-oidc-access"
+  # ...
+  policy_arns = [aws_iam_policy.bundle_read.arn]
+}
+```
+
+Pair with `operator-tools/render-bundle.sh` (one subcommand per bundle shape) and `operator-tools/sync-secure-files.sh` (uploads a directory to a GitLab project's Secure Files via the API) to complete the pipeline. See `examples/aws-eks-ci-oidc-bundle-orchestration/` for a runnable composition.
+
 ## Notes
 
 - Only one OIDC provider per issuer URL per AWS account. If the provider already exists, pass its ARN via `oidc_provider_arn`.
@@ -56,3 +89,4 @@ module "ci_deploy" {
 - `oidc_thumbprints` can be left empty for providers using a trusted CA (GitHub, GitLab.com).
 - EKS access entries require EKS v1.23+ with the API authentication mode enabled.
 - When using an existing provider, `oidc_issuer_url` is not required. The issuer host is extracted from the provider ARN.
+- `policy_arns` is capped by AWS to 10 managed-policy attachments per role. Combine policies into fewer documents if you approach the limit.
