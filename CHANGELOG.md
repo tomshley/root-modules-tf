@@ -6,6 +6,18 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **terraform/examples/aws-eks-ci-oidc-bundle-orchestration**: New runnable example documenting the CI-rendered credential bundle pattern. Shows how to compose a `secretsmanager:GetSecretValue` + `DescribeSecret` policy over an explicit list of secret ARNs and pass it to `aws-eks-ci-oidc-access` via the existing `policy_arns` input. Pattern enables an infrastructure repository's CI to render credential bundles in a follow-on `bundle` stage after `tofu apply` and upload them to consumer projects' secure file stores via `sync-secure-files.sh` — eliminating the need for human operator AWS credentials in the rotation/render path. The `aws-eks-ci-oidc-access` module itself required no code changes; the `policy_arns` hook (since v1.x) already supports this composition. The example exists to make the use case discoverable to platform teams adopting the repo as a multi-customer foundation.
+
+### Documentation
+
+- **terraform/modules/aws-eks-ci-oidc-access/README.md**: New `Use case: CI-rendered credential bundles` section walking through the `policy_arns` composition for bundle-stage CI jobs, with a concise HCL snippet and pointer to the new example. Adds a note clarifying the AWS managed-policy attachment cap (10 per role) so consumers approaching the limit can plan policy consolidation.
+
+---
+
 ## [1.8.4] — 2026-05-01
 
 ### Added
