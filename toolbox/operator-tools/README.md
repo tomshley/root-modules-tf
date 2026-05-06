@@ -67,13 +67,19 @@ Idempotent. Outputs values for `.env` / `.tfvars` files; if `--output-dir` is gi
 
 ### `render-streaming-bundle.sh`
 
-Renders per-workload Kafka + SR credential `.env` files from a streaming-stack's outputs. Workload set is data-driven — discovered from the `workload_kafka_api_key_ids` map output.
+Renders per-workload Kafka + SR + Flink credential `.env` files from a streaming-stack's outputs. Workload set is data-driven — discovered from the union of the `workload_kafka_api_key_ids` and `workload_flink_api_key_ids` map outputs, so a stack with only Kafka workloads, only a Flink deploy SA, or both will produce the correct per-workload bundle set automatically.
 
 ```bash
 ./render-streaming-bundle.sh /path/to/environments/staging/us-east-1/streaming
 ```
 
-Output: `<stack-dir>/.env-bundle/<workload>.env` per workload, chmod 600.
+Each `<stack-dir>/.env-bundle/<workload>.env` file (chmod 600) is composed of up to three blocks in this order:
+
+- **Kafka**: `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_API_KEY`, `KAFKA_API_SECRET` — when the workload has a Kafka API key in `workload_kafka_api_key_ids`.
+- **Schema Registry**: `SCHEMA_REGISTRY_URL`, `SCHEMA_REGISTRY_API_KEY`, `SCHEMA_REGISTRY_API_SECRET` — when SR is configured at the cluster level and the workload has an SR API key.
+- **Flink (Confluent Cloud)**: `FLINK_REST_ENDPOINT`, `FLINK_COMPUTE_POOL_ID`, `FLINK_RUNNER_SERVICE_ACCOUNT_ID`, `FLINK_ENVIRONMENT_ID`, `FLINK_API_KEY`, `FLINK_API_SECRET` — when the workload has a Flink API key in `workload_flink_api_key_ids`.
+
+A workload with only a Flink key renders a Flink-only file (no empty `KAFKA_*`/`SCHEMA_REGISTRY_*` lines). A workload with no credentials in any of the three maps is skipped with a log line.
 
 ### `render-ci-deploy-bundle.sh`
 
