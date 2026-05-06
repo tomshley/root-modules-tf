@@ -150,9 +150,9 @@ resource "aws_rds_cluster" "this" {
     Name = "${var.project_name_prefix}-${var.workload_name}-db"
   })
 
-  # Symmetric with `ignore_changes = [secret_string]` on
-  # aws_secretsmanager_secret_version.this below: after a Scenario A
-  # (out-of-band) master-password rotation — see the three-scenario runbook
+  # `master_password`: symmetric with `ignore_changes = [secret_string]` on
+  # aws_secretsmanager_secret_version.this below — after a Scenario A
+  # (out-of-band) master-password rotation, see the three-scenario runbook
   # in the secret_version lifecycle comment — Terraform must not re-assert
   # `random_password.master_password.result` in-place on the cluster. Without
   # this, any subsequent apply that regenerates random_password (length bump,
@@ -160,8 +160,36 @@ resource "aws_rds_cluster" "this" {
   # with a stale Terraform-state value. Terraform-driven rotation
   # (Scenario B) requires temporarily bypassing this ignore_changes; cluster
   # rebuild (Scenario C) is destructive and handled separately.
+  #
+  # `engine_version`: AWS Aurora defaults `auto_minor_version_upgrade = true`
+  # at the instance level, so AWS-driven minor bumps (e.g. 16.4 → 16.11) land
+  # out-of-band. Without this guard, the next apply sees drift and tries to
+  # ModifyDBCluster back to the var-pinned minor — AWS rejects with
+  # `InvalidParameterCombination: Cannot upgrade aurora-postgresql from
+  # 16.11 to 16.4` (minor downgrades are not permitted), breaking every
+  # subsequent apply on the stack until an operator manually bumps
+  # var.engine_version to chase live. Ignoring `engine_version` here lets
+  # AWS own the minor channel.
+  #
+  # Major-version bumps are operator-driven and non-destructive in-place via
+  # ModifyDBCluster + ModifyDBInstance — analogous to the master_password
+  # Scenario B lift-and-restore mechanic, NOT to Scenario C (-replace of the
+  # cluster, which is destructive and drops every tenant DB). Procedure:
+  #   1. Comment out `ignore_changes = [..., engine_version]` on ALL THREE
+  #      resources: aws_rds_cluster.this AND aws_rds_cluster_instance.writer
+  #      AND aws_rds_cluster_instance.reader. The instance blocks reference
+  #      `aws_rds_cluster.this.engine_version`, so leaving either instance
+  #      ignore_changes in place strands the instances on the old minor
+  #      while the cluster moves.
+  #   2. Add `allow_major_version_upgrade = true` to aws_rds_cluster.this
+  #      (default is false; the provider rejects the plan otherwise) and
+  #      bump var.engine_version.
+  #   3. terraform apply → in-place ModifyDBCluster + ModifyDBInstance.
+  #   4. Restore the three ignore_changes blocks and remove
+  #      allow_major_version_upgrade; apply again.
+  # Mirrored on writer/reader instances below.
   lifecycle {
-    ignore_changes = [master_password]
+    ignore_changes = [master_password, engine_version]
   }
 }
 
@@ -176,6 +204,20 @@ resource "aws_rds_cluster_instance" "writer" {
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-${var.workload_name}-db-1"
   })
+
+  # Mirror of the cluster's `ignore_changes = [engine_version]` (see
+  # aws_rds_cluster.this lifecycle comment for the full rationale and the
+  # major-version bump procedure). The instance's engine_version is wired
+  # from `aws_rds_cluster.this.engine_version`, which carries the (now
+  # ignored, possibly stale) TF-state value rather than live AWS state.
+  # Without this guard, AWS-driven minor bumps trigger a ModifyDBInstance
+  # attempt back to the stale TF-state minor and fail with the same
+  # `Cannot upgrade aurora-postgresql from <live> to <stale>` rejection.
+  # Major-version bumps require lifting ignore_changes on cluster + writer
+  # + reader simultaneously — see the cluster comment for the full mechanic.
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 }
 
 resource "aws_rds_cluster_instance" "reader" {
@@ -187,6 +229,16 @@ resource "aws_rds_cluster_instance" "reader" {
   engine              = aws_rds_cluster.this.engine
   engine_version      = aws_rds_cluster.this.engine_version
   publicly_accessible = false
+
+  # Mirror of the cluster's `ignore_changes = [engine_version]` — see the
+  # writer instance above for the rationale. Same wiring (instance reads
+  # `aws_rds_cluster.this.engine_version`, which is itself now ignored on
+  # the cluster), same downgrade-rejection trap, same fix. Major-version
+  # bumps require lifting ignore_changes on cluster + writer + reader
+  # simultaneously — see the cluster comment for the full mechanic.
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-${var.workload_name}-db-reader-${count.index + 1}"
@@ -231,7 +283,7 @@ resource "aws_secretsmanager_secret_version" "this" {
   #
   #     ARN=$(terraform output -raw master_secret_arn)
   #     # or directly: ARN="$(terraform output -raw <consumer-stack-alias>)"
-  #     # e.g. `aurora_master_secret_arn` in the ami product stacks.
+  #     # e.g. `aurora_master_secret_arn` in a consumer product stack.
   #
   #     NEW=$(aws secretsmanager get-secret-value \
   #             --secret-id "$ARN" --query SecretString --output text \
