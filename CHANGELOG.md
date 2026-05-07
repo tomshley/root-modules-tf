@@ -6,6 +6,21 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.9.0] — 2026-05-07
+
+### Added
+
+- **terraform/modules/keycloak-bootstrap-admin**: New Terraform module for provisioning a Keycloak bootstrap admin user and service-account client with deterministic UUID generation and secret rotation support. Outputs three JSON snippets (client, clientScopeMappings, service-account user) for realm import workflows. Module features include deterministic admin user UUID via uuid_v5 (namespace + email), bootstrap service-account client with configurable required actions, Secrets Manager integration for credential storage, input validation preventing .env corruption, fullScopeAllowed=false with explicit role mapping, and two rotation strategies (secret-only vs full user replacement). All identifiers are product-neutral (platform-bootstrap, platform-admin) for public OSS consumption.
+
+- **toolbox/operator-tools/render-bundle.sh** (keycloak bundles): Three new bundle renderers for Keycloak bootstrap credentials:
+  - `keycloak-admin`: Full admin user tuple (UUID, email, firstname, lastname, role, required_actions) from the keycloak-bootstrap-admin module's Secrets Manager payload. Renders space-separated required_actions tokens for bash source compatibility.
+  - `keycloak-bootstrap-client`: Service-account client credentials (clientId + secret) for bootstrap workflows.
+  - `keycloak-admin-user`: Admin user identity subset for verification workflows.
+  - Improved JSON parsing error diagnostics with explicit gates using `jq empty` instead of `jq -e .` to avoid false negatives on valid but falsy JSON.
+  - Updated bundle catalog and help docstrings to document the new Keycloak-related bundles.
+
+---
+
 ## [1.8.6] — 2026-05-05
 
 ### Fixed

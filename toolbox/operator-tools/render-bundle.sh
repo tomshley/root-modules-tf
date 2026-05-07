@@ -21,6 +21,9 @@
 #   redis-config     ElastiCache Redis connection metadata (host/port/tls)
 #   redis-auth       ElastiCache Redis AUTH credentials from Secrets Manager
 #   keycloak         Keycloak cluster-internal URLs
+#   keycloak-admin   Keycloak master-realm admin credentials from Secrets Manager
+#   keycloak-bootstrap-client  Bootstrap service-account client credentials
+#   keycloak-admin-user        Admin user identity tuple (UUID, email, name, role, required_actions)
 #   s3-config        S3 bucket name + region
 #   kafka-workload   Confluent Cloud workload credentials
 #   rds-ca-pair      Amazon RDS CA bundle PEM + pointer .env
@@ -47,6 +50,9 @@ BUNDLE_CATALOG=(
   "redis-config:aws-eks-elasticache-redis:Redis connection metadata (host/port/tls; non-secret)"
   "redis-auth:aws-eks-elasticache-redis:Redis AUTH credentials from the AUTH-token Secrets Manager secret"
   "keycloak:aws-eks-keycloak:Keycloak cluster-internal URLs (JWKS, issuer, token)"
+  "keycloak-admin:aws-eks-keycloak:Keycloak master-realm admin credentials from Secrets Manager"
+  "keycloak-bootstrap-client:keycloak-bootstrap-admin:Bootstrap service-account client credentials (clientId + secret)"
+  "keycloak-admin-user:keycloak-bootstrap-admin:Admin user identity tuple (UUID + email + firstname + lastname + role + required_actions)"
   "s3-config:aws-eks-secure-s3:S3 bucket name + region"
   "kafka-workload:confluent-streaming-workload-access:Per-workload Kafka + Schema Registry credentials"
   "rds-ca-pair:Amazon RDS:CA bundle PEM + pointer .env file"
@@ -616,6 +622,305 @@ EOF
 }
 
 # ========================================================================
+# Bundle: keycloak-admin
+# ========================================================================
+
+_help_keycloak_admin() {
+  cat <<'EOF'
+keycloak-admin — Keycloak master-realm admin credentials.
+Anchored to: a Secrets Manager secret the consumer creates to wrap the
+Keycloak admin username + password JSON pair (commonly the same secret
+passed to the aws-eks-keycloak module's admin_secret_arn input).
+
+Usage:
+  render-bundle.sh keycloak-admin --out FILE --region REGION
+                                  (--secret-arn ARN | --secret-arn-output KEY --identity-dir DIR)
+                                  [--default-username USER]
+
+Required flags:
+  --out FILE                Output .env file path
+  --region REGION           AWS region for Secrets Manager
+  --secret-arn ARN          Direct Secrets Manager ARN, OR
+  --secret-arn-output KEY   TF output key for the ARN (in --identity-dir)
+  --identity-dir DIR        Identity stack directory (required if --secret-arn-output is used)
+
+Optional flags:
+  --default-username USER   Default if .username is missing in the secret JSON (default: admin)
+
+Output file format:
+  KEYCLOAK_ADMIN_USERNAME=..., KEYCLOAK_ADMIN_PASSWORD=...
+
+Skip behaviour: if the secret cannot be read or the password is empty, emits
+a skip and writes nothing.
+EOF
+}
+
+_run_keycloak_admin() {
+  local out="" region="" secret_arn="" secret_arn_key="" identity_dir=""
+  local default_user="admin"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)                out="$2";            shift 2 ;;
+      --region)             region="$2";         shift 2 ;;
+      --secret-arn)         secret_arn="$2";     shift 2 ;;
+      --secret-arn-output)  secret_arn_key="$2"; shift 2 ;;
+      --identity-dir)       identity_dir="$2";   shift 2 ;;
+      --default-username)   default_user="$2";   shift 2 ;;
+      --help)               _help_keycloak_admin; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]    && { echo "keycloak-admin: --out is required" >&2; exit 1; }
+  [[ -z "$region" ]] && { echo "keycloak-admin: --region is required" >&2; exit 1; }
+
+  if [[ -z "$secret_arn" ]]; then
+    [[ -z "$secret_arn_key" ]] && { echo "keycloak-admin: provide --secret-arn or --secret-arn-output" >&2; exit 1; }
+    [[ -z "$identity_dir" ]] && { echo "keycloak-admin: --identity-dir is required when using --secret-arn-output" >&2; exit 1; }
+    secret_arn=$(read_tf_output "$identity_dir" "$secret_arn_key")
+  fi
+
+  if [[ -z "$secret_arn" ]]; then
+    emit_skip "$(basename "$out") (admin secret ARN not in stack outputs)"
+    return
+  fi
+
+  local secret_json admin_user admin_pass
+  secret_json=$(get_secret_string "$secret_arn" "$region")
+  if [[ -z "$secret_json" ]]; then
+    emit_skip "$(basename "$out") (could not read Secrets Manager: $secret_arn — likely IAM permission denied, KMS Decrypt denied, or network failure)"
+    return
+  fi
+  if ! echo "$secret_json" | jq empty >/dev/null 2>&1; then
+    emit_skip "$(basename "$out") (Secrets Manager value is not valid JSON — verify the SecretString shape: { username, password })"
+    return
+  fi
+  admin_user=$(echo "$secret_json" | jq -r --arg d "$default_user" '.username // $d')
+  admin_pass=$(echo "$secret_json" | jq -r '.password // empty')
+  if [[ -z "$admin_pass" ]]; then
+    emit_skip "$(basename "$out") (Secrets Manager JSON is missing or has an empty 'password' field)"
+    return
+  fi
+
+  write_file_secure "$out" 600 <<EOF
+# Keycloak master-realm admin credentials (do not commit)
+KEYCLOAK_ADMIN_USERNAME=$admin_user
+KEYCLOAK_ADMIN_PASSWORD=$admin_pass
+EOF
+  emit_ok "$out"
+}
+
+# ========================================================================
+# Bundle: keycloak-bootstrap-client
+# ========================================================================
+
+_help_keycloak_bootstrap_client() {
+  cat <<'EOF'
+keycloak-bootstrap-client — Bootstrap service-account client credentials.
+Anchored to: a Secrets Manager secret the consumer creates to wrap the
+keycloak-bootstrap-admin module's bootstrap_client_id + bootstrap_client_secret
+outputs as a JSON object.
+
+Usage:
+  render-bundle.sh keycloak-bootstrap-client --out FILE --region REGION
+                                            (--secret-arn ARN | --secret-arn-output KEY --identity-dir DIR)
+
+Required flags:
+  --out FILE                Output .env file path
+  --region REGION           AWS region for Secrets Manager
+  --secret-arn ARN          Direct Secrets Manager ARN, OR
+  --secret-arn-output KEY   TF output key for the ARN (in --identity-dir)
+  --identity-dir DIR        Identity stack directory (required if --secret-arn-output is used)
+
+The Secrets Manager value MUST be a JSON object of shape:
+  { "client_id": "platform-bootstrap", "client_secret": "<48-char-secret>" }
+
+This is the shape produced by wiring the keycloak-bootstrap-admin module's
+bootstrap_client_id + bootstrap_client_secret outputs into a Secrets Manager
+secret_version with jsonencode().
+
+Output file format:
+  KEYCLOAK_BOOTSTRAP_CLIENT_ID=..., KEYCLOAK_BOOTSTRAP_CLIENT_SECRET=...
+
+Skip behaviour: if the secret cannot be read, the JSON is malformed, or
+either field is empty, emits a skip and writes nothing.
+EOF
+}
+
+_run_keycloak_bootstrap_client() {
+  local out="" region="" secret_arn="" secret_arn_key="" identity_dir=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)                out="$2";            shift 2 ;;
+      --region)             region="$2";         shift 2 ;;
+      --secret-arn)         secret_arn="$2";     shift 2 ;;
+      --secret-arn-output)  secret_arn_key="$2"; shift 2 ;;
+      --identity-dir)       identity_dir="$2";   shift 2 ;;
+      --help)               _help_keycloak_bootstrap_client; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]    && { echo "keycloak-bootstrap-client: --out is required" >&2; exit 1; }
+  [[ -z "$region" ]] && { echo "keycloak-bootstrap-client: --region is required" >&2; exit 1; }
+
+  if [[ -z "$secret_arn" ]]; then
+    [[ -z "$secret_arn_key" ]] && { echo "keycloak-bootstrap-client: provide --secret-arn or --secret-arn-output" >&2; exit 1; }
+    [[ -z "$identity_dir" ]] && { echo "keycloak-bootstrap-client: --identity-dir is required when using --secret-arn-output" >&2; exit 1; }
+    secret_arn=$(read_tf_output "$identity_dir" "$secret_arn_key")
+  fi
+
+  if [[ -z "$secret_arn" ]]; then
+    emit_skip "$(basename "$out") (bootstrap client secret ARN not in stack outputs — keycloak-bootstrap-admin module may not be applied yet)"
+    return
+  fi
+
+  # Single Secrets Manager call + local jq parsing. Halves API calls and
+  # KMS Decrypt invocations vs. one get_secret_field per field, and lets
+  # us distinguish 'unreadable secret' / 'malformed JSON' / 'missing
+  # field' in the skip diagnostic.
+  local secret_json client_id client_secret
+  secret_json=$(get_secret_string "$secret_arn" "$region")
+  if [[ -z "$secret_json" ]]; then
+    emit_skip "$(basename "$out") (could not read Secrets Manager: $secret_arn — likely IAM permission denied, KMS Decrypt denied, or network failure)"
+    return
+  fi
+  if ! echo "$secret_json" | jq empty >/dev/null 2>&1; then
+    emit_skip "$(basename "$out") (Secrets Manager value is not valid JSON — verify the SecretString shape: { client_id, client_secret })"
+    return
+  fi
+  client_id=$(echo "$secret_json" | jq -r '.client_id // empty')
+  client_secret=$(echo "$secret_json" | jq -r '.client_secret // empty')
+  if [[ -z "$client_id" || -z "$client_secret" ]]; then
+    emit_skip "$(basename "$out") (Secrets Manager JSON is missing client_id or client_secret — verify the SecretString shape)"
+    return
+  fi
+
+  write_file_secure "$out" 600 <<EOF
+# Keycloak bootstrap service-account client (client_credentials grant)
+KEYCLOAK_BOOTSTRAP_CLIENT_ID=$client_id
+KEYCLOAK_BOOTSTRAP_CLIENT_SECRET=$client_secret
+EOF
+  emit_ok "$out"
+}
+
+# ========================================================================
+# Bundle: keycloak-admin-user
+# ========================================================================
+
+_help_keycloak_admin_user() {
+  cat <<'EOF'
+keycloak-admin-user — Admin user identity tuple (deterministic).
+Anchored to: a Secrets Manager secret the consumer creates to wrap the
+keycloak-bootstrap-admin module's admin_user_* outputs as a JSON object.
+
+Usage:
+  render-bundle.sh keycloak-admin-user --out FILE --region REGION
+                                       (--secret-arn ARN | --secret-arn-output KEY --identity-dir DIR)
+
+Required flags:
+  --out FILE                Output .env file path
+  --region REGION           AWS region for Secrets Manager
+  --secret-arn ARN          Direct Secrets Manager ARN, OR
+  --secret-arn-output KEY   TF output key for the ARN (in --identity-dir)
+  --identity-dir DIR        Identity stack directory (required if --secret-arn-output is used)
+
+The Secrets Manager value MUST be a JSON object of shape:
+  { "user_id": "<uuid>", "email": "...", "firstname": "...",
+    "lastname": "...", "role": "...",
+    "required_actions": ["UPDATE_PASSWORD","VERIFY_EMAIL"] }
+
+This is the shape produced by wiring the keycloak-bootstrap-admin module's
+admin_user_* outputs into a Secrets Manager secret_version with jsonencode().
+The required_actions field is optional in the secret — if absent, the bundle
+emits an empty value so the bootstrap mechanism falls back to its own
+default.
+
+Output file format:
+  KEYCLOAK_ADMIN_USER_ID=..., KEYCLOAK_ADMIN_USER_EMAIL=...,
+  KEYCLOAK_ADMIN_USER_FIRSTNAME=..., KEYCLOAK_ADMIN_USER_LASTNAME=...,
+  KEYCLOAK_ADMIN_USER_ROLE=...,
+  KEYCLOAK_ADMIN_USER_REQUIRED_ACTIONS=<space-separated tokens, e.g.
+                                       'UPDATE_PASSWORD VERIFY_EMAIL'>
+
+Skip behaviour: emits skip and writes nothing if the secret cannot be read,
+JSON is malformed, or any required field (user_id, email, firstname,
+lastname, role) is empty. Bootstrap mechanisms requiring all five fields
+should treat skip as a hard error.
+EOF
+}
+
+_run_keycloak_admin_user() {
+  local out="" region="" secret_arn="" secret_arn_key="" identity_dir=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)                out="$2";            shift 2 ;;
+      --region)             region="$2";         shift 2 ;;
+      --secret-arn)         secret_arn="$2";     shift 2 ;;
+      --secret-arn-output)  secret_arn_key="$2"; shift 2 ;;
+      --identity-dir)       identity_dir="$2";   shift 2 ;;
+      --help)               _help_keycloak_admin_user; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]    && { echo "keycloak-admin-user: --out is required" >&2; exit 1; }
+  [[ -z "$region" ]] && { echo "keycloak-admin-user: --region is required" >&2; exit 1; }
+
+  if [[ -z "$secret_arn" ]]; then
+    [[ -z "$secret_arn_key" ]] && { echo "keycloak-admin-user: provide --secret-arn or --secret-arn-output" >&2; exit 1; }
+    [[ -z "$identity_dir" ]] && { echo "keycloak-admin-user: --identity-dir is required when using --secret-arn-output" >&2; exit 1; }
+    secret_arn=$(read_tf_output "$identity_dir" "$secret_arn_key")
+  fi
+
+  if [[ -z "$secret_arn" ]]; then
+    emit_skip "$(basename "$out") (admin-user-bootstrap secret ARN not in stack outputs — keycloak-bootstrap-admin module may not be applied yet)"
+    return
+  fi
+
+  local secret_json user_id email firstname lastname role required_actions
+  secret_json=$(get_secret_string "$secret_arn" "$region")
+  if [[ -z "$secret_json" ]]; then
+    emit_skip "$(basename "$out") (could not read Secrets Manager: $secret_arn — likely IAM permission denied, KMS Decrypt denied, or network failure)"
+    return
+  fi
+  if ! echo "$secret_json" | jq empty >/dev/null 2>&1; then
+    emit_skip "$(basename "$out") (Secrets Manager value is not valid JSON — verify the SecretString shape)"
+    return
+  fi
+  user_id=$(echo "$secret_json"   | jq -r '.user_id   // empty')
+  email=$(echo "$secret_json"     | jq -r '.email     // empty')
+  firstname=$(echo "$secret_json" | jq -r '.firstname // empty')
+  lastname=$(echo "$secret_json"  | jq -r '.lastname  // empty')
+  role=$(echo "$secret_json"      | jq -r '.role      // empty')
+  # required_actions is rendered as a space-separated token list rather
+  # than a JSON array literal. Reasons:
+  #   - bash `source` would strip the inner double quotes from a raw
+  #     `KEY=["A","B"]` line (assignment-context word splitting), so
+  #     the JSON form is fragile across consumers.
+  #   - The action keys are already constrained by the module's input
+  #     regex (^[A-Z][A-Z0-9_]*$) to contain no whitespace, so space
+  #     separation is unambiguous.
+  #   - Splitting in any consumer language is trivial (bash for-loop,
+  #     Python str.split(), etc.).
+  # Defaults to the empty string when the field is absent so the
+  # bootstrap mechanism's own default applies.
+  required_actions=$(echo "$secret_json" | jq -r '(.required_actions // []) | join(" ")')
+  if [[ -z "$user_id" || -z "$email" || -z "$firstname" || -z "$lastname" || -z "$role" ]]; then
+    emit_skip "$(basename "$out") (admin-user-bootstrap secret missing one of: user_id, email, firstname, lastname, role)"
+    return
+  fi
+
+  write_file_secure "$out" 600 <<EOF
+# Keycloak admin user identity tuple (deterministic across applies)
+KEYCLOAK_ADMIN_USER_ID=$user_id
+KEYCLOAK_ADMIN_USER_EMAIL=$email
+KEYCLOAK_ADMIN_USER_FIRSTNAME=$firstname
+KEYCLOAK_ADMIN_USER_LASTNAME=$lastname
+KEYCLOAK_ADMIN_USER_ROLE=$role
+KEYCLOAK_ADMIN_USER_REQUIRED_ACTIONS=$required_actions
+EOF
+  emit_ok "$out"
+}
+
+# ========================================================================
 # Bundle: s3-config
 # ========================================================================
 
@@ -965,14 +1270,14 @@ EOF
 _print_list() {
   echo "Available bundles (each anchored to a root-modules-tf module):"
   echo ""
-  printf "  %-16s  %-50s  %s\n" "BUNDLE" "MODULE-ANCHOR" "DESCRIPTION"
-  printf "  %-16s  %-50s  %s\n" "------" "-------------" "-----------"
+  printf "  %-26s  %-50s  %s\n" "BUNDLE" "MODULE-ANCHOR" "DESCRIPTION"
+  printf "  %-26s  %-50s  %s\n" "------" "-------------" "-----------"
   local entry name anchor desc
   for entry in "${BUNDLE_CATALOG[@]}"; do
     name="${entry%%:*}"
     anchor="${entry#*:}"; anchor="${anchor%%:*}"
     desc="${entry##*:}"
-    printf "  %-16s  %-50s  %s\n" "$name" "$anchor" "$desc"
+    printf "  %-26s  %-50s  %s\n" "$name" "$anchor" "$desc"
   done
   echo ""
   echo "Run \`$(basename "$0") <bundle> --help\` for per-bundle flags."
@@ -998,20 +1303,23 @@ fi
 bundle="$1"; shift
 
 case "$bundle" in
-  --list|list)        _print_list; exit 0 ;;
-  --help|-h|help)     _print_usage; exit 0 ;;
-  ci-deploy)          _run_ci_deploy "$@" ;;
-  aurora-config)      _run_aurora_config "$@" ;;
-  aurora-master)      _run_aurora_master "$@" ;;
-  aurora-tenant)      _run_aurora_tenant "$@" ;;
-  redis-config)       _run_redis_config "$@" ;;
-  redis-auth)         _run_redis_auth "$@" ;;
-  keycloak)           _run_keycloak "$@" ;;
-  s3-config)          _run_s3_config "$@" ;;
-  kafka-workload)     _run_kafka_workload "$@" ;;
-  rds-ca-pair)        _run_rds_ca_pair "$@" ;;
-  aws-arns)           _run_aws_arns "$@" ;;
-  registry)           _run_registry "$@" ;;
+  --list|list)               _print_list; exit 0 ;;
+  --help|-h|help)            _print_usage; exit 0 ;;
+  ci-deploy)                 _run_ci_deploy "$@" ;;
+  aurora-config)             _run_aurora_config "$@" ;;
+  aurora-master)             _run_aurora_master "$@" ;;
+  aurora-tenant)             _run_aurora_tenant "$@" ;;
+  redis-config)              _run_redis_config "$@" ;;
+  redis-auth)                _run_redis_auth "$@" ;;
+  keycloak)                  _run_keycloak "$@" ;;
+  keycloak-admin)            _run_keycloak_admin "$@" ;;
+  keycloak-bootstrap-client) _run_keycloak_bootstrap_client "$@" ;;
+  keycloak-admin-user)       _run_keycloak_admin_user "$@" ;;
+  s3-config)                 _run_s3_config "$@" ;;
+  kafka-workload)            _run_kafka_workload "$@" ;;
+  rds-ca-pair)               _run_rds_ca_pair "$@" ;;
+  aws-arns)                  _run_aws_arns "$@" ;;
+  registry)                  _run_registry "$@" ;;
   *)
     echo "Error: unknown bundle '$bundle'" >&2
     echo "Run \`$(basename "$0") --list\` to see available bundles." >&2
