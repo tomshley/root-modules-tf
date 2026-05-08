@@ -10,10 +10,12 @@
 # Arguments:
 #   stack-dir  Path to the Terraform/OpenTofu stack directory (default: current directory).
 #              Must contain a state with streaming outputs. Required: kafka_bootstrap_servers
-#              and workload_kafka_api_key_ids. Optional: schema_registry_url and the four
-#              flink_* scalars plus workload_flink_api_key_ids / _secrets — any
-#              missing optional outputs are treated as empty and the corresponding blocks
-#              are omitted per-workload.
+#              and workload_kafka_api_key_ids. Optional: schema_registry_url, the five
+#              flink_* scalars (flink_rest_endpoint, flink_compute_pool_id,
+#              flink_runner_service_account_id, flink_environment_id, flink_organization_id),
+#              and workload_flink_api_key_ids / _secrets — any missing optional outputs
+#              are treated as empty and the corresponding blocks (or block lines) are
+#              omitted per-workload.
 #
 # Output:
 #   Creates <stack-dir>/.env-bundle/<workload>.env for each workload, composed
@@ -22,9 +24,15 @@
 #       (when the workload has a Kafka API key in workload_kafka_api_key_ids)
 #   - SCHEMA_REGISTRY_URL, SCHEMA_REGISTRY_API_KEY, SCHEMA_REGISTRY_API_SECRET
 #       (when SR is configured and the workload has an SR API key)
-#   - FLINK_REST_ENDPOINT, FLINK_COMPUTE_POOL_ID, FLINK_RUNNER_SERVICE_ACCOUNT_ID,
-#     FLINK_ENVIRONMENT_ID, FLINK_API_KEY, FLINK_API_SECRET
-#       (when the workload has a Flink API key in workload_flink_api_key_ids)
+#   - FLINK_PLATFORM, FLINK_REST_ENDPOINT, FLINK_COMPUTE_POOL_ID,
+#     FLINK_RUNNER_SERVICE_ACCOUNT_ID, FLINK_ENVIRONMENT_ID,
+#     FLINK_API_KEY, FLINK_API_SECRET
+#       (when the workload has a Flink API key in workload_flink_api_key_ids).
+#       Plus FLINK_ORGANIZATION_ID and FLINK_STATEMENTS_PATH (a pre-rendered
+#       Flink Gateway REST path) when the stack additionally exposes a
+#       flink_organization_id output, allowing curl + Basic-auth consumer
+#       scripts to reach the statements collection without a vendor CLI or
+#       a runtime URL-template builder.
 #   A workload with only a Flink key renders a Flink-only env file; a workload
 #   with no credentials in any map is skipped. All files are chmod 600.
 
@@ -88,12 +96,19 @@ FLINK_REST_ENDPOINT=$($TOFU output -raw flink_rest_endpoint 2>/dev/null || echo 
 FLINK_COMPUTE_POOL_ID=$($TOFU output -raw flink_compute_pool_id 2>/dev/null || echo "")
 FLINK_RUNNER_SA_ID=$($TOFU output -raw flink_runner_service_account_id 2>/dev/null || echo "")
 FLINK_ENVIRONMENT_ID=$($TOFU output -raw flink_environment_id 2>/dev/null || echo "")
+# Optional: organization id, used to pre-render the Flink Gateway REST statements
+# path so consumer scripts don't have to bake the vendor URL template into per-service
+# code. Stacks that don't expose this output get a Flink block without
+# FLINK_ORGANIZATION_ID / FLINK_STATEMENTS_PATH, and the consumer must source the
+# value (or the path) by other means.
+FLINK_ORGANIZATION_ID=$($TOFU output -raw flink_organization_id 2>/dev/null || echo "")
 [ "$FLINK_KEY_IDS" = "null" ] && FLINK_KEY_IDS="{}"
 [ "$FLINK_SECRETS" = "null" ] && FLINK_SECRETS="{}"
 [ "$FLINK_REST_ENDPOINT" = "null" ] && FLINK_REST_ENDPOINT=""
 [ "$FLINK_COMPUTE_POOL_ID" = "null" ] && FLINK_COMPUTE_POOL_ID=""
 [ "$FLINK_RUNNER_SA_ID" = "null" ] && FLINK_RUNNER_SA_ID=""
 [ "$FLINK_ENVIRONMENT_ID" = "null" ] && FLINK_ENVIRONMENT_ID=""
+[ "$FLINK_ORGANIZATION_ID" = "null" ] && FLINK_ORGANIZATION_ID=""
 
 # Get workload names from the union of Kafka + Flink key maps.
 # A workload in both maps renders both blocks (Kafka -> SR -> Flink order);
@@ -177,10 +192,28 @@ EOF
     # Rendered when the workload has a Flink API key (e.g. a Flink-only submit
     # service account that ships only `workload_flink_api_*` outputs).
     # Coexists with Kafka+SR blocks when a workload appears in multiple maps.
+    #
+    # FLINK_PLATFORM is a discriminator the consumer script switches on to pick
+    # the right request-body shape. Today the renderer only knows the Confluent
+    # Cloud Flink Gateway and emits the literal `confluent_cloud`; future
+    # platforms (e.g. Apache Flink SQL Gateway, Ververica Platform) would extend
+    # this with a corresponding TF input and a different value.
+    #
+    # FLINK_STATEMENTS_PATH is the Flink Gateway path tail that consumers append
+    # to FLINK_REST_ENDPOINT to reach the statements collection. The Confluent
+    # Cloud Flink Gateway embeds the org and environment IDs in the path
+    # (https://docs.confluent.io/cloud/current/flink/operate-and-deploy/flink-rest-api.html);
+    # pre-rendering it here keeps the URL template out of per-consumer scripts
+    # and lets a curl + Basic-auth consumer talk to the gateway without a
+    # vendor CLI dependency. Emitted only when the stack exposes the optional
+    # flink_organization_id output AND a flink_environment_id; otherwise the
+    # path lines are omitted and the consumer is expected to fail loudly
+    # rather than fall back to a malformed URL.
     if [ -n "$FLINK_KEY" ]; then
         [ "$has_content" = 1 ] && echo "" >> "$env_file"
         cat >> "$env_file" <<EOF
 # Flink (Confluent Cloud)
+FLINK_PLATFORM=confluent_cloud
 FLINK_REST_ENDPOINT=$FLINK_REST_ENDPOINT
 FLINK_COMPUTE_POOL_ID=$FLINK_COMPUTE_POOL_ID
 FLINK_RUNNER_SERVICE_ACCOUNT_ID=$FLINK_RUNNER_SA_ID
@@ -188,6 +221,12 @@ FLINK_ENVIRONMENT_ID=$FLINK_ENVIRONMENT_ID
 FLINK_API_KEY=$FLINK_KEY
 FLINK_API_SECRET=$FLINK_SECRET
 EOF
+        if [ -n "$FLINK_ORGANIZATION_ID" ] && [ -n "$FLINK_ENVIRONMENT_ID" ]; then
+            cat >> "$env_file" <<EOF
+FLINK_ORGANIZATION_ID=$FLINK_ORGANIZATION_ID
+FLINK_STATEMENTS_PATH=/sql/v1/organizations/$FLINK_ORGANIZATION_ID/environments/$FLINK_ENVIRONMENT_ID/statements
+EOF
+        fi
     fi
 
     echo "Created: $env_file"
