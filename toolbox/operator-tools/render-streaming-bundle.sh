@@ -10,10 +10,11 @@
 # Arguments:
 #   stack-dir  Path to the Terraform/OpenTofu stack directory (default: current directory).
 #              Must contain a state with streaming outputs. Required: kafka_bootstrap_servers
-#              and workload_kafka_api_key_ids. Optional: schema_registry_url, the five
+#              and workload_kafka_api_key_ids. Optional: schema_registry_url, the seven
 #              flink_* scalars (flink_rest_endpoint, flink_compute_pool_id,
-#              flink_runner_service_account_id, flink_environment_id, flink_organization_id),
-#              and workload_flink_api_key_ids / _secrets — any missing optional outputs
+#              flink_runner_service_account_id, flink_environment_id, flink_organization_id,
+#              flink_current_catalog, flink_current_database), and
+#              workload_flink_api_key_ids / _secrets — any missing optional outputs
 #              are treated as empty and the corresponding blocks (or block lines) are
 #              omitted per-workload.
 #
@@ -28,6 +29,14 @@
 #     FLINK_RUNNER_SERVICE_ACCOUNT_ID, FLINK_ENVIRONMENT_ID,
 #     FLINK_API_KEY, FLINK_API_SECRET
 #       (when the workload has a Flink API key in workload_flink_api_key_ids).
+#       Plus FLINK_CATALOG_NAME / FLINK_DATABASE_NAME when the stack exposes
+#       flink_current_catalog / flink_current_database outputs — consumers
+#       pass these into `spec.properties.sql.current-catalog` /
+#       `sql.current-database` on POST /statements so Flink SQL can resolve
+#       unqualified table references (topic names). Without them a statement
+#       reaches phase=FAILED with `Table '...' does not exist ... Using
+#       current catalog '' and current database ''.`
+#
 #       Plus FLINK_ORGANIZATION_ID and FLINK_STATEMENTS_PATH (a pre-rendered
 #       Flink Gateway REST path) when the stack additionally exposes a
 #       flink_organization_id output, allowing curl + Basic-auth consumer
@@ -102,6 +111,20 @@ FLINK_ENVIRONMENT_ID=$($TOFU output -raw flink_environment_id 2>/dev/null || ech
 # FLINK_ORGANIZATION_ID / FLINK_STATEMENTS_PATH, and the consumer must source the
 # value (or the path) by other means.
 FLINK_ORGANIZATION_ID=$($TOFU output -raw flink_organization_id 2>/dev/null || echo "")
+# Optional: Flink SQL catalog + database display names. In Confluent Cloud Flink
+# these correspond to the environment display name and the Kafka cluster display
+# name (not the env-xxx / lkc-xxx IDs) and are required by the SQL planner to
+# resolve unqualified table references. The Confluent `confluent flink statement
+# create` CLI derived these from `~/.confluent/config.json` current-context; the
+# REST API has no equivalent implicit context, so consumers submitting via curl
+# must set `spec.properties.sql.current-catalog` / `sql.current-database`
+# explicitly. Stacks that don't expose these outputs get a Flink block without
+# FLINK_CATALOG_NAME / FLINK_DATABASE_NAME; a curl-based submit script MUST
+# fail loudly on absence (rather than submit `properties: {}`) because a
+# property-less statement reaches phase=FAILED at plan time rather than
+# surfacing as a 4xx at POST.
+FLINK_CURRENT_CATALOG=$($TOFU output -raw flink_current_catalog 2>/dev/null || echo "")
+FLINK_CURRENT_DATABASE=$($TOFU output -raw flink_current_database 2>/dev/null || echo "")
 [ "$FLINK_KEY_IDS" = "null" ] && FLINK_KEY_IDS="{}"
 [ "$FLINK_SECRETS" = "null" ] && FLINK_SECRETS="{}"
 [ "$FLINK_REST_ENDPOINT" = "null" ] && FLINK_REST_ENDPOINT=""
@@ -109,6 +132,8 @@ FLINK_ORGANIZATION_ID=$($TOFU output -raw flink_organization_id 2>/dev/null || e
 [ "$FLINK_RUNNER_SA_ID" = "null" ] && FLINK_RUNNER_SA_ID=""
 [ "$FLINK_ENVIRONMENT_ID" = "null" ] && FLINK_ENVIRONMENT_ID=""
 [ "$FLINK_ORGANIZATION_ID" = "null" ] && FLINK_ORGANIZATION_ID=""
+[ "$FLINK_CURRENT_CATALOG" = "null" ] && FLINK_CURRENT_CATALOG=""
+[ "$FLINK_CURRENT_DATABASE" = "null" ] && FLINK_CURRENT_DATABASE=""
 
 # Get workload names from the union of Kafka + Flink key maps.
 # A workload in both maps renders both blocks (Kafka -> SR -> Flink order);
@@ -225,6 +250,21 @@ EOF
             cat >> "$env_file" <<EOF
 FLINK_ORGANIZATION_ID=$FLINK_ORGANIZATION_ID
 FLINK_STATEMENTS_PATH=/sql/v1/organizations/$FLINK_ORGANIZATION_ID/environments/$FLINK_ENVIRONMENT_ID/statements
+EOF
+        fi
+        # Flink SQL catalog/database context. Gated independently of the
+        # org/env path above — a stack that exposes statement-path outputs
+        # but not catalog/database outputs still gets a usable Flink block
+        # (the consumer will fail at POST rather than at render), and vice
+        # versa. Both values must be non-empty to emit either, since Flink
+        # SQL needs both the catalog AND database to resolve unqualified
+        # table references — emitting just one would produce a more subtle
+        # failure (resolves in catalog X but finds no table, rather than
+        # the clearer "current catalog ''" error).
+        if [ -n "$FLINK_CURRENT_CATALOG" ] && [ -n "$FLINK_CURRENT_DATABASE" ]; then
+            cat >> "$env_file" <<EOF
+FLINK_CATALOG_NAME=$FLINK_CURRENT_CATALOG
+FLINK_DATABASE_NAME=$FLINK_CURRENT_DATABASE
 EOF
         fi
     fi
