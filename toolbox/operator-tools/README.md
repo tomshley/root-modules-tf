@@ -77,7 +77,7 @@ Each `<stack-dir>/.env-bundle/<workload>.env` file (chmod 600) is composed of up
 
 - **Kafka**: `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_API_KEY`, `KAFKA_API_SECRET` — when the workload has a Kafka API key in `workload_kafka_api_key_ids`.
 - **Schema Registry**: `SCHEMA_REGISTRY_URL`, `SCHEMA_REGISTRY_API_KEY`, `SCHEMA_REGISTRY_API_SECRET` — when SR is configured at the cluster level and the workload has an SR API key.
-- **Flink (Confluent Cloud)**: `FLINK_REST_ENDPOINT`, `FLINK_COMPUTE_POOL_ID`, `FLINK_RUNNER_SERVICE_ACCOUNT_ID`, `FLINK_ENVIRONMENT_ID`, `FLINK_API_KEY`, `FLINK_API_SECRET` — when the workload has a Flink API key in `workload_flink_api_key_ids`.
+- **Flink (Confluent Cloud)**: `FLINK_PLATFORM`, `FLINK_REST_ENDPOINT`, `FLINK_COMPUTE_POOL_ID`, `FLINK_RUNNER_SERVICE_ACCOUNT_ID`, `FLINK_ENVIRONMENT_ID`, `FLINK_API_KEY`, `FLINK_API_SECRET` — when the workload has a Flink API key in `workload_flink_api_key_ids`. Plus `FLINK_ORGANIZATION_ID` and `FLINK_STATEMENTS_PATH` (a pre-rendered Flink Gateway path tail of the form `/sql/v1/organizations/<org>/environments/<env>/statements`) when the stack additionally exposes a `flink_organization_id` output. `FLINK_PLATFORM=confluent_cloud` is a discriminator the consumer's submit script switches on to pick the right request-body shape; pre-rendering the path lets a `curl` + Basic-auth consumer reach the statements collection without a vendor CLI or a runtime URL builder.
 
 A workload with only a Flink key renders a Flink-only file (no empty `KAFKA_*`/`SCHEMA_REGISTRY_*` lines). A workload with no credentials in any of the three maps is skipped with a log line.
 

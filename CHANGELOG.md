@@ -6,6 +6,23 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.9.1] — 2026-05-08
+
+### Added
+
+- **toolbox/operator-tools/render-streaming-bundle.sh** (Flink block): Emit a `FLINK_PLATFORM=confluent_cloud` discriminator alongside the existing `FLINK_REST_ENDPOINT` / `FLINK_COMPUTE_POOL_ID` / `FLINK_RUNNER_SERVICE_ACCOUNT_ID` / `FLINK_ENVIRONMENT_ID` / `FLINK_API_KEY` / `FLINK_API_SECRET` lines. The discriminator gives consumer submit scripts a single `case "$FLINK_PLATFORM" in` switch to select the right request-body shape per Flink control plane: today the renderer only knows the Confluent Cloud Flink Gateway, but a future hotfix that adds support for Apache Flink SQL Gateway, Ververica Platform, or a self-hosted Flink Kubernetes Operator can extend this with a corresponding TF input and a different value without changing the existing variable names. Consumer scripts written today against `FLINK_PLATFORM=confluent_cloud` remain forward-compatible and can grow new branches alongside, rather than fork on every platform addition.
+- **toolbox/operator-tools/render-streaming-bundle.sh** (`flink_organization_id` output read): Optionally read a new `flink_organization_id` scalar output from the streaming stack. When both `flink_organization_id` and `flink_environment_id` are present, the renderer additionally emits `FLINK_ORGANIZATION_ID=<org>` and `FLINK_STATEMENTS_PATH=/sql/v1/organizations/<org>/environments/<env>/statements` into the Flink block. The path tail is the public Confluent Cloud Flink Gateway shape documented at https://docs.confluent.io/cloud/current/flink/operate-and-deploy/flink-rest-api.html and pre-rendering it in the bundle keeps the URL template out of per-consumer code — a consumer's submit script becomes `curl -u "$FLINK_API_KEY:$FLINK_API_SECRET" "${FLINK_REST_ENDPOINT}${FLINK_STATEMENTS_PATH}"` rather than a per-service URL builder. Stacks that don't expose `flink_organization_id` get a Flink block without these two lines (fully backwards-compatible with v1.8.6+ stacks); the consumer is expected to fail loudly on absence rather than fall back to a malformed URL. Defensive `null`-coercion mirrors the existing pattern for the other five `flink_*` scalar reads (see v1.8.6 `### Added` block).
+
+### Rationale
+
+The added lines unblock a `curl` + HTTP Basic auth consumer pattern for Flink statement deploys that does not require the vendor `confluent` CLI in the deploy CI image. The CLI's `confluent login` command is interactive (email/password/SSO) and rejects non-interactive API-key env vars with `Error: no credentials found`, which forces consumers either to embed user-bound credentials in CI (a poor posture under HIPAA-style controls that disallow human auth in machine pipelines) or to bypass the CLI entirely. With `FLINK_STATEMENTS_PATH` and `FLINK_PLATFORM` present in the rendered bundle, a consumer's submit script can drop the CLI tarball install, drop the `confluent login` step, and drop the synthetic `CONFLUENT_CLOUD_API_KEY=$FLINK_API_KEY` re-export — leaving a single bundle-source + `curl` invocation. The `FLINK_PLATFORM` discriminator preserves the option to extend the same consumer script to a non-Confluent Flink target later without renaming any variables.
+
+### Backward Compatibility
+
+Fully additive on the rendered `.env` file shape — pre-v1.9.1 consumer scripts that only read `FLINK_REST_ENDPOINT` / `FLINK_API_KEY` / `FLINK_API_SECRET` ignore the three new lines and continue to work unchanged. Stacks without a `flink_organization_id` output produce a Flink block identical to v1.8.6's shape plus only the `FLINK_PLATFORM=confluent_cloud` line; consumers requiring `FLINK_STATEMENTS_PATH` must add the output to their streaming module to opt in.
+
+---
+
 ## [1.9.0] — 2026-05-07
 
 ### Added
