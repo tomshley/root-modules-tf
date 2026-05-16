@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+---
+
+## [1.11.0] — 2026-05-16
+
 ### Added
 
 - **toolbox/operator-tools/capture-dns-snapshot.sh**: New operator tool that captures a deterministic snapshot of every authoritative DNS record described by a directory of BIND-format zone exports. For each (fqdn, type) pair found in the exports plus a synthesized AAAA + NS probe per zone apex, the script queries an authoritative nameserver via `dig +short` and writes a sorted, header-commented text file. Output is byte-stable across runs against unchanged DNS state — the script exports `LC_ALL=C` to pin sort collation, sorts each per-record dig response before joining, and uses an atomic `mktemp` + `mv` to publish the final file — so two snapshots from the same state on different machines (operator laptop, CI runner, incident-response shell) diff to zero. BIND control directives (`$ORIGIN`, `$TTL`, `$INCLUDE`) are skipped during parse so they do not pollute the records file. Intended use: pre-plan, pre-apply, and post-apply baselines for DNS migrations into Terraform-managed state. The captured pre-plan snapshot is the rollback evidence — restoring it via the DNS provider's API is the canonical recovery path. Nameserver is configurable via `NAMESERVER` env var (defaults to `1.1.1.1`); override with the zone's authoritative NS for the strongest guarantee against intermediate-resolver caching.
