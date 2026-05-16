@@ -42,6 +42,7 @@ variable "dns_records" {
     value   = optional(string)
     ttl     = optional(number, 1)
     proxied = optional(bool)
+    comment = optional(string)
     caa = optional(object({
       flags = optional(number, 0)
       tag   = string
@@ -50,7 +51,7 @@ variable "dns_records" {
   }))
   default = []
 
-  description = "Curated baseline DNS records. Supported types are A, AAAA, CNAME, TXT, and CAA. Use value for A, AAAA, CNAME, and TXT. Use caa.flags, caa.tag, and caa.value for CAA. proxied is valid only for A, AAAA, and CNAME. ttl defaults to 1 (automatic)."
+  description = "Curated baseline DNS records. Supported types are A, AAAA, CNAME, TXT, and CAA. Use value for A, AAAA, CNAME, and TXT. Use caa.flags, caa.tag, and caa.value for CAA. proxied is valid only for A, AAAA, and CNAME. ttl defaults to 1 (automatic). Optional comment is a free-form operator label that is passed through verbatim to the Cloudflare record metadata."
 
   validation {
     condition     = alltrue([for record in var.dns_records : trimspace(record.name) != ""])
