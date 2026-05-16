@@ -8,6 +8,10 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- **toolbox/operator-tools/render-bundle.sh** (keycloak bundle emitter): `KEYCLOAK_ISSUER` was hardcoded to the cluster-internal Service DNS URL alongside `KEYCLOAK_JWKS_URI` and `KEYCLOAK_TOKEN_URL` — but `KEYCLOAK_ISSUER` semantics differ from the other two. JWKS_URI is fetched over HTTP to retrieve signing keys (cluster-internal is correct: low-latency, no public-network egress, no NAT traversal per JWT validation). TOKEN_URL is the client-credentials grant endpoint (cluster-internal is correct for in-cluster service-to-service token issuance). ISSUER is the value an OIDC resource-server compares — by literal string equality, with NO network call — against the `iss` claim that Keycloak embeds in tokens. Keycloak emits its realm frontend URL (the public hostname clients use to obtain tokens) as `iss`, and only knows one frontend URL to emit; with `KEYCLOAK_ISSUER` set to the cluster-internal Service DNS, every token validation by a downstream resource-server failed with `Invalid issuer`, blocking all authenticated traffic to services that consumed the rendered bundle. The fix reads the `keycloak_issuer_url` TF output (already exposed by identity stacks built on `terraform/modules/aws-eks-keycloak`, whose value is `${var.keycloak_public_url}/realms/${realm_name}` — the realm frontend URL) and uses it for `KEYCLOAK_ISSUER`. JWKS_URI and TOKEN_URL stay cluster-internal — JWKS fetch needs no NAT egress per JWT validation and the validator does no network call to ISSUER. Backward-compatible: when `keycloak_public_url` is null (cluster-internal-only deployments — minikube, dev, isolated test stacks), the emitter falls back to the cluster-internal URL as before. The companion `--help` block reorganizes the `Output file format` section to describe the two URL kinds separately so the rationale is visible to operators reading the inline docs.
+
 ---
 
 ## [1.11.0] — 2026-05-16
