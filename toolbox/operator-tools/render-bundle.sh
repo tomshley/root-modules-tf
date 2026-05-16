@@ -582,8 +582,13 @@ Optional flags:
   --port-output KEY      TF output for service port (default: keycloak_service_port)
 
 Output file format:
-  KEYCLOAK_JWKS_URI, KEYCLOAK_ISSUER, KEYCLOAK_TOKEN_URL — all cluster-internal
-  http URLs of the form http://<service>.<namespace>.svc.cluster.local:<port>/realms/<realm>/...
+  KEYCLOAK_JWKS_URI, KEYCLOAK_TOKEN_URL — cluster-internal http URLs of the form
+    http://<service>.<namespace>.svc.cluster.local:<port>/realms/<realm>/...
+    (low-latency, no NAT egress per JWT validation).
+  KEYCLOAK_ISSUER — realm frontend URL (TF output keycloak_issuer_url) when set;
+    falls back to cluster-internal when keycloak_public_url is null. MUST match
+    the `iss` claim Keycloak emits in tokens — the validator does a literal
+    string compare, with NO network call to this URL, so security is unaffected.
 EOF
 }
 
@@ -612,10 +617,33 @@ _run_keycloak() {
   port=$(read_tf_output_required "$identity_dir" "$port_key" "identity")
   base="http://${svc}.${ns}.svc.cluster.local:${port}"
 
+  # KEYCLOAK_ISSUER must literally equal the `iss` claim Keycloak emits in
+  # tokens, which is the realm frontend URL (the public hostname clients use to
+  # obtain tokens — Keycloak only knows one frontend URL to emit). OIDC
+  # resource-server validators do a string-only compare against `iss`, with NO
+  # network call to this URL, so emitting the public URL here keeps signature
+  # verification on the cluster-internal JWKS endpoint (off the public network,
+  # security unaffected) while letting `iss` validation succeed for tokens
+  # issued through the public realm URL.
+  #
+  # Falls back to cluster-internal when keycloak_public_url is null
+  # (cluster-internal-only deployments — minikube, dev, isolated test stacks).
+  local issuer issuer_public
+  issuer_public=$(read_tf_output "$identity_dir" keycloak_issuer_url)
+  if [[ -n "$issuer_public" ]]; then
+    issuer="$issuer_public"
+  else
+    issuer="${base}/realms/${realm}"
+  fi
+
   write_file_secure "$out" 600 <<EOF
-# Keycloak identity provider URLs (cluster-internal)
+# Keycloak identity provider URLs
+# JWKS_URI / TOKEN_URL: cluster-internal Service DNS (low-latency, no public egress).
+# ISSUER: realm frontend URL — matches the `iss` claim in tokens. Validator does
+# a literal string compare, no network call. Falls back to cluster-internal when
+# keycloak_public_url TF output is null.
 KEYCLOAK_JWKS_URI=${base}/realms/${realm}/protocol/openid-connect/certs
-KEYCLOAK_ISSUER=${base}/realms/${realm}
+KEYCLOAK_ISSUER=${issuer}
 KEYCLOAK_TOKEN_URL=${base}/realms/${realm}/protocol/openid-connect/token
 EOF
   emit_ok "$out"
