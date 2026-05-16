@@ -16,6 +16,9 @@ toolbox/operator-tools/
 ├── render-ci-deploy-bundle.sh    # render CI deploy .env from cloud stack
 ├── render-bundle.sh              # render a single credential bundle (subcommand-based)
 ├── sync-secure-files.sh          # upload .secure_files/ to GitLab Secure Files
+├── capture-dns-snapshot.sh       # capture byte-stable DNS snapshot from BIND zone exports
+├── compare-dns-snapshots.sh      # diff two snapshots; gate apply on stability
+├── verify-dns-1to1.sh            # semantic 1:1 verify of live DNS vs. BIND exports
 ├── lib/
 │   └── render-helpers.sh         # sourceable bash library (low-level)
 └── README.md
@@ -98,6 +101,68 @@ Uploads `.secure_files/` to a GitLab project's Secure Files store with backup/re
 ```bash
 ./sync-secure-files.sh --project-id 76128095 --token "$GITLAB_TOKEN"
 ```
+
+---
+
+## DNS migration tools
+
+A three-script chain used to build a rollback-evidence baseline when migrating authoritative DNS records from a dashboard/manual configuration into Terraform-managed state. The chain is intentionally `dig` + `awk` + `diff` only — no provider credentials, no TF state — so it produces evidence independent of the migration tooling itself.
+
+The input to all three is a directory of BIND-format zone exports (one `<zone>.txt` per zone) — the format Cloudflare's dashboard "Export DNS records" button produces.
+
+### `capture-dns-snapshot.sh`
+
+Writes a deterministic, byte-stable snapshot of every authoritative DNS record in the export directory by querying `dig +short @$NAMESERVER` per (fqdn, type) pair, plus a synthesized AAAA + NS probe per zone apex. Output is sorted and locale-pinned (`LC_ALL=C`) so two snapshots from the same DNS state produce identical files regardless of operator machine locale.
+
+```bash
+NAMESERVER=ns1.cloudflare.com \
+  ./capture-dns-snapshot.sh ./zone-exports/ ./snapshots/pre-plan.txt
+```
+
+Capture three times in a typical migration: pre-plan (the rollback baseline), pre-apply (proves nobody mutated DNS during the planning window), post-apply (proves apply was a wire-level no-op).
+
+### `compare-dns-snapshots.sh`
+
+Diffs two snapshots, stripping the header timestamp lines so capture time does not produce false drift.
+
+```bash
+./compare-dns-snapshots.sh ./snapshots/pre-plan.txt ./snapshots/pre-apply.txt
+```
+
+Exit 0 = snapshots are 1:1 identical. Exit 1 = drift detected (output is standard `diff(1)` format so failing records are visible). Exit 2 = invocation error.
+
+### `verify-dns-1to1.sh`
+
+Semantic per-RRset verification. Every `(fqdn, type)` RRset described in the BIND export is compared **set-equal** against the live answer; both *missing* values (in BIND, absent from live) and *extra* values (in live, absent from BIND) are reported as drift via `comm`. The extra-value detection is the operationally critical half — it catches a record that was left behind by a previous DNS provider, or hand-added during the migration window, and never made it into the export. A per-line / per-record check would silently miss those.
+
+```bash
+NAMESERVER=ns1.cloudflare.com \
+  ./verify-dns-1to1.sh ./zone-exports/
+```
+
+Output on a clean run:
+
+```
+  ✓ MX example.com (3 value(s))
+  ✓ A api.example.com (2 value(s))
+  ✓ PROXIED A example.com (alive, 1 BIND record(s))
+```
+
+Output on drift:
+
+```
+  ✗ MX example.com DRIFT
+    Missing (declared in BIND, absent from live):
+      - 10 mx1.example-mail.com
+    Extra (present in live, absent from BIND):
+      + 20 mx1.legacy-provider.com
+```
+
+Proxied RRsets (any record with `; cf-proxied:true`) take a separate path: live must be non-empty, but byte-equality is not enforced because Cloudflare returns its anycast addresses, not the origin values. SOA and apex NS are skipped — both are managed at the registrar/parent-zone level; `capture-dns-snapshot.sh` covers them in the byte-stable snapshot path.
+
+Exit 0 = every RRset 1:1 + every proxied RRset alive. Exit 1 = any drift or any proxied RRset not resolving. Pairs with the snapshot tools: the snapshot pair answers "did anything change?", this answers "is the live state actually what the export said?".
+
+**Bound:** the BIND export is the source-of-truth. The tool catches every divergence within RRsets the export describes, but cannot enumerate live records whose `(fqdn, type)` is absent from the export entirely (public DNS does not support enumerate-zone over `dig`). The export must therefore be a complete dump of the zone — for Cloudflare, the dashboard's "Export DNS records" button produces that.
 
 ---
 
