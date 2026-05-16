@@ -5,21 +5,24 @@ locals {
     for index, record in var.mx_records : format("%03d-%d-%s", index, record.priority, lower(trimspace(record.value))) => {
       priority = record.priority
       value    = trimspace(record.value)
+      comment  = try(record.comment, null)
     }
   }
 
   normalized_dkim_records = {
     for index, record in var.dkim_records : format("%03d-%s-%s", index, upper(record.type), lower(trimspace(record.name))) => {
-      name  = trimspace(record.name)
-      type  = upper(record.type)
-      value = trimspace(record.value)
+      name    = trimspace(record.name)
+      type    = upper(record.type)
+      value   = trimspace(record.value)
+      comment = try(record.comment, null)
     }
   }
 
   normalized_verification_records = {
     for index, record in var.verification_records : format("%03d-%s", index, lower(trimspace(record.name))) => {
-      name  = trimspace(record.name)
-      value = trimspace(record.value)
+      name    = trimspace(record.name)
+      value   = trimspace(record.value)
+      comment = try(record.comment, null)
     }
   }
 }
@@ -33,6 +36,7 @@ resource "cloudflare_dns_record" "mx" {
   ttl      = 1
   priority = each.value.priority
   content  = each.value.value
+  comment  = each.value.comment
 }
 
 resource "cloudflare_dns_record" "spf" {
@@ -41,6 +45,7 @@ resource "cloudflare_dns_record" "spf" {
   type    = "TXT"
   ttl     = 1
   content = trimspace(var.spf_value)
+  comment = var.spf_comment
 }
 
 resource "cloudflare_dns_record" "dkim" {
@@ -51,6 +56,7 @@ resource "cloudflare_dns_record" "dkim" {
   type    = each.value.type
   ttl     = 1
   content = each.value.value
+  comment = each.value.comment
 }
 
 resource "cloudflare_dns_record" "dmarc" {
@@ -59,6 +65,7 @@ resource "cloudflare_dns_record" "dmarc" {
   type    = "TXT"
   ttl     = 1
   content = trimspace(var.dmarc_value)
+  comment = var.dmarc_comment
 }
 
 resource "cloudflare_dns_record" "verification" {
@@ -69,4 +76,5 @@ resource "cloudflare_dns_record" "verification" {
   type    = "TXT"
   ttl     = 1
   content = each.value.value
+  comment = each.value.comment
 }

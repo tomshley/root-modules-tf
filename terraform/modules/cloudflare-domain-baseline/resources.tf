@@ -8,6 +8,7 @@ locals {
       ttl     = record.ttl
       value   = try(record.value, null)
       proxied = contains(["A", "AAAA", "CNAME"], upper(record.type)) ? (record.proxied != null ? record.proxied : true) : null
+      comment = try(record.comment, null)
       caa     = try(record.caa, null)
     }
   }
@@ -46,6 +47,7 @@ resource "cloudflare_dns_record" "standard" {
   ttl     = each.value.ttl
   content = each.value.value
   proxied = each.value.proxied
+  comment = each.value.comment
 }
 
 resource "cloudflare_dns_record" "txt" {
@@ -56,6 +58,7 @@ resource "cloudflare_dns_record" "txt" {
   type    = each.value.type
   ttl     = each.value.ttl
   content = each.value.value
+  comment = each.value.comment
 }
 
 resource "cloudflare_dns_record" "caa" {
@@ -65,6 +68,7 @@ resource "cloudflare_dns_record" "caa" {
   name    = each.value.name
   type    = each.value.type
   ttl     = each.value.ttl
+  comment = each.value.comment
 
   data = {
     flags = try(each.value.caa.flags, 0)
