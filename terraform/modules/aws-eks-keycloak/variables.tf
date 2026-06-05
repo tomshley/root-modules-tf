@@ -137,6 +137,12 @@ variable "replicas" {
   }
 }
 
+variable "pod_annotations" {
+  description = "Additional annotations applied to the Keycloak pod template (chart podAnnotations). Deep-merged with module-managed annotations; the realm-import checksum annotation wins on key conflict so realm-change rolling restarts are preserved. Common uses: scheduler hints such as karpenter.sh/do-not-disrupt=true to keep a single-replica deployment from being voluntarily disrupted, service-mesh sidecar injection, or metrics scrape config."
+  type        = map(string)
+  default     = {}
+}
+
 # --- Resource limits ---
 
 variable "resources_requests_cpu" {
