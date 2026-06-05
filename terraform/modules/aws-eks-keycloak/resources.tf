@@ -67,6 +67,13 @@ locals {
   image_tag_values   = var.keycloak_image_tag != null ? { image = { tag = var.keycloak_image_tag } } : {}
   service_host       = "${var.release_name}.${local.namespace}.svc.cluster.local"
   port_suffix        = var.service_port != 80 ? ":${var.service_port}" : ""
+  # Pod template annotations: user-supplied (var.pod_annotations) merged with
+  # module-managed annotations. The realm-import checksum drives a rolling
+  # restart when realm content changes, so it must always win on key conflict.
+  pod_annotations = merge(
+    var.pod_annotations,
+    local.realm_import ? { "checksum/realm-config" = local.realm_content_hash } : {},
+  )
   common_labels = merge({
     "app.kubernetes.io/managed-by" = "terraform"
     "app.kubernetes.io/part-of"    = "keycloak"
@@ -183,10 +190,8 @@ resource "helm_release" "keycloak" {
       }
       },
       local.image_tag_values,
-      local.realm_import ? {
-        podAnnotations = {
-          "checksum/realm-config" = local.realm_content_hash
-        }
+      length(local.pod_annotations) > 0 ? {
+        podAnnotations = local.pod_annotations
     } : {})),
   ], var.extra_helm_values)
 
