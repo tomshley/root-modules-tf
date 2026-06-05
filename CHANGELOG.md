@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.11.2] — 2026-06-05
+
+### Added
+
+- **`pod_annotations` input on `aws-eks-keycloak`** — consumers had no first-class way to set pod-level annotations on the Keycloak template. Scheduling and disruption controls such as `karpenter.sh/do-not-disrupt` required bypassing module inputs entirely via raw `extra_helm_values`, with no merge safety guarantees. The new `pod_annotations = map(string)` variable (default `{}`) deep-merges caller-supplied annotations with the module-managed realm-import checksum annotation; the checksum wins on key conflict so realm-change rolling restarts are preserved. Emitted with or without realm import.
+
 ## [1.11.1] — 2026-05-16
 
 ### Fixed
