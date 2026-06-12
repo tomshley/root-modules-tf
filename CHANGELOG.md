@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.11.3] — 2026-06-12
+
+### Fixed
+
+- **toolbox/operator-tools/render-bundle.sh** (keycloak bundle emitter): the generated-file header comment inside the `write_file_secure <<EOF` heredoc contained `` `iss` `` in unescaped backticks. The heredoc delimiter is necessarily unquoted (the body interpolates `${base}`, `${realm}`, `${issuer}`), so bash performed command substitution on the backticks at render time: every keycloak bundle render printed `render-bundle.sh: line 639: iss: command not found` to stderr and emitted the comment with the word silently dropped ("matches the  claim in tokens"). The three `KEY=value` lines were never affected — the noise was cosmetic — but it surfaced in every operator rotation log against per-service keycloak bundles and read as a render failure. Fix escapes the backticks (`\`iss\``) so the rendered comment carries them literally. A sweep of all toolbox scripts confirmed this was the only backtick inside an unquoted heredoc body; backticks elsewhere live in `cat <<'EOF'` usage blocks (quoted, inert) or plain shell comments.
+
 ## [1.11.2] — 2026-06-05
 
 ### Added
