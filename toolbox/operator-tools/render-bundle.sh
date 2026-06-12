@@ -639,7 +639,7 @@ _run_keycloak() {
   write_file_secure "$out" 600 <<EOF
 # Keycloak identity provider URLs
 # JWKS_URI / TOKEN_URL: cluster-internal Service DNS (low-latency, no public egress).
-# ISSUER: realm frontend URL — matches the `iss` claim in tokens. Validator does
+# ISSUER: realm frontend URL — matches the \`iss\` claim in tokens. Validator does
 # a literal string compare, no network call. Falls back to cluster-internal when
 # keycloak_public_url TF output is null.
 KEYCLOAK_JWKS_URI=${base}/realms/${realm}/protocol/openid-connect/certs
