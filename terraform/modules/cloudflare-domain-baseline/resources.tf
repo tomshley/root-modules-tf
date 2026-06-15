@@ -38,6 +38,12 @@ resource "cloudflare_zone_setting" "min_tls_version" {
   value      = var.min_tls_version
 }
 
+resource "cloudflare_zone_setting" "email_obfuscation" {
+  zone_id    = local.normalized_zone_id
+  setting_id = "email_obfuscation"
+  value      = var.email_obfuscation ? "on" : "off"
+}
+
 resource "cloudflare_dns_record" "standard" {
   for_each = local.proxied_dns_records
 

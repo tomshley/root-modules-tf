@@ -35,6 +35,12 @@ variable "min_tls_version" {
   }
 }
 
+variable "email_obfuscation" {
+  type        = bool
+  default     = true
+  description = "Whether to enable Cloudflare email address obfuscation for HTML responses."
+}
+
 variable "dns_records" {
   type = list(object({
     name    = string
