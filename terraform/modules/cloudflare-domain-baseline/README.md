@@ -5,6 +5,7 @@ Establish foundational Cloudflare posture for an existing zone.
 This module manages:
 - SSL/TLS mode
 - Minimum TLS version
+- Email address obfuscation toggle
 - Curated DNS records limited to `A`, `AAAA`, `CNAME`, `TXT`, and `CAA`
 - Optional Cloudflare Origin CA certificate issuance from a caller-provided CSR
 
@@ -20,6 +21,9 @@ This module does not create a zone.
 - `min_tls_version`
   - Default: `1.2`
   - Allowed values: `1.0`, `1.1`, `1.2`, `1.3`
+- `email_obfuscation`
+  - Default: `true`
+  - Enables or disables Cloudflare Email Address Obfuscation for HTML responses
 - `dns_records`
   - Default: `[]`
   - Curated baseline DNS records.
@@ -85,9 +89,10 @@ When `origin_ca` is set, `requested_validity` must be one of Cloudflare's suppor
 module "cloudflare_domain_baseline" {
   source = "../../modules/cloudflare-domain-baseline"
 
-  zone_id         = "cloudflare-zone-id"
-  ssl_mode        = "strict"
-  min_tls_version = "1.2"
+  zone_id           = "cloudflare-zone-id"
+  ssl_mode          = "strict"
+  min_tls_version   = "1.2"
+  email_obfuscation = true
 
   dns_records = [
     {

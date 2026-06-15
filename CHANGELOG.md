@@ -6,6 +6,16 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased]
+
+## [1.12.0] — 2026-06-15
+
+### Added
+
+- **terraform/modules/cloudflare-pages-site**: New generic module for Cloudflare Pages deployments. It provisions a Pages project (`cloudflare_pages_project`), attaches one or more custom domains (`cloudflare_pages_domain`), and optionally manages a proxied CNAME to `<project>.pages.dev` per domain (`create_dns_record`, with `zone_id` required only for domains whose DNS is managed here). The module supports direct-upload workflows (for example, CI `wrangler pages deploy`) by leaving `build_config = null`, and accepts an optional `build_config` to set Cloudflare Pages build settings.
+- **terraform/examples/cloudflare-pages-site**: New runnable example demonstrating a Pages project with apex + `www` custom domains using documentation-safe placeholders (`example.com`, placeholder account/zone IDs).
+- **terraform/modules/cloudflare-domain-baseline**: Added `email_obfuscation` input (default `true`) and corresponding `cloudflare_zone_setting` management for Cloudflare Email Address Obfuscation. The module README usage and both domain-baseline examples now show the toggle explicitly.
+
 ## [1.11.3] — 2026-06-12
 
 ### Fixed
