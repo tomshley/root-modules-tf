@@ -6,9 +6,10 @@ variable "zone_id" {
 module "cloudflare_domain_baseline" {
   source = "../../modules/cloudflare-domain-baseline"
 
-  zone_id         = var.zone_id
-  ssl_mode        = "strict"
-  min_tls_version = "1.2"
+  zone_id           = var.zone_id
+  ssl_mode          = "strict"
+  min_tls_version   = "1.2"
+  email_obfuscation = true
 
   dns_records = [
     {
