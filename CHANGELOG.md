@@ -8,6 +8,8 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-06-15
+
 ### Added
 
 - **terraform/modules/cloudflare-pages-site**: New generic module for Cloudflare Pages deployments. It provisions a Pages project (`cloudflare_pages_project`), attaches one or more custom domains (`cloudflare_pages_domain`), and optionally manages a proxied CNAME to `<project>.pages.dev` per domain (`create_dns_record`, with `zone_id` required only for domains whose DNS is managed here). The module supports direct-upload workflows (for example, CI `wrangler pages deploy`) by leaving `build_config = null`, and accepts an optional `build_config` to set Cloudflare Pages build settings.
