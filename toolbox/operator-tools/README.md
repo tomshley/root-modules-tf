@@ -16,13 +16,76 @@ toolbox/operator-tools/
 ├── render-ci-deploy-bundle.sh    # render CI deploy .env from cloud stack
 ├── render-bundle.sh              # render a single credential bundle (subcommand-based)
 ├── sync-secure-files.sh          # upload .secure_files/ to GitLab Secure Files
+├── check-env-contract-drift.sh   # validate real .env shape vs contracts/<stack>.env.example
+├── hydrate-stack-secrets.sh      # write env-supplied secret values into a stack .env (contract-driven)
 ├── capture-dns-snapshot.sh       # capture byte-stable DNS snapshot from BIND zone exports
 ├── compare-dns-snapshots.sh      # diff two snapshots; gate apply on stability
 ├── verify-dns-1to1.sh            # semantic 1:1 verify of live DNS vs. BIND exports
 ├── lib/
+│   ├── contract.sh               # sourceable: parse REQUIRED/OPTIONAL keys from a contract
 │   └── render-helpers.sh         # sourceable bash library (low-level)
 └── README.md
 ```
+
+---
+
+## Env-file contracts (`check-env-contract-drift.sh` + `hydrate-stack-secrets.sh`)
+
+A lightweight, repo-agnostic convention for keeping each stack's real `.env`
+honest. A **contract** is a committed template,
+`<secure-dir>/contracts/<stack>.env.example`, enumerating the variable *names* a
+real `<env>-<region>-<stack>.env` may define — independent of environment. Two
+annotations are parsed literally (grammar in `lib/contract.sh`, sourced by both
+scripts so there is one definition):
+
+```bash
+# REQUIRED — must appear in every real .env for this stack
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+
+# OPTIONAL — uncomment + populate when a stack feature is enabled
+# TF_VAR_some_feature_token=
+```
+
+- `^[A-Za-z_][A-Za-z0-9_]*=` → **REQUIRED**
+- `^#[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=` → **OPTIONAL** (the character class spans both cases, so mixed-case names like `TF_VAR_*` parse)
+- everything else (free comments, blanks) → ignored
+
+### `check-env-contract-drift.sh` — validate shape (read side)
+
+```bash
+./check-env-contract-drift.sh [SECURE_FILES_DIR]   # default: .secure_files
+```
+
+For each real `<env>-<region>-<stack>.env`: locate its contract (else fail),
+enforce **REQUIRED ⊆ real** and **real ⊆ (REQUIRED ∪ OPTIONAL)**. For each
+contract that declares REQUIRED keys, at least one matching real file must
+exist — this catches the silently-missing-`.env` class that otherwise surfaces
+as an opaque provider-auth error deep inside `tofu plan`. Exit 0 = clean,
+1 = drift, 2 = usage error. Ideal as a CI `before_script` pre-flight, or run
+locally.
+
+### `hydrate-stack-secrets.sh` — fill values (write side)
+
+```bash
+SOME_API_KEY=… TF_VAR_some_token=… \
+  ./hydrate-stack-secrets.sh --stack <stack> --env <env> --region <region> \
+    --secure-dir <path> [--dry-run] [--strict]
+```
+
+The inverse of the checker: it *writes* operator-supplied secret VALUES into the
+real `.env`, driven by the same contract. For every REQUIRED/OPTIONAL key the
+contract declares, if a same-named environment variable is set and non-empty,
+its value is upserted (chmod 600, symlink-safe, position-preserving). It never
+hardcodes key names and never prints values — only key names. Because it only
+ever writes contract-declared keys, it cannot introduce drift — the keys it
+writes always satisfy `check-env-contract-drift.sh`. Missing OPTIONAL keys are skipped; missing
+REQUIRED keys warn (fail under `--strict`). Pass `--region ""` for global
+(account-wide) stacks (`<env>-<stack>.env`).
+
+Any caller — CI, an operator shell, a rotation tool — drives hydrate
+identically, because the key-to-file mapping lives in the contract, not the
+caller.
 
 ---
 
