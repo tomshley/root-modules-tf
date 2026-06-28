@@ -70,6 +70,19 @@ locals {
     annotationAutodiscovery = { enabled = true }
   } : {}
 
+  # v4 requires every enabled feature to be assigned to a named Alloy collector
+  # that exists in `collectors`, AND every defined collector to be used by an
+  # enabled feature (the chart validates BOTH directions). Chart 4.0.0 ships no
+  # named-defaults, so controller types come from explicit presets: metrics on a
+  # single-replica deployment, cluster events on a singleton (avoids duplicate
+  # events), and pod logs on a per-node daemonset that mounts /var/log. Built
+  # from the same toggles so only collectors for enabled features are created.
+  collectors = merge(
+    var.cluster_metrics_enabled ? { "alloy-metrics" = { presets = ["deployment"] } } : {},
+    var.cluster_events_enabled ? { "alloy-singleton" = { presets = ["singleton"] } } : {},
+    var.pod_logs_enabled ? { "alloy-logs" = { presets = ["daemonset", "filesystem-log-reader"] } } : {},
+  )
+
   # v4 `destinations` is a name-keyed map. Built with yamlencode so the
   # conditional auth/secret shapes can never produce malformed YAML.
   chart_values = yamlencode(merge({
@@ -88,9 +101,19 @@ locals {
         auth = local.logs_auth
       }, local.secret_block)
     }
-    clusterMetrics = { enabled = var.cluster_metrics_enabled }
-    clusterEvents  = { enabled = var.cluster_events_enabled }
-    podLogsViaLoki = { enabled = var.pod_logs_enabled }
+    collectors     = local.collectors
+    clusterMetrics = { enabled = var.cluster_metrics_enabled, collector = "alloy-metrics" }
+    clusterEvents  = { enabled = var.cluster_events_enabled, collector = "alloy-singleton" }
+    podLogsViaLoki = { enabled = var.pod_logs_enabled, collector = "alloy-logs" }
+
+    # clusterMetrics needs a kube-state-metrics connection. Deploy the
+    # chart-managed KSM (into var.namespace) whenever clusterMetrics is on.
+    # Consumers with an existing cluster-wide KSM can override via
+    # extra_helm_values (deploy=false + clusterMetrics.kube-state-metrics
+    # namespace/labelSelectors).
+    telemetryServices = {
+      "kube-state-metrics" = { deploy = var.cluster_metrics_enabled }
+    }
   }, local.annotation_autodiscovery_values))
 }
 
