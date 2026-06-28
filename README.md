@@ -35,6 +35,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
 | `aws-eks-karpenter-controller` | AWS | Karpenter controller deployment on EKS with service account and configuration | **New** |
 | `aws-eks-metrics-server` | AWS | Metrics Server deployment on EKS for HPA and autoscaling metrics | **New** |
+| `aws-eks-grafana-alloy` | AWS | Grafana k8s-monitoring (Alloy) collectors for cluster metrics, pod logs, and opt-in application metrics autodiscovery | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic) and per-field overrides | **New** |
 | `aws-eks-keycloak` | AWS | Keycloak identity server on EKS via Bitnami Helm chart, DB credentials via Secrets Manager ARN, optional realm import | **New** |
@@ -47,6 +48,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `cloudflare-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
 | `confluent-streaming-topics` | Confluent | Overlay-driven Kafka topic provisioning with deployment filtering | **New** |
 | `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
+| `grafana-cloud-alerting` | Grafana | Workload-health alert rule groups with webhook routing, built-in Kubernetes signals, and caller-defined Prometheus/Loki rules | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
 
@@ -54,6 +56,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 - `terraform/examples/gcp-gke-full-stack/` — GKE cluster + system/workload pools + NAT
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
+- `terraform/examples/aws-eks-grafana-alloy/` — EKS Grafana Alloy/k8s-monitoring collectors with inline-token credential path and annotation autodiscovery
 - `terraform/examples/aws-eks-aurora-event-store/` — Write-optimized Aurora cluster (event-store preset)
 - `terraform/examples/aws-eks-aurora-read-store/` — Read-optimized Aurora cluster with reader instance
 - `terraform/examples/aws-eks-aurora-generic/` — Aurora cluster with no preset tuning, individual override
@@ -71,6 +74,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/streaming-topics-overlay/` — Overlay-driven topic provisioning with inclusion/exclusion filtering
 - `terraform/examples/streaming-workload-access-commercial/` — Confluent workload with Schema Registry access
 - `terraform/examples/streaming-workload-access-external-sr/` — Kafka-only workload (external SR)
+- `terraform/examples/grafana-cloud-alerting/` — Grafana-managed workload-health alerting with built-in and caller-defined Prometheus/Loki rules
 - `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access
 - `terraform/examples/aws-eks-ci-oidc-github-reuse/` — GitHub Actions with existing OIDC provider
 - `terraform/examples/aws-eks-ci-oidc-gitlab/` — GitLab CI → AWS → EKS deploy access
