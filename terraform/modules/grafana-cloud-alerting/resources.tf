@@ -1,24 +1,23 @@
 # Grafana-managed workload-health alert rules -> a generic webhook contact
 # point (incident.io / PagerDuty / Opsgenie / Slack-webhook / ...). House
-# defaults for the three signals that catch a sick Kubernetes workload:
-#   1. pod restarts  (crash loop)            — Prometheus / kube-state-metrics
-#   2. OOMKilled     (out-of-memory)         — Prometheus / kube-state-metrics
-#   3. error logs    (trouble before crash)  — Loki  (optional)
+# defaults catch the three Kubernetes workload signals that are usually worth
+# wiring first:
+#   1. pod restarts  (crash loop)            - Prometheus / kube-state-metrics
+#   2. OOMKilled     (out-of-memory)         - Prometheus / kube-state-metrics
+#   3. error logs    (trouble before crash)  - Loki  (optional)
 #
-# Vendor-neutral: every workload-specific value (namespace, labels, severities,
-# the log regex, annotations, datasource names) is an input. The metric rules
-# and the Loki rule live in separate rule groups so the log rule — and its Loki
-# dependency — can be switched off independently for workloads that do not ship
-# logs to Loki.
+# Callers can append arbitrary Prometheus and Loki rules through metric_rules
+# and log_rules. The metric and Loki rules live in separate rule groups so the
+# Loki dependency can be switched off independently for workloads that do not
+# ship logs.
 #
 # Null-tolerant: deploys only when enabled AND webhook_url is set, so leaving it
 # enabled on cold-start keeps every resource inert (count = 0). The caller must
 # also fold provider-readiness (grafana url + token present) into `enabled`,
-# because the datasource lookups below run at plan time.
+# because datasource lookups below run at plan time.
 
 locals {
-  deploy      = var.enabled && var.webhook_url != null
-  deploy_logs = local.deploy && var.error_log_alert_enabled
+  deploy = var.enabled && var.webhook_url != null
 
   # Grafana Cloud auto-provisions datasources named grafanacloud-<slug>-prom /
   # -logs. Allow explicit override for self-hosted Grafana / non-standard names.
@@ -31,46 +30,77 @@ locals {
     var.grafana_stack_slug != null ? "grafanacloud-${var.grafana_stack_slug}-logs" : "grafanacloud-logs"
   )
 
-  # Shared expression node: fires when query A reduces (last value) to > 0.
-  # Built once so the threshold semantics are identical across every rule.
-  classic_gt_zero_model = jsonencode({
-    conditions = [{
-      evaluator = { params = [0], type = "gt" }
-      operator  = { type = "and" }
-      query     = { params = ["A"] }
-      reducer   = { params = [], type = "last" }
-      type      = "query"
-    }]
-    datasource = { type = "__expr__", uid = "-100" }
-    refId      = "B"
-    type       = "classic_conditions"
-  })
-
-  # severity is applied on top of the shared labels and wins on its key.
-  pod_restart_labels = merge(var.alert_labels, { severity = var.pod_restart_severity })
-  oom_labels         = merge(var.alert_labels, { severity = var.oom_severity })
-  error_log_labels   = merge(var.alert_labels, { severity = var.error_log_severity })
-
-  # Neutral defaults; callers override individual keys via the *_annotations vars.
-  pod_restart_annotations = merge({
+  # Neutral annotation defaults; callers override individual keys via the
+  # *_annotations vars. tomap() keeps every rule object below at one element
+  # type, which the concat()s that build the effective lists require.
+  pod_restart_annotations = tomap(merge({
     summary     = "Pod is restarting in ${var.namespace}"
     description = "kube_pod_container_status_restarts_total increased for {{ $labels.pod }} in {{ $labels.namespace }}. Likely a crash loop — check the pod logs."
-  }, var.pod_restart_annotations)
+  }, var.pod_restart_annotations))
 
-  oom_annotations = merge({
+  oom_annotations = tomap(merge({
     summary     = "Container OOMKilled in ${var.namespace}"
     description = "A container in {{ $labels.pod }} ({{ $labels.namespace }}) terminated with reason=OOMKilled. Review memory limits and usage."
-  }, var.oom_annotations)
+  }, var.oom_annotations))
 
-  error_log_annotations = merge({
+  error_log_annotations = tomap(merge({
     summary     = "Error logs detected in ${var.namespace}"
     description = "Matched error log lines in {{ $labels.namespace }}. Leading indicator of trouble that liveness/readiness probes may not catch."
-  }, var.error_log_annotations)
+  }, var.error_log_annotations))
+
+  # House-default rules expressed in the SAME object shape as var.metric_rules /
+  # var.log_rules so one dynamic "rule" block renders built-ins and caller rules
+  # uniformly. `for_duration` (not `for`) avoids the object-key reserved word.
+  builtin_metric_rules = concat(
+    var.pod_restart_rule_enabled ? [{
+      name               = var.pod_restart_rule_name
+      expr               = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"${var.namespace}\"}[10m]))"
+      threshold          = 0
+      reducer            = "last"
+      for_duration       = var.pod_restart_for
+      severity           = var.pod_restart_severity
+      annotations        = local.pod_restart_annotations
+      query_from_seconds = 600
+      no_data_state      = "OK"
+    }] : [],
+    var.oom_rule_enabled ? [{
+      name               = var.oom_rule_name
+      expr               = "sum by (pod) (kube_pod_container_status_last_terminated_reason{namespace=\"${var.namespace}\", reason=\"OOMKilled\"})"
+      threshold          = 0
+      reducer            = "last"
+      for_duration       = "0s"
+      severity           = var.oom_severity
+      annotations        = local.oom_annotations
+      query_from_seconds = 600
+      no_data_state      = "OK"
+    }] : [],
+  )
+
+  builtin_log_rules = var.error_log_alert_enabled ? [{
+    name               = var.error_log_rule_name
+    expr               = "sum(count_over_time({namespace=\"${var.namespace}\"} |~ `${var.error_log_pattern}` [5m]))"
+    threshold          = 0
+    reducer            = "last"
+    for_duration       = var.error_log_for
+    severity           = var.error_log_severity
+    annotations        = local.error_log_annotations
+    query_from_seconds = 600
+    no_data_state      = "OK"
+  }] : []
+
+  # Built-ins first, then caller rules (appended rules never reorder built-ins).
+  metric_rules_effective = concat(local.builtin_metric_rules, var.metric_rules)
+  log_rules_effective    = concat(local.builtin_log_rules, var.log_rules)
+
+  # A grafana_rule_group must hold >= 1 rule, so a group deploys only when it has
+  # at least one effective rule (and the module as a whole is deploying).
+  deploy_metrics = local.deploy && length(local.metric_rules_effective) > 0
+  deploy_logs    = local.deploy && length(local.log_rules_effective) > 0
 }
 
-# ── Datasource UID lookups ──────────────────────────────────────────
+# -- Datasource UID lookups ----------------------------------------------------
 data "grafana_data_source" "prometheus" {
-  count = local.deploy ? 1 : 0
+  count = local.deploy_metrics ? 1 : 0
   name  = local.prometheus_datasource_name
 }
 
@@ -79,7 +109,7 @@ data "grafana_data_source" "loki" {
   name  = local.loki_datasource_name
 }
 
-# ── Folder + webhook contact point ──────────────────────────────────
+# -- Folder + webhook contact point -------------------------------------------
 resource "grafana_folder" "this" {
   count = local.deploy ? 1 : 0
   title = var.folder_title
@@ -97,143 +127,148 @@ resource "grafana_contact_point" "webhook" {
   }
 }
 
-# ── Metric rules (pod restart + OOMKilled) ──────────────────────────
+# -- Metric rules --------------------------------------------------------------
 # Per-rule notification_settings route to the contact point WITHOUT taking over
 # the org-wide root notification policy. Requires Grafana 10.4+ (simplified
 # routing).
 resource "grafana_rule_group" "metrics" {
-  count            = local.deploy ? 1 : 0
+  count            = local.deploy_metrics ? 1 : 0
   name             = var.rule_group_name
   folder_uid       = grafana_folder.this[0].uid
   interval_seconds = var.evaluation_interval_seconds
 
-  rule {
-    name           = var.pod_restart_rule_name
-    for            = var.pod_restart_for
-    condition      = "B"
-    no_data_state  = "OK"
-    exec_err_state = "Error"
+  dynamic "rule" {
+    for_each = local.metric_rules_effective
+    content {
+      name           = rule.value.name
+      for            = rule.value.for_duration
+      condition      = "B"
+      no_data_state  = rule.value.no_data_state
+      exec_err_state = "Error"
 
-    data {
-      ref_id = "A"
-      relative_time_range {
-        from = 600
-        to   = 0
+      data {
+        ref_id = "A"
+        relative_time_range {
+          from = rule.value.query_from_seconds
+          to   = 0
+        }
+        datasource_uid = data.grafana_data_source.prometheus[0].uid
+        model = jsonencode({
+          refId         = "A"
+          instant       = true
+          range         = false
+          expr          = rule.value.expr
+          intervalMs    = 1000
+          maxDataPoints = 43200
+        })
       }
-      datasource_uid = data.grafana_data_source.prometheus[0].uid
-      model = jsonencode({
-        refId         = "A"
-        instant       = true
-        range         = false
-        expr          = "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"${var.namespace}\"}[10m]))"
-        intervalMs    = 1000
-        maxDataPoints = 43200
-      })
-    }
-    data {
-      ref_id = "B"
-      relative_time_range {
-        from = 0
-        to   = 0
-      }
-      datasource_uid = "-100"
-      model          = local.classic_gt_zero_model
-    }
 
-    labels      = local.pod_restart_labels
-    annotations = local.pod_restart_annotations
-    notification_settings {
-      contact_point = grafana_contact_point.webhook[0].name
-      group_by      = var.notification_group_by
+      data {
+        ref_id = "B"
+        relative_time_range {
+          from = 0
+          to   = 0
+        }
+        datasource_uid = "-100"
+        model = jsonencode({
+          conditions = [{
+            evaluator = { params = [rule.value.threshold], type = "gt" }
+            operator  = { type = "and" }
+            query     = { params = ["A"] }
+            reducer   = { params = [], type = rule.value.reducer }
+            type      = "query"
+          }]
+          datasource = { type = "__expr__", uid = "-100" }
+          refId      = "B"
+          type       = "classic_conditions"
+        })
+      }
+
+      labels      = merge(var.alert_labels, { severity = rule.value.severity })
+      annotations = rule.value.annotations
+
+      notification_settings {
+        contact_point = grafana_contact_point.webhook[0].name
+        group_by      = var.notification_group_by
+      }
     }
   }
 
-  rule {
-    name           = var.oom_rule_name
-    for            = "0s"
-    condition      = "B"
-    no_data_state  = "OK"
-    exec_err_state = "Error"
-
-    data {
-      ref_id = "A"
-      relative_time_range {
-        from = 600
-        to   = 0
-      }
-      datasource_uid = data.grafana_data_source.prometheus[0].uid
-      model = jsonencode({
-        refId         = "A"
-        instant       = true
-        range         = false
-        expr          = "sum by (pod) (kube_pod_container_status_last_terminated_reason{namespace=\"${var.namespace}\", reason=\"OOMKilled\"})"
-        intervalMs    = 1000
-        maxDataPoints = 43200
-      })
-    }
-    data {
-      ref_id = "B"
-      relative_time_range {
-        from = 0
-        to   = 0
-      }
-      datasource_uid = "-100"
-      model          = local.classic_gt_zero_model
-    }
-
-    labels      = local.oom_labels
-    annotations = local.oom_annotations
-    notification_settings {
-      contact_point = grafana_contact_point.webhook[0].name
-      group_by      = var.notification_group_by
+  lifecycle {
+    precondition {
+      condition     = length(local.metric_rules_effective) == length(distinct([for r in local.metric_rules_effective : r.name]))
+      error_message = "Effective metric rule names (built-ins + metric_rules) must be unique within the rule group; rename the colliding entry."
     }
   }
 }
 
-# ── Log rule (optional; requires a Loki datasource) ─────────────────
+# -- Log rules -----------------------------------------------------------------
 resource "grafana_rule_group" "logs" {
   count            = local.deploy_logs ? 1 : 0
   name             = "${var.rule_group_name}-logs"
   folder_uid       = grafana_folder.this[0].uid
   interval_seconds = var.evaluation_interval_seconds
 
-  rule {
-    name           = var.error_log_rule_name
-    for            = var.error_log_for
-    condition      = "B"
-    no_data_state  = "OK"
-    exec_err_state = "Error"
+  dynamic "rule" {
+    for_each = local.log_rules_effective
+    content {
+      name           = rule.value.name
+      for            = rule.value.for_duration
+      condition      = "B"
+      no_data_state  = rule.value.no_data_state
+      exec_err_state = "Error"
 
-    data {
-      ref_id = "A"
-      relative_time_range {
-        from = 600
-        to   = 0
+      data {
+        ref_id = "A"
+        relative_time_range {
+          from = rule.value.query_from_seconds
+          to   = 0
+        }
+        datasource_uid = data.grafana_data_source.loki[0].uid
+        model = jsonencode({
+          refId         = "A"
+          queryType     = "instant"
+          expr          = rule.value.expr
+          intervalMs    = 1000
+          maxDataPoints = 43200
+        })
       }
-      datasource_uid = data.grafana_data_source.loki[0].uid
-      model = jsonencode({
-        refId         = "A"
-        queryType     = "instant"
-        expr          = "sum(count_over_time({namespace=\"${var.namespace}\"} |~ `${var.error_log_pattern}` [5m]))"
-        intervalMs    = 1000
-        maxDataPoints = 43200
-      })
-    }
-    data {
-      ref_id = "B"
-      relative_time_range {
-        from = 0
-        to   = 0
-      }
-      datasource_uid = "-100"
-      model          = local.classic_gt_zero_model
-    }
 
-    labels      = local.error_log_labels
-    annotations = local.error_log_annotations
-    notification_settings {
-      contact_point = grafana_contact_point.webhook[0].name
-      group_by      = var.notification_group_by
+      data {
+        ref_id = "B"
+        relative_time_range {
+          from = 0
+          to   = 0
+        }
+        datasource_uid = "-100"
+        model = jsonencode({
+          conditions = [{
+            evaluator = { params = [rule.value.threshold], type = "gt" }
+            operator  = { type = "and" }
+            query     = { params = ["A"] }
+            reducer   = { params = [], type = rule.value.reducer }
+            type      = "query"
+          }]
+          datasource = { type = "__expr__", uid = "-100" }
+          refId      = "B"
+          type       = "classic_conditions"
+        })
+      }
+
+      labels      = merge(var.alert_labels, { severity = rule.value.severity })
+      annotations = rule.value.annotations
+
+      notification_settings {
+        contact_point = grafana_contact_point.webhook[0].name
+        group_by      = var.notification_group_by
+      }
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = length(local.log_rules_effective) == length(distinct([for r in local.log_rules_effective : r.name]))
+      error_message = "Effective log rule names (built-in error log + log_rules) must be unique within the rule group; rename the colliding entry."
     }
   }
 }
