@@ -8,6 +8,15 @@
 # grafana_cloud_token / prometheus_username / loki_username and set
 # credentials_secret_name instead (see the credentials_secret_* variables).
 #
+# Application metrics opt in from their own Pod template or Service annotations:
+#   k8s.grafana.com/scrape: "true"
+#   k8s.grafana.com/metrics.portNumber: "9090" # or metrics.portName
+#   k8s.grafana.com/metrics.path: "/metrics"   # default: /metrics
+# Optional annotations include metrics.scheme, metrics.scrapeInterval,
+# metrics.scrapeTimeout, metrics.container, job, and instance.
+# For multi-container Pods, target a specific container/port to avoid duplicate
+# series that differ only by container label.
+#
 # Requires a `helm` provider configured against the target cluster.
 # Replace placeholder values before applying.
 ###############################################################################
@@ -58,6 +67,11 @@ module "grafana_alloy" {
   prometheus_username = var.prometheus_username
   loki_username       = var.loki_username
   grafana_cloud_token = var.grafana_cloud_token
+
+  # Scrape application Pods/Services annotated `k8s.grafana.com/scrape: "true"`
+  # and ship their metrics to the Prometheus destination. Workloads opt in with
+  # their own annotations; enabling this here only turns the collector feature on.
+  annotation_autodiscovery_enabled = true
 }
 
 output "release_enabled" {

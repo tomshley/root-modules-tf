@@ -38,7 +38,7 @@ variable "prometheus_datasource_name" {
 }
 
 variable "loki_datasource_name" {
-  description = "Name of the Loki datasource in Grafana. When null, falls back to grafanacloud-<slug>-logs (or \"grafanacloud-logs\"). Only used when error_log_alert_enabled = true."
+  description = "Name of the Loki datasource in Grafana. When null, falls back to grafanacloud-<slug>-logs (or \"grafanacloud-logs\"). Only used when the built-in error-log rule or at least one log_rules entry is effective."
   type        = string
   default     = null
 }
@@ -91,7 +91,7 @@ variable "notification_group_by" {
 # --- Labels + severities ---
 
 variable "alert_labels" {
-  description = "Labels merged into EVERY rule (e.g. { team = \"...\", service = \"...\" }). A per-rule severity label is added on top via the *_severity variables and wins on the \"severity\" key."
+  description = "Labels merged into EVERY rule (e.g. { team = \"...\", service = \"...\" }). A per-rule severity label is added on top via the built-in *_severity variables or each custom rule's severity field and wins on the \"severity\" key."
   type        = map(string)
   default     = {}
 }
@@ -174,4 +174,140 @@ variable "error_log_annotations" {
   description = "Annotations merged OVER the module's default summary/description for the error-log rule."
   type        = map(string)
   default     = {}
+}
+
+# --- Built-in (house-default) metric rule toggles ---
+
+variable "pod_restart_rule_enabled" {
+  description = "Whether to emit the built-in pod-restart metric rule. Set false to drop this house default and rely solely on metric_rules."
+  type        = bool
+  default     = true
+}
+
+variable "oom_rule_enabled" {
+  description = "Whether to emit the built-in OOMKilled metric rule. Set false to drop this house default and rely solely on metric_rules."
+  type        = bool
+  default     = true
+}
+
+# --- Generic caller-defined rules ---
+
+variable "metric_rules" {
+  description = <<-EOT
+    Additional Prometheus-backed alert rules, appended to the metric rule group
+    AFTER the built-in house defaults. Each rule fires when its query, reduced
+    by `reducer`, is greater than `threshold`.
+
+    Fields:
+      - name          (required) Rule display name. Must be unique across the
+                      effective metric set (built-ins + this list).
+      - expr          (required) PromQL whose reduced value is compared to
+                      `threshold`. Encode any condition that yields a series
+                      only when breached, such as a saturation gauge or a
+                      compound no-progress expression.
+      - threshold     (optional, default 0) Fires when reduce(expr) > threshold.
+      - reducer       (optional, default "last") last|max|min|mean|sum|count.
+      - for_duration  (optional, default "5m") Pending period; maps to the
+                      rule's Grafana `for`. Use "0s" to fire immediately.
+      - severity      (optional, default "critical") Value of the `severity`
+                      label, merged over alert_labels.
+      - annotations   (optional, default {}) Annotation map (summary,
+                      description, runbook_url, ...). Grafana templating allowed,
+                      e.g. "{{ $labels.pod }}".
+      - query_from_seconds (optional, default 600) relative_time_range lookback
+                      in seconds. Must cover the largest range selector in
+                      `expr`; a "[15m]" selector needs at least 900.
+      - no_data_state (optional, default "OK") OK|Alerting|NoData.
+
+    Fully additive: defaults to [], so existing consumers are unaffected.
+  EOT
+  type = list(object({
+    name               = string
+    expr               = string
+    threshold          = optional(number, 0)
+    reducer            = optional(string, "last")
+    for_duration       = optional(string, "5m")
+    severity           = optional(string, "critical")
+    annotations        = optional(map(string), {})
+    query_from_seconds = optional(number, 600)
+    no_data_state      = optional(string, "OK")
+  }))
+  default = []
+
+  validation {
+    condition     = length(var.metric_rules) == length(distinct([for r in var.metric_rules : r.name]))
+    error_message = "metric_rules names must be unique."
+  }
+  validation {
+    condition     = alltrue([for r in var.metric_rules : length(trimspace(r.name)) > 0 && length(trimspace(r.expr)) > 0])
+    error_message = "Every metric_rules entry must have a non-empty name and expr."
+  }
+  validation {
+    condition     = alltrue([for r in var.metric_rules : contains(["last", "max", "min", "mean", "sum", "count"], r.reducer)])
+    error_message = "metric_rules[*].reducer must be one of: last, max, min, mean, sum, count."
+  }
+  validation {
+    condition     = alltrue([for r in var.metric_rules : contains(["OK", "Alerting", "NoData"], r.no_data_state)])
+    error_message = "metric_rules[*].no_data_state must be one of: OK, Alerting, NoData."
+  }
+  validation {
+    condition     = alltrue([for r in var.metric_rules : r.query_from_seconds > 0])
+    error_message = "metric_rules[*].query_from_seconds must be a positive number of seconds."
+  }
+  validation {
+    condition     = alltrue([for r in var.metric_rules : can(regex("^([0-9]+(ms|s|m|h|d|w|y))+$", r.for_duration))])
+    error_message = "metric_rules[*].for_duration must be a duration like \"30s\", \"5m\", \"1h30m\", or \"0s\"."
+  }
+}
+
+variable "log_rules" {
+  description = <<-EOT
+    Additional Loki-backed alert rules, appended to the log rule group AFTER the
+    built-in error-log default. Same shape and semantics as metric_rules, except
+    `expr` is LogQL. A non-empty list (or the built-in error-log rule) requires
+    the Loki datasource to resolve at plan time.
+
+    Typical `expr`: a count-over-window query thresholded by `threshold`, e.g.
+    "sum(count_over_time({namespace=\"ns\"} |~ `PATTERN` [10m]))". Ensure
+    query_from_seconds covers the window in the selector.
+
+    Fully additive: defaults to [].
+  EOT
+  type = list(object({
+    name               = string
+    expr               = string
+    threshold          = optional(number, 0)
+    reducer            = optional(string, "last")
+    for_duration       = optional(string, "5m")
+    severity           = optional(string, "warning")
+    annotations        = optional(map(string), {})
+    query_from_seconds = optional(number, 600)
+    no_data_state      = optional(string, "OK")
+  }))
+  default = []
+
+  validation {
+    condition     = length(var.log_rules) == length(distinct([for r in var.log_rules : r.name]))
+    error_message = "log_rules names must be unique."
+  }
+  validation {
+    condition     = alltrue([for r in var.log_rules : length(trimspace(r.name)) > 0 && length(trimspace(r.expr)) > 0])
+    error_message = "Every log_rules entry must have a non-empty name and expr."
+  }
+  validation {
+    condition     = alltrue([for r in var.log_rules : contains(["last", "max", "min", "mean", "sum", "count"], r.reducer)])
+    error_message = "log_rules[*].reducer must be one of: last, max, min, mean, sum, count."
+  }
+  validation {
+    condition     = alltrue([for r in var.log_rules : contains(["OK", "Alerting", "NoData"], r.no_data_state)])
+    error_message = "log_rules[*].no_data_state must be one of: OK, Alerting, NoData."
+  }
+  validation {
+    condition     = alltrue([for r in var.log_rules : r.query_from_seconds > 0])
+    error_message = "log_rules[*].query_from_seconds must be a positive number of seconds."
+  }
+  validation {
+    condition     = alltrue([for r in var.log_rules : can(regex("^([0-9]+(ms|s|m|h|d|w|y))+$", r.for_duration))])
+    error_message = "log_rules[*].for_duration must be a duration like \"30s\", \"5m\", \"1h30m\", or \"0s\"."
+  }
 }

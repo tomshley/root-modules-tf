@@ -1,4 +1,7 @@
 terraform {
+  # optional(...) object attributes with defaults in metric_rules/log_rules.
+  required_version = ">= 1.3"
+
   required_providers {
     grafana = {
       source = "grafana/grafana"
