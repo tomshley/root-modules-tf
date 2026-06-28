@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.14.1] — 2026-06-28
+
+### Fixed
+
+- **terraform/modules/aws-eks-grafana-alloy**: Fixed k8s-monitoring v4 compatibility so enabled features always map to real collectors and pre-install chart validation passes reliably. The module now emits feature-scoped collectors (`alloy-metrics`, `alloy-singleton`, `alloy-logs`) and binds `clusterMetrics`, `clusterEvents`, and `podLogsViaLoki` to those collectors, eliminating the previous "enabled feature with no collector" failure mode. Also wires `telemetryServices.kube-state-metrics.deploy` from `cluster_metrics_enabled` so cluster metrics has the required kube-state-metrics service when enabled.
+
 ## [1.14.0] — 2026-06-27
 
 ### Added
