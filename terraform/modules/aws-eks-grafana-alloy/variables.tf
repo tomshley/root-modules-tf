@@ -114,6 +114,12 @@ variable "pod_logs_enabled" {
   default     = true
 }
 
+variable "annotation_autodiscovery_enabled" {
+  description = "Enable annotationAutodiscovery: the metrics collector scrapes Pods/Services annotated `k8s.grafana.com/scrape: \"true\"` (with optional `k8s.grafana.com/metrics.*` port/path/scheme/interval/container annotations) and ships those application metrics to the Prometheus destination. Default false: enabling it widens scrape scope and active-series cost, so opt in deliberately. For multi-container Pods, target a specific container/port or add discovery/metric relabeling via extra_helm_values to avoid duplicate series. Advanced sub-configuration (annotation remap, namespace/label filters, per-port targeting, discovery or metric-processing rules) is available via extra_helm_values."
+  type        = bool
+  default     = false
+}
+
 variable "helm_timeout" {
   description = "Helm release timeout in seconds. wait=true, so a green apply means the collectors actually came up."
   type        = number

@@ -66,9 +66,13 @@ locals {
     }
   } : {}
 
+  annotation_autodiscovery_values = var.annotation_autodiscovery_enabled ? {
+    annotationAutodiscovery = { enabled = true }
+  } : {}
+
   # v4 `destinations` is a name-keyed map. Built with yamlencode so the
   # conditional auth/secret shapes can never produce malformed YAML.
-  chart_values = yamlencode({
+  chart_values = yamlencode(merge({
     cluster = {
       name = var.cluster_name
     }
@@ -87,7 +91,7 @@ locals {
     clusterMetrics = { enabled = var.cluster_metrics_enabled }
     clusterEvents  = { enabled = var.cluster_events_enabled }
     podLogsViaLoki = { enabled = var.pod_logs_enabled }
-  })
+  }, local.annotation_autodiscovery_values))
 }
 
 resource "helm_release" "k8s_monitoring" {
