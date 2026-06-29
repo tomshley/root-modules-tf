@@ -10,6 +10,12 @@
 # target Grafana / Grafana Cloud instance. The datasource lookups run at plan
 # time, so set enabled = false until the provider points at a real instance.
 # Replace placeholder values before applying.
+#
+# By default the module stays inert until webhook_url is set. Set
+# require_webhook = false (see the module block) to deploy and evaluate the
+# rules BEFORE wiring a webhook — useful for validating rule expressions against
+# live data; until a webhook_url is supplied the rules route to the org default
+# notification policy.
 ###############################################################################
 
 variable "namespace" {
@@ -40,6 +46,11 @@ module "alerting" {
   webhook_url        = var.webhook_url
   webhook_token      = var.webhook_token
   grafana_stack_slug = var.grafana_stack_slug
+
+  # Default true keeps the whole module inert until a webhook destination
+  # exists. Set false to render + evaluate the rules before webhook_url is
+  # supplied (they route to the org default notification policy until then).
+  require_webhook = true
 
   alert_labels = {
     team    = "platform"
@@ -95,6 +106,10 @@ module "alerting" {
 
 output "alerting_enabled" {
   value = module.alerting.enabled
+}
+
+output "alerting_notifications_enabled" {
+  value = module.alerting.notifications_enabled
 }
 
 output "metrics_rule_group" {

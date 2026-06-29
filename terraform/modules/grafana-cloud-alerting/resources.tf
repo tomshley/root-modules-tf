@@ -11,13 +11,23 @@
 # Loki dependency can be switched off independently for workloads that do not
 # ship logs.
 #
-# Null-tolerant: deploys only when enabled AND webhook_url is set, so leaving it
-# enabled on cold-start keeps every resource inert (count = 0). The caller must
-# also fold provider-readiness (grafana url + token present) into `enabled`,
-# because datasource lookups below run at plan time.
+# Null-tolerant: with the default require_webhook = true the module deploys only
+# when enabled AND webhook_url is set, so leaving it enabled on cold-start keeps
+# every resource inert (count = 0). Set require_webhook = false to deploy and
+# evaluate the rules before a webhook exists — the contact point is then created
+# only once webhook_url is supplied, and until then rules route to the org
+# default notification policy. The caller must also fold provider-readiness
+# (grafana url + token present) into `enabled`, because the datasource lookups
+# below run at plan time.
 
 locals {
-  deploy = var.enabled && var.webhook_url != null
+  # The webhook contact point is a separate concern from rule existence:
+  #   notify = a destination exists (webhook_url set) -> create the contact
+  #            point and attach per-rule notification routing to it.
+  #   deploy = the rules + folder render; gated on provider-readiness
+  #            (var.enabled) unless require_webhook forces a destination first.
+  notify = var.enabled && var.webhook_url != null
+  deploy = var.enabled && (var.webhook_url != null || !var.require_webhook)
 
   # Grafana Cloud auto-provisions datasources named grafanacloud-<slug>-prom /
   # -logs. Allow explicit override for self-hosted Grafana / non-standard names.
@@ -116,7 +126,7 @@ resource "grafana_folder" "this" {
 }
 
 resource "grafana_contact_point" "webhook" {
-  count = local.deploy ? 1 : 0
+  count = local.notify ? 1 : 0
   name  = var.contact_point_name
 
   webhook {
@@ -187,9 +197,12 @@ resource "grafana_rule_group" "metrics" {
       labels      = merge(var.alert_labels, { severity = rule.value.severity })
       annotations = rule.value.annotations
 
-      notification_settings {
-        contact_point = grafana_contact_point.webhook[0].name
-        group_by      = var.notification_group_by
+      dynamic "notification_settings" {
+        for_each = local.notify ? [1] : []
+        content {
+          contact_point = grafana_contact_point.webhook[0].name
+          group_by      = var.notification_group_by
+        }
       }
     }
   }
@@ -258,9 +271,12 @@ resource "grafana_rule_group" "logs" {
       labels      = merge(var.alert_labels, { severity = rule.value.severity })
       annotations = rule.value.annotations
 
-      notification_settings {
-        contact_point = grafana_contact_point.webhook[0].name
-        group_by      = var.notification_group_by
+      dynamic "notification_settings" {
+        for_each = local.notify ? [1] : []
+        content {
+          contact_point = grafana_contact_point.webhook[0].name
+          group_by      = var.notification_group_by
+        }
       }
     }
   }
