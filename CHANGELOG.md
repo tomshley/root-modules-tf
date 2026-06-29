@@ -6,6 +6,20 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.15.0] — 2026-06-29
+
+### Added
+
+- **terraform/modules/grafana-cloud-alerting**: New `require_webhook` input (default `true`) that decouples alert-rule deployment from the webhook contact point. With the default the module behaves exactly as before — it stays inert (`count = 0`) until `webhook_url` is set, so no alert rule is ever created without a delivery destination. Set `require_webhook = false` to deploy and evaluate the rules as soon as the `grafana` provider is ready, before an on-call webhook exists: the rules render and report their state (Normal/Pending/Firing) immediately and route to the org default notification policy, then the webhook contact point and per-rule routing attach automatically once `webhook_url` is supplied. This lets operators validate rule expressions against live data before wiring on-call. A companion `notifications_enabled` output reports whether the contact point exists and rules route to it.
+
+### Changed
+
+- **terraform/modules/grafana-cloud-alerting**: The webhook contact point is now provisioned independently of the rules — created only when `webhook_url` is set rather than as part of an all-or-nothing gate — and each rule's `notification_settings` is emitted through a `dynamic` block that attaches only when a webhook is present. The `contact_point_name` output returns `null` when no webhook is configured.
+
+### Backward Compatibility
+
+All changes are additive and the default `require_webhook = true` reproduces the previous behavior exactly: with no webhook nothing deploys, and with a webhook the same folder, contact point, and rules are created and wired identically — the `notification_settings` block renders the same content, so existing state refreshes and applies with no resource-address churn or migration. The new behavior is strictly opt-in via `require_webhook = false`.
+
 ## [1.14.1] — 2026-06-28
 
 ### Fixed
