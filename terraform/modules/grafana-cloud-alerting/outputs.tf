@@ -1,6 +1,11 @@
 output "enabled" {
-  description = "Whether the module's base Grafana objects were deployed (enabled AND webhook_url set). False on cold-start / pre-webhook plans."
+  description = "Whether the module's rules + folder were deployed. True once `enabled` is set and either webhook_url is set or require_webhook = false. False on cold-start / disabled plans."
   value       = local.deploy
+}
+
+output "notifications_enabled" {
+  description = "Whether the webhook contact point exists and rules route to it (enabled AND webhook_url set). When false, any deployed rules route to the org default notification policy."
+  value       = local.notify
 }
 
 output "folder_uid" {
@@ -9,8 +14,8 @@ output "folder_uid" {
 }
 
 output "contact_point_name" {
-  description = "Name of the webhook contact point (null when not deployed)."
-  value       = local.deploy ? grafana_contact_point.webhook[0].name : null
+  description = "Name of the webhook contact point (null when no webhook_url is set, i.e. notifications route to the default policy)."
+  value       = local.notify ? grafana_contact_point.webhook[0].name : null
 }
 
 output "metrics_rule_group" {

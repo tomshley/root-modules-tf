@@ -1,5 +1,5 @@
 variable "enabled" {
-  description = "Master switch. The rules are ALSO gated on webhook_url being set, so leaving this true keeps everything inert (count = 0) until the webhook is supplied. IMPORTANT: the caller must pass false whenever the grafana provider is not yet pointed at a real instance (url + token), otherwise the datasource lookups fail at plan — fold your provider-readiness check into this input."
+  description = "Master switch / provider-readiness gate. When require_webhook is true (the default), the module ALSO stays inert (count = 0) until webhook_url is set; when require_webhook is false, the alert rules deploy as soon as this is true, regardless of webhook_url. IMPORTANT: the caller must pass false whenever the grafana provider is not yet pointed at a real instance (url + token), otherwise the datasource lookups fail at plan — fold your provider-readiness check into this input."
   type        = bool
   default     = true
 }
@@ -51,8 +51,14 @@ variable "grafana_stack_slug" {
 
 # --- Webhook contact point (vendor-neutral: incident.io / PagerDuty / Opsgenie / etc.) ---
 
+variable "require_webhook" {
+  description = "When true (default), the entire module stays inert (count = 0) until webhook_url is set, preserving the \"never create an alert rule without a delivery destination\" behavior. Set false to deploy and evaluate the rules as soon as enabled is true, BEFORE a webhook exists: the rules render in Grafana (showing Normal/Pending/Firing) and route via the org default notification policy until webhook_url is supplied, at which point the contact point is created and per-rule routing attaches to it. Lets you validate rule expressions against live data before wiring on-call."
+  type        = bool
+  default     = true
+}
+
 variable "webhook_url" {
-  description = "Webhook URL of the external alerting/on-call system that should receive notifications. Required for the module to deploy (the deploy gate). The contact point posts the Grafana alert payload here."
+  description = "Webhook URL of the external alerting/on-call system that should receive notifications. When require_webhook is true (default) this is also the module's deploy gate. The contact point posts the Grafana alert payload here; when null, no contact point is created and the rules (if require_webhook = false) route to the org default notification policy."
   type        = string
   default     = null
 }
