@@ -66,8 +66,14 @@ locals {
     }
   } : {}
 
+  metrics_collector_enabled = var.cluster_metrics_enabled || var.annotation_autodiscovery_enabled || var.prometheus_operator_objects_enabled
+
   annotation_autodiscovery_values = var.annotation_autodiscovery_enabled ? {
-    annotationAutodiscovery = { enabled = true }
+    annotationAutodiscovery = { enabled = true, collector = "alloy-metrics" }
+  } : {}
+
+  prometheus_operator_objects_values = var.prometheus_operator_objects_enabled ? {
+    prometheusOperatorObjects = { enabled = true, collector = "alloy-metrics" }
   } : {}
 
   # v4 requires every enabled feature to be assigned to a named Alloy collector
@@ -78,7 +84,7 @@ locals {
   # events), and pod logs on a per-node daemonset that mounts /var/log. Built
   # from the same toggles so only collectors for enabled features are created.
   collectors = merge(
-    var.cluster_metrics_enabled ? { "alloy-metrics" = { presets = ["deployment"] } } : {},
+    local.metrics_collector_enabled ? { "alloy-metrics" = { presets = ["deployment"] } } : {},
     var.cluster_events_enabled ? { "alloy-singleton" = { presets = ["singleton"] } } : {},
     var.pod_logs_enabled ? { "alloy-logs" = { presets = ["daemonset", "filesystem-log-reader"] } } : {},
   )
@@ -114,7 +120,7 @@ locals {
     telemetryServices = {
       "kube-state-metrics" = { deploy = var.cluster_metrics_enabled }
     }
-  }, local.annotation_autodiscovery_values))
+  }, local.annotation_autodiscovery_values, local.prometheus_operator_objects_values))
 }
 
 resource "helm_release" "k8s_monitoring" {
