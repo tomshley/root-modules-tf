@@ -8,7 +8,7 @@
 # grafana_cloud_token / prometheus_username / loki_username and set
 # credentials_secret_name instead (see the credentials_secret_* variables).
 #
-# Application metrics opt in from their own Pod template or Service annotations:
+# Application metrics can opt in from their own Pod template or Service annotations:
 #   k8s.grafana.com/scrape: "true"
 #   k8s.grafana.com/metrics.portNumber: "9090" # or metrics.portName
 #   k8s.grafana.com/metrics.path: "/metrics"   # default: /metrics
@@ -16,6 +16,12 @@
 # metrics.scrapeTimeout, metrics.container, job, and instance.
 # For multi-container Pods, target a specific container/port to avoid duplicate
 # series that differ only by container label.
+#
+# Existing Prometheus Operator Probes, PodMonitors, and ServiceMonitors can also
+# be consumed by enabling prometheus_operator_objects_enabled below. The
+# monitoring.coreos.com/v1 CRDs must exist on the cluster before such manifests
+# can be applied — verify the pinned chart version's CRD handling for the
+# prometheusOperatorObjects feature or install the CRDs explicitly.
 #
 # Requires a `helm` provider configured against the target cluster.
 # Replace placeholder values before applying.
@@ -72,6 +78,10 @@ module "grafana_alloy" {
   # and ship their metrics to the Prometheus destination. Workloads opt in with
   # their own annotations; enabling this here only turns the collector feature on.
   annotation_autodiscovery_enabled = true
+
+  # Scrape metrics through existing Prometheus Operator objects such as
+  # ServiceMonitors. Enable only when those objects are intentionally curated.
+  prometheus_operator_objects_enabled = false
 }
 
 output "release_enabled" {

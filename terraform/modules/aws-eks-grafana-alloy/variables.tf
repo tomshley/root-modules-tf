@@ -120,6 +120,12 @@ variable "annotation_autodiscovery_enabled" {
   default     = false
 }
 
+variable "prometheus_operator_objects_enabled" {
+  description = "Enable prometheusOperatorObjects: the metrics collector discovers Prometheus Operator Probes, PodMonitors, and ServiceMonitors and ships their metrics to the Prometheus destination. Default false: enabling it widens scrape scope and active-series cost, so opt in only when the cluster's ServiceMonitor ownership and labels are intentional. The monitoring.coreos.com/v1 CRDs must exist on the cluster before ServiceMonitor/PodMonitor/Probe manifests can be applied — verify the pinned chart version's CRD handling for this feature or install the CRDs explicitly. Namespace/label selector narrowing and other advanced sub-configuration are available via extra_helm_values."
+  type        = bool
+  default     = false
+}
+
 variable "helm_timeout" {
   description = "Helm release timeout in seconds. wait=true, so a green apply means the collectors actually came up."
   type        = number
