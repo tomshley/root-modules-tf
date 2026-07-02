@@ -6,6 +6,21 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.16.0] — 2026-07-02
+
+### Added
+
+- **terraform/modules/aws-eks-grafana-alloy**: Added `prometheus_operator_objects_enabled` (default `false`), mapping 1:1 to the k8s-monitoring chart's top-level `prometheusOperatorObjects` feature. When enabled, the Alloy metrics collector discovers existing Prometheus Operator Probes, PodMonitors, and ServiceMonitors and ships their metrics to the Prometheus destination — the standard consumption path for clusters that author ServiceMonitors but do not run a full Prometheus Operator stack. Default `false` keeps the rendered values unchanged until opted into, because consuming operator objects widens scrape scope and active-series cost. Namespace/label selector narrowing and other advanced sub-configuration remain available through the existing `extra_helm_values` passthrough. NOTE: the `monitoring.coreos.com/v1` CRDs must exist on the cluster before ServiceMonitor/PodMonitor/Probe manifests can be applied — verify the pinned chart version's CRD handling (its `prometheusOperatorObjects` feature can deploy them) or install the CRDs explicitly.
+- **terraform/examples/aws-eks-grafana-alloy**: Documented the `prometheus_operator_objects_enabled` toggle alongside the annotation-autodiscovery opt-in in the example header.
+
+### Fixed
+
+- **terraform/modules/aws-eks-grafana-alloy**: The `alloy-metrics` collector is now created whenever ANY metrics-producing feature is enabled (`cluster_metrics_enabled`, `annotation_autodiscovery_enabled`, or `prometheus_operator_objects_enabled`), and `annotationAutodiscovery` is bound to that collector explicitly. Previously the collector existed only when `cluster_metrics_enabled` was true, so enabling annotation autodiscovery alone failed the chart's pre-install "enabled feature with no collector" validation.
+
+### Backward Compatibility
+
+All changes are additive and semantically equivalent for existing consumers: `prometheus_operator_objects_enabled` defaults to `false` (feature omitted from rendered values as before), and the chart already bound `annotationAutodiscovery` to the metrics collector by default — the only rendered delta for consumers with autodiscovery enabled is the now-explicit `collector` key (an in-place Helm release value change, no resource-address churn).
+
 ## [1.15.0] — 2026-06-29
 
 ### Added
