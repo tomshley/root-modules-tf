@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.17.1] — 2026-07-03
+
+### Fixed
+
+- **terraform/modules/grafana-cloud-alerting**: Loki log rules now set `query_type = "instant"` on the query data block, mirroring the `queryType` already in the model JSON. Grafana materializes this attribute server-side for Loki instant queries, so leaving it unset produced a perpetual `query_type = "instant" -> null` in-place diff on every plan after the first apply — noise that defeats "empty plan" CI gates. No behavioral change to the rules themselves.
+
 ## [1.17.0] — 2026-07-03
 
 ### Added
