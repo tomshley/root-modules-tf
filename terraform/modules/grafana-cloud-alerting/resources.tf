@@ -256,6 +256,11 @@ resource "grafana_rule_group" "logs" {
 
       data {
         ref_id = "A"
+        # Mirrors the model's queryType: Grafana materializes query_type on the
+        # data block server-side for Loki instant queries, so leaving it unset
+        # produces a perpetual `query_type = "instant" -> null` plan diff after
+        # the first apply (state refreshes to "instant", config says null).
+        query_type = "instant"
         relative_time_range {
           from = rule.value.query_from_seconds
           to   = 0
