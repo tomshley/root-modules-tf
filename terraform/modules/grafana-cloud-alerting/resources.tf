@@ -19,15 +19,38 @@
 # default notification policy. The caller must also fold provider-readiness
 # (grafana url + token present) into `enabled`, because the datasource lookups
 # below run at plan time.
+#
+# COMPOSITION NOTE: when webhook_url/webhook_token come from ANOTHER RESOURCE's
+# attributes (e.g. incident-io-alert-source's alert_events_url/secret_token),
+# their values are unknown at plan time and `webhook_url != null` cannot drive
+# `count`. Pass webhook_configured (a plan-time-known bool, e.g. "the API key
+# is present" or the source module's `enabled` input) to gate the contact
+# point instead — see the incident-io-alert-source example.
 
 locals {
+  # Whether a webhook destination exists. webhook_configured overrides the
+  # null-check for composed callers whose webhook_url is unknown until apply;
+  # when it is null (default), the original plan-time null-check applies.
+  #
+  # try(nonsensitive(x), x): coalesce() unions the sensitivity marks of ALL its
+  # arguments onto its result, so a sensitive webhook_url — a sensitive = true
+  # variable, or another module's sensitive output such as
+  # incident-io-alert-source's alert_events_url — would taint this bool, and
+  # with it notify/deploy and the enabled/notifications_enabled outputs, which
+  # root modules could then not export without sensitive = true ("Output refers
+  # to sensitive values"). Whether a destination EXISTS is not a secret, so the
+  # incidental mark is stripped; try() degrades to a no-op for unmarked inputs
+  # (nonsensitive() errors on non-sensitive values in Terraform < 1.7).
+  webhook_present_raw = coalesce(var.webhook_configured, var.webhook_url != null)
+  webhook_present     = try(nonsensitive(local.webhook_present_raw), local.webhook_present_raw)
+
   # The webhook contact point is a separate concern from rule existence:
-  #   notify = a destination exists (webhook_url set) -> create the contact
+  #   notify = a destination exists (webhook_present) -> create the contact
   #            point and attach per-rule notification routing to it.
   #   deploy = the rules + folder render; gated on provider-readiness
   #            (var.enabled) unless require_webhook forces a destination first.
-  notify = var.enabled && var.webhook_url != null
-  deploy = var.enabled && (var.webhook_url != null || !var.require_webhook)
+  notify = var.enabled && local.webhook_present
+  deploy = var.enabled && (local.webhook_present || !var.require_webhook)
 
   # Grafana Cloud auto-provisions datasources named grafanacloud-<slug>-prom /
   # -logs. Allow explicit override for self-hosted Grafana / non-standard names.

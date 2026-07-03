@@ -49,6 +49,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `confluent-streaming-topics` | Confluent | Overlay-driven Kafka topic provisioning with deployment filtering | **New** |
 | `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
 | `grafana-cloud-alerting` | Grafana | Workload-health alert rule groups with webhook routing, built-in Kubernetes signals, and caller-defined Prometheus/Loki rules | **New** |
+| `incident-io-alert-source` | incident.io | Alert source as code with sane payload templates; exports alert_events_url/secret_token to feed webhook contact points through state | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
 
@@ -75,6 +76,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/streaming-workload-access-commercial/` — Confluent workload with Schema Registry access
 - `terraform/examples/streaming-workload-access-external-sr/` — Kafka-only workload (external SR)
 - `terraform/examples/grafana-cloud-alerting/` — Grafana-managed workload-health alerting with built-in and caller-defined Prometheus/Loki rules
+- `terraform/examples/incident-io-alert-source/` — incident.io alert source composed with grafana-cloud-alerting: webhook credentials flow through state, never by hand
 - `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access
 - `terraform/examples/aws-eks-ci-oidc-github-reuse/` — GitHub Actions with existing OIDC provider
 - `terraform/examples/aws-eks-ci-oidc-gitlab/` — GitLab CI → AWS → EKS deploy access
