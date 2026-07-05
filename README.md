@@ -92,6 +92,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 ### Utilities
 
 - `tools/cloudflare-import/` — runnable read-only Cloudflare inventory, classification, scaffold, and review utility
+- `tools/confluent-topic-config-reset/` — local operator CLI (never invoked by Terraform or CI) that resets per-topic Kafka config overrides to cluster defaults via the native AdminClient protocol, unwedging provider plans the Confluent REST path cannot execute
 
 ### Security Posture Highlights
 
