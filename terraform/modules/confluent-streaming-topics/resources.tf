@@ -55,6 +55,9 @@ resource "confluent_kafka_topic" "managed" {
     each.value.min_compaction_lag_ms != null ? {
       "min.compaction.lag.ms" = tostring(each.value.min_compaction_lag_ms)
     } : {},
+    each.value.max_message_bytes != null ? {
+      "max.message.bytes" = tostring(each.value.max_message_bytes)
+    } : {},
   )
 
   credentials {

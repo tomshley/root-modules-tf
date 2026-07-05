@@ -6,6 +6,13 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.18.0] — 2026-07-05
+
+### Added
+
+- **terraform/modules/confluent-streaming-topics**: Optional `max_message_bytes` catalog field, emitted as Kafka `max.message.bytes` when non-null (valid for every cleanup policy; `>= 0` plan-time gate; fully additive — null omits the key as before). Primary motivation beyond ordinary sizing: Confluent Cloud's policy engine refuses to UNSET a topic-level `max.message.bytes` override (`POLICY_VIOLATION` over the AdminClient protocol, `400 … value 'null' is not a valid INT` over REST), so a topic that drifted to carry the override — UI edit, CLI touch, out-of-band creation — makes the confluent provider plan an unexecutable `-> null` removal that wedges every subsequent apply. Declaring the live value in the catalog converges the plan.
+- **tools/confluent-topic-config-reset**: Review-first CLI (list → dry-run → `--execute`) that resets per-topic Kafka config overrides to cluster defaults over the native AdminClient protocol (`incrementalAlterConfigs` `DELETE`) — the operation the provider's REST path cannot perform (`400 … value 'null' is not a valid INT`). Resets only `DYNAMIC_TOPIC_CONFIG` entries, skips everything else with its source named, re-describes after execution and fails non-zero if an override survived (surfacing platform-policy-pinned configs like Confluent Cloud's `max.message.bytes`, whose only convergence path is declaring the live value in the managing Terraform). SASL_SSL (Confluent Cloud) and PLAINTEXT (local broker) postures; credentials via flags or `CONFLUENT_*` env.
+
 ## [1.17.1] — 2026-07-03
 
 ### Fixed

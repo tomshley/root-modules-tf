@@ -16,9 +16,21 @@ variable "catalog_entries" {
         when non-null. Minimum age a record must reach before it is
         eligible for compaction; default 0 (eligible immediately).
 
-    Both fields default to null and are omitted from the topic config
-    when null, so existing consumers that don't set them continue to
-    receive Kafka's defaults — fully additive on existing catalogs.
+    Optional record-size field:
+      - max_message_bytes: emitted as Kafka `max.message.bytes` when
+        non-null. Largest record batch the topic accepts. Declare it
+        when the live topic carries a topic-level override that the
+        managed platform refuses to reset — Confluent Cloud's policy
+        engine rejects unsetting max.message.bytes (POLICY_VIOLATION on
+        the AdminClient DELETE path and a 400 on the REST path), so an
+        undeclared override wedges every plan/apply as an unexecutable
+        `-> null` removal. Declaring the live value converges the plan;
+        see tools/confluent-topic-config-reset for the resettable-config
+        companion workflow.
+
+    All optional fields default to null and are omitted from the topic
+    config when null, so existing consumers that don't set them continue
+    to receive Kafka's defaults — fully additive on existing catalogs.
   EOT
   type = list(object({
     name                  = string
@@ -29,6 +41,7 @@ variable "catalog_entries" {
     role                  = string
     delete_retention_ms   = optional(number)
     min_compaction_lag_ms = optional(number)
+    max_message_bytes     = optional(number)
   }))
 
   validation {
@@ -100,6 +113,14 @@ variable "catalog_entries" {
       t.min_compaction_lag_ms == null || t.min_compaction_lag_ms >= 0
     ])
     error_message = "min_compaction_lag_ms must be >= 0 (Kafka rejects negative values for min.compaction.lag.ms)."
+  }
+
+  validation {
+    condition = alltrue([
+      for t in var.catalog_entries :
+      t.max_message_bytes == null || t.max_message_bytes >= 0
+    ])
+    error_message = "max_message_bytes must be >= 0 (Kafka rejects negative values for max.message.bytes; managed platforms additionally cap it per cluster type at apply time)."
   }
 }
 
