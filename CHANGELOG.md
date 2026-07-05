@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **tools/confluent-topic-config-reset**: Review-first CLI (list → dry-run → `--execute`) that resets per-topic Kafka config overrides to cluster defaults over the native AdminClient protocol (`incrementalAlterConfigs` `DELETE`) — the operation the provider's REST path cannot perform (`400 … value 'null' is not a valid INT`). Resets only `DYNAMIC_TOPIC_CONFIG` entries, skips everything else with its source named, re-describes after execution and fails non-zero if an override survived (surfacing platform-policy-pinned configs like Confluent Cloud's `max.message.bytes`, whose only convergence path is declaring the live value in the managing Terraform). SASL_SSL (Confluent Cloud) and PLAINTEXT (local broker) postures; credentials via flags or `CONFLUENT_*` env.
+
 ## [1.17.1] — 2026-07-03
 
 ### Fixed
