@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.18.1] — 2026-07-06
+
+### Fixed
+
+- **terraform/modules/cloudflare-access-guard**: `hostname` validation now accepts a single leading wildcard label (for example `*.project.pages.dev`). Cloudflare Access self-hosted applications support wildcard domains, and gating a Pages project's per-branch preview deployments requires exactly this shape — the previous FQDN-only regex rejected it at plan time. Non-wildcard hostnames validate unchanged; a bare `*.tld` remains invalid.
+
 ## [1.18.0] — 2026-07-05
 
 ### Added

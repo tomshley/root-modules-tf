@@ -32,7 +32,7 @@ variable "account_id" {
 
 variable "hostname" {
   type        = string
-  description = "Hostname to protect with Cloudflare Access."
+  description = "Hostname to protect with Cloudflare Access. A single leading wildcard label is supported (for example *.project.pages.dev) to cover per-branch preview hostnames."
 
   validation {
     condition     = trimspace(var.hostname) != ""
@@ -40,8 +40,8 @@ variable "hostname" {
   }
 
   validation {
-    condition     = can(regex("^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", trimspace(var.hostname)))
-    error_message = "hostname must be a valid fully qualified domain name."
+    condition     = can(regex("^(\\*\\.)?([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", trimspace(var.hostname)))
+    error_message = "hostname must be a valid fully qualified domain name, optionally with a single leading wildcard label (*.example.com)."
   }
 }
 
