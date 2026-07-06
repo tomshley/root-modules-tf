@@ -17,7 +17,7 @@ This module does not create a zone, manage DNS records, manage tunnel configurat
   - Default: `null`
   - Cloudflare account ID that owns the Access policy. When set, the Access application is managed at account level instead of zone level.
 - `hostname`
-  - Hostname to protect, for example `preview.example.com`.
+  - Hostname to protect, for example `preview.example.com`. A single leading wildcard label is supported, for example `*.project.pages.dev`, to cover per-branch preview deployment hostnames with one application.
 - `application_name`
   - Display name for the Access application.
 - `allowed_emails`
