@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.19.0] — Unreleased
+
+### Added
+
+- **terraform/modules/aws-eks-secure-s3**: New `additional_bucket_policy_documents` variable accepts a list of IAM policy document JSON strings and merges them into the module's single `aws_s3_bucket_policy` via `source_policy_documents`, preserving exactly one Terraform owner for the bucket policy instead of requiring a second conflicting resource. Each supplied document must be a JSON object with a top-level `Statement` (validated at plan time); duplicate non-empty `Sid` values across the merged documents fail at plan time by design. The module's existing `DenyInsecureTransport` statement remains first and unchanged; with the default empty list, existing consumers see no behavioral change.
+
 ## [1.18.1] — 2026-07-06
 
 ### Fixed
