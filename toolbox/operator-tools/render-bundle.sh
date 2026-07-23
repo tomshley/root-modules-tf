@@ -1042,14 +1042,18 @@ _run_kafka_workload() {
   [[ -z "$streaming_dir" ]] && { echo "kafka-workload: --streaming-dir is required" >&2; exit 1; }
   [[ -z "$workload" ]]      && { echo "kafka-workload: --workload is required" >&2; exit 1; }
 
-  if ! (cd "$streaming_dir" && $TOFU output confluent_configured 2>/dev/null | grep -q "true"); then
+  # read_tf_output is make-aware: raw tofu cannot read HTTP-backend state
+  # outside make once credentials live only in the Makefile env (see
+  # read_tf_output_json header). A raw read here returned empty and skipped
+  # every kafka bundle with a misleading "streaming not configured".
+  if [[ "$(read_tf_output "$streaming_dir" confluent_configured)" != "true" ]]; then
     emit_skip "$(basename "$out") (streaming not configured)"
     return
   fi
 
   local kafka_bootstrap sr_url kafka_key kafka_secret sr_key sr_secret
-  kafka_bootstrap=$(cd "$streaming_dir" && $TOFU output -raw kafka_bootstrap_servers 2>/dev/null || echo "")
-  sr_url=$(cd "$streaming_dir" && $TOFU output -raw schema_registry_url 2>/dev/null || echo "")
+  kafka_bootstrap=$(read_tf_output "$streaming_dir" kafka_bootstrap_servers)
+  sr_url=$(read_tf_output "$streaming_dir" schema_registry_url)
   kafka_key=$(read_tf_output_map_value "$streaming_dir" workload_kafka_api_key_ids "$workload")
   kafka_secret=$(read_tf_output_map_value "$streaming_dir" workload_kafka_api_secrets "$workload")
   sr_key=$(read_tf_output_map_value "$streaming_dir" workload_schema_registry_api_key_ids "$workload")
