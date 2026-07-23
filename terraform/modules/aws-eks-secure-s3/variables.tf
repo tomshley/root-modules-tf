@@ -71,3 +71,18 @@ variable "tags" {
   default     = {}
   description = "Additional tags to apply to all resources"
 }
+
+variable "additional_bucket_policy_documents" {
+  type        = list(string)
+  default     = []
+  nullable    = false
+  description = "Optional list of additional IAM policy documents (JSON strings) to merge into the single S3 bucket policy via source_policy_documents. Each document must be a JSON object with a top-level Statement. Statement Sids must be unique across all supplied documents and must not collide with DenyInsecureTransport."
+
+  validation {
+    condition = alltrue([
+      for doc in var.additional_bucket_policy_documents :
+      can(jsondecode(doc).Statement)
+    ])
+    error_message = "Each element of additional_bucket_policy_documents must be a valid JSON policy document object containing a Statement key."
+  }
+}
