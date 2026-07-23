@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **toolbox/operator-tools: state reads survive env-only HTTP-backend credentials.** The credential-transport hardening (backend username/password exported by the consumer Makefile instead of persisted `-backend-config` args) broke every raw `tofu output` invoked outside `make`: `read_tf_output_json` silently returned `{}` (masking auth failures as "empty map"), `render-bundle.sh kafka-workload` skipped all bundles with a misleading "streaming not configured", and `render-streaming-bundle.sh` exited cleanly at its `confluent_configured` gate. All three now retry failed reads through the consumer Makefile via a stdin-injected target so the Makefile's exported `TF_HTTP_*` env applies (raw tofu is still tried first for CI, where the variables are exported directly). `read_tf_output_json` warns loudly on total failure instead of silently returning `{}`.
+
 ## [1.19.0] — 2026-07-23
 
 ### Added
