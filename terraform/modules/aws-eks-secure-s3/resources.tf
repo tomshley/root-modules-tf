@@ -23,6 +23,13 @@ data "aws_iam_policy_document" "tls_only" {
   }
 }
 
+data "aws_iam_policy_document" "bucket_policy" {
+  source_policy_documents = concat(
+    [data.aws_iam_policy_document.tls_only.json],
+    var.additional_bucket_policy_documents,
+  )
+}
+
 resource "aws_s3_bucket" "secure" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
@@ -122,7 +129,7 @@ resource "aws_s3_bucket_logging" "secure" {
 
 resource "aws_s3_bucket_policy" "secure" {
   bucket = aws_s3_bucket.secure.id
-  policy = data.aws_iam_policy_document.tls_only.json
+  policy = data.aws_iam_policy_document.bucket_policy.json
 }
 
 resource "aws_iam_policy" "readwrite" {
