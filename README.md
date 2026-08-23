@@ -50,6 +50,8 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `confluent-streaming-workload-access` | Confluent | Service account, API keys, Kafka ACLs, optional Schema Registry RBAC | **New** |
 | `grafana-cloud-alerting` | Grafana | Workload-health alert rule groups with webhook routing, built-in Kubernetes signals, and caller-defined Prometheus/Loki rules | **New** |
 | `incident-io-alert-source` | incident.io | Alert source as code with sane payload templates; exports alert_events_url/secret_token to feed webhook contact points through state | **New** |
+| `ci-oidc-trust` | Generic | CI OIDC federation trust contract — resource-less normalization and validation consumed by every per-platform implementation | **New** |
+| `aws-ci-oidc-role` | AWS | CI platform OIDC federation to a plain IAM role (no cluster coupling) — for pipelines that exist before, or independent of, any cluster | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
 
@@ -80,6 +82,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/aws-eks-ci-oidc-github/` — GitHub Actions → AWS → EKS deploy access
 - `terraform/examples/aws-eks-ci-oidc-github-reuse/` — GitHub Actions with existing OIDC provider
 - `terraform/examples/aws-eks-ci-oidc-gitlab/` — GitLab CI → AWS → EKS deploy access
+- `terraform/examples/aws-ci-oidc-role-gitlab/` — GitLab CI → AWS federated role for an infrastructure pipeline (no cluster coupling)
 - `terraform/examples/aws-eks-ci-oidc-bitbucket/` — Bitbucket Pipelines → AWS → EKS deploy access
 - `terraform/examples/gcp-gke-ci-oidc-github/` — GitHub Actions → GCP → GKE deploy access
 - `terraform/examples/gcp-gke-ci-oidc-gitlab/` — GitLab CI → GCP → GKE deploy access

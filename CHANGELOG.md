@@ -6,6 +6,17 @@ This project follows Semantic Versioning.
 
 ---
 
+## [1.20.0] — 2026-08-23
+
+### Added
+
+- **terraform/modules/ci-oidc-trust**: New resource-less module owning the CI OIDC federation trust contract. Normalizes and validates a CI platform's federation trust once — https issuer (multi-segment issuer paths preserved), audiences, and claim conditions in a deliberately minimal two-kind grammar (`exact` | `wildcard`) that stays expressible on every cloud — and exports the normalized trust object per-platform implementation modules consume. Validation lives here so implementations cannot drift apart: at least one condition (an unconditioned federation trusts every workload on the issuer), no duplicate claim+match, `exact` values may not contain glob characters (a pattern is never compared verbatim by accident), and every `wildcard` condition must actually contain a pattern. Implementations whose platform cannot express a match kind are directed to reject it at plan time rather than weaken it — the `wildcard_conditions` output exists to make that refusal a one-line precondition.
+- **terraform/modules/aws-ci-oidc-role**: First implementation of the ci-oidc-trust contract — registers (or reuses via `oidc_provider_arn`) the IAM OIDC identity provider and mints a federated IAM role from the normalized trust object (`exact` → `StringEquals`, `wildcard` → `StringLike`, keyed on `{issuer_host}:{claim}`). Deliberately carries no Kubernetes coupling: this is the role for pipelines that exist before, or independent of, any cluster — infrastructure provisioning being the canonical case, since the pipeline that creates a cluster cannot depend on one. Cluster-binding modules (aws-eks-ci-oidc-access) remain unchanged and can later compose this module. Plan-time guards: 64-character IAM role-name ceiling with the offending lengths named, issuer-or-provider-ARN required, non-empty audience list. Example: `terraform/examples/aws-ci-oidc-role-gitlab/` (tag-pipeline + protected-ref trust with a least-privilege inline policy).
+
+### Fixed
+
+- **toolbox/operator-tools: state reads survive env-only HTTP-backend credentials.** The credential-transport hardening (backend username/password exported by the consumer Makefile instead of persisted `-backend-config` args) broke every raw `tofu output` invoked outside `make`: `read_tf_output_json` silently returned `{}` (masking auth failures as "empty map"), `render-bundle.sh kafka-workload` skipped all bundles with a misleading "streaming not configured", and `render-streaming-bundle.sh` exited cleanly at its `confluent_configured` gate. All three now retry failed reads through the consumer Makefile via a stdin-injected target so the Makefile's exported `TF_HTTP_*` env applies (raw tofu is still tried first for CI, where the variables are exported directly). `read_tf_output_json` warns loudly on total failure instead of silently returning `{}`.
+
 ## [1.19.0] — 2026-07-23
 
 ### Added

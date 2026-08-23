@@ -166,9 +166,30 @@ read_tf_output_required() {
 
 # read_tf_output_json STACK_DIR KEY
 #   Echo the JSON value of an output (object/array), or "{}" on failure.
+#   Tries raw tofu first (CI exports TF_HTTP_USERNAME/PASSWORD directly).
+#   Falls back to replaying the command through the consumer Makefile via a
+#   stdin-injected target: after the credential-transport hardening the HTTP
+#   backend username/password live ONLY in the Makefile's exported env (no
+#   longer persisted in .terraform/ backend metadata by -backend-config
+#   args), so raw tofu outside make cannot read state. Without this fallback
+#   the old silent `|| echo "{}"` masked auth failures as "empty map" and
+#   downstream renderers skipped bundles with misleading messages.
 read_tf_output_json() {
-  local dir="$1" key="$2"
-  (cd "$dir" && $TOFU output -json "$key" 2>/dev/null) || echo "{}"
+  local dir="$1" key="$2" out=""
+  if out=$(cd "$dir" && $TOFU output -json "$key" 2>/dev/null); then
+    printf '%s\n' "$out"
+    return 0
+  fi
+  if [[ -f "$dir/Makefile" ]]; then
+    if out=$(cd "$dir" && printf 'tf-output-json:\n\t@$(TOFU) output -json $(TF_OUTPUT_KEY)\n' \
+        | make -s -f Makefile -f - tf-output-json TF_OUTPUT_KEY="$key" TOFU="$TOFU" 2>/dev/null) \
+        && [[ -n "$out" ]]; then
+      printf '%s\n' "$out"
+      return 0
+    fi
+  fi
+  echo "WARN: read_tf_output_json: could not read output '$key' from $dir (state auth? stack not applied?) — returning {}" >&2
+  echo "{}"
 }
 
 # read_tf_output_map_value STACK_DIR KEY MAP_KEY
