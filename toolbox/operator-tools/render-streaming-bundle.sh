@@ -53,7 +53,31 @@ set -euo pipefail
 # against same-host readers racing the renderer.
 umask 077
 
-TOFU="${TOFU:-tofu}"
+REAL_TOFU="${TOFU:-tofu}"
+
+# Every $TOFU read below must also work when the HTTP-backend username and
+# password live ONLY in the consumer Makefile's exported env (the credential-
+# transport hardening stopped persisting them in .terraform/ backend metadata,
+# so raw tofu outside make cannot read state). Try the real binary first (CI
+# exports TF_HTTP_* directly); on failure replay the exact command through
+# make via a stdin-injected target so the Makefile env applies. Same pattern
+# as lib/render-helpers.sh::read_tf_output_json. Runs from the stack dir
+# (this script cd's into STACK_DIR before any read).
+_tofu_make_aware() {
+    local out
+    if out=$("$REAL_TOFU" "$@" 2>/dev/null); then
+        printf '%s\n' "$out"
+        return 0
+    fi
+    if [ -f Makefile ]; then
+        printf 'tf-passthrough:\n\t@$(TOFU) $(TF_PASSTHROUGH_ARGS)\n' \
+            | make -s -f Makefile -f - tf-passthrough \
+                TF_PASSTHROUGH_ARGS="$*" TOFU="$REAL_TOFU" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+TOFU=_tofu_make_aware
 
 # Default to current directory if not specified
 STACK_DIR="${1:-$(pwd)}"
