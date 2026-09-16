@@ -6,6 +6,42 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.0.0] — 2026-09-16
+
+This release states each workload requirement once, in a provider-neutral contract module, and makes every cloud adapter either honour that contract or refuse it at plan time. AWS consumers are unaffected at their current inputs: every existing AWS module re-plans to no changes, and the modules that were split into shared Kubernetes bases carry state-only `moved` blocks. The major version reflects the GCP module surface, which is reshaped rather than extended.
+
+### Added
+
+- **terraform/modules/postgres-binding, postgres-tenancy-contract, postgres-workload-contract**: Resource-less contract modules describing what a PostgreSQL consumer needs — purpose, tenancy model, TLS requirement, reader requirement, retention, whether the store is authoritative or a rebuildable projection — validated once so provider adapters cannot drift apart. Invalid purpose/tenancy/binding combinations fail with a named reason instead of producing a subtly different database on each cloud.
+- **terraform/modules/redis-service-contract**: Contract for a Redis-protocol service covering TLS, availability, and retained-state expectations. Adapters expose which profiles they can provide and fail the plan for the rest rather than silently weakening them.
+- **terraform/modules/node-provisioning-contract**: Node-pool intent (labels, taints, CPU and memory ceilings, disruption policy, whether a provisioning controller is required) expressed once for Karpenter on EKS and the Karpenter GCP provider alike.
+- **terraform/modules/k8s-keycloak, k8s-grafana-alloy, k8s-metrics-server**: The Kubernetes layer of Keycloak, Grafana Alloy, and Metrics Server, lifted out of the EKS-specific modules. Provider-specific concerns (identity, storage, database) are inputs; the rendered charts and manifests are identical whichever cloud supplies them.
+- **terraform/modules/aws-keycloak**: Resolves Keycloak's database and admin credentials from AWS Secrets Manager and composes `k8s-keycloak`; `aws-eks-keycloak` now delegates to it.
+- **terraform/modules/gcp-network**: VPC, subnetwork, and secondary ranges for GKE, extracted from `gcp-gke-cluster` so network lifetime is independent of cluster lifetime.
+- **terraform/modules/gcp-gke-workload-identity**: The single owner of Google service accounts, Workload Identity bindings, and project IAM grants for GKE workloads. Every other GCP module delegates principal grants here rather than creating its own.
+- **terraform/modules/gcp-cloudsql-postgres**: Cloud SQL for PostgreSQL adapter for the shared PostgreSQL contracts, with private service access, TLS enforcement, and read replicas driven by the contract.
+- **terraform/modules/gcp-memorystore-redis**: Memorystore adapter for `redis-service-contract`. Dedicated-reader and retained-state profiles are rejected at plan time because Memorystore cannot provide them.
+- **terraform/modules/gcp-keycloak, gcp-secure-gcs, gcp-karpenter-prereqs, gcp-karpenter-controller**: GCP counterparts of the AWS Keycloak, secure bucket, and Karpenter modules. The Karpenter modules install the `cloudpilot-ai/karpenter-provider-gcp` `0.3.0` release with a least-privilege custom role reviewed against its source.
+- **terraform/modules/gcp-gke-keycloak, gcp-gke-grafana-alloy, gcp-gke-metrics-server, gcp-gke-secure-gcs, gcp-gke-karpenter-controller**: Cluster-level GKE adapters that mirror the `aws-eks-*` call surface over the shared bases, so a consumer's module graph has the same shape on either cloud.
+- **terraform/examples/gcp-gke-full-stack, gcp-cloudsql-connection-contract, gcp-gke-karpenter-network-tag-contract**: End-to-end GKE example plus focused examples of the connection and node-tag contracts.
+- **terraform/contracts**: Machine-readable contract scenarios (`scenarios/contract-cases.json`, validated by `schemas/scenario.schema.json`) shared by the test suite and by adapter authors.
+- **terraform/tests**: A contract test suite run in CI on every branch, merge request, and tag: contract validation (valid and invalid cases each failing for their intended reason), adapter behaviour, coverage of every declared adapter, formatting of every module, isolated package installation for every packaged module and shim, baseline-versus-candidate compatibility for the AWS examples, and renderer comparison for the shared Kubernetes modules.
+- **tools/module-package**: `package_module.py` assembles dependency-closed module archives (a module and every relative-path module it references, provider sources preserved) with a manifest; `publish_module.py` uploads them. Archives install in an empty directory with no sibling checkout, and a module that references a path outside the repository fails packaging.
+
+### Changed
+
+- **terraform/modules/aws-eks-aurora-cluster**: Optional `workload_contract` input adopts the shared PostgreSQL contracts. When supplied, TLS enforcement and reader-instance requirements follow the contract and a reader requirement without reader instances fails the plan. Absent, behaviour is unchanged.
+- **terraform/modules/aws-eks-elasticache-redis**: Optional `redis_contract` input adopts `redis-service-contract` with the same honour-or-refuse semantics. Absent, behaviour is unchanged.
+- **terraform/modules/aws-eks-keycloak, aws-eks-grafana-alloy, aws-eks-metrics-server**: Now thin adapters over `aws-keycloak` and the shared `k8s-*` modules. Resource addresses relocate through state-only `moved` blocks; existing consumers re-plan to no changes at their current inputs.
+- **terraform/modules/gcp-gke-cluster** (breaking): No longer creates the VPC or subnetwork. Takes `google_compute_network_id`, `google_compute_subnetwork_id`, and the secondary range names from `gcp-network`, enables Workload Identity, and adds `enable_private_endpoint`. Removed inputs: `subnet_cidr`, `services_cidr`, `pods_cidr`, `ipv6_access_type`. The derived service-account ID is lower-cased and validated against Google's naming rules at plan time. `required_version >= 1.9` is now declared, matching every sibling module.
+- **terraform/modules/gcp-project-with-api**: Enables the Service Networking, Cloud SQL Admin, Memorystore, and Cloud Storage APIs required by the new GCP modules.
+- **CI**: Module packaging moves from a bare `tar` to `tools/module-package`, so a published archive always carries its dependency closure. Pipeline templates track `cicd-pipelines` `v0.9.0` and base containers `0.6.0`.
+
+### Fixed
+
+- **OpenTofu 1.9 compatibility**: Null guards in the new contract paths were written as `a != null && a.field` and `a == null || module.x[0].y`. OpenTofu evaluates both operands of `&&`/`||` before 1.10, so on 1.9.x every caller that passed no contract — the default — failed with a null-attribute or empty-index error. These are now lazy conditionals; the declared `>= 1.9` floor holds on a real 1.9 binary.
+- **terraform/modules/confluent-streaming-topics**: The same evaluation rule made the `delete_retention_ms`, `min_compaction_lag_ms`, and `max_message_bytes` validations fail on OpenTofu 1.9.x whenever the optional field was left unset. Rewritten as conditionals; catalog semantics are unchanged.
+
 ## [1.20.0] — 2026-08-23
 
 ### Added
