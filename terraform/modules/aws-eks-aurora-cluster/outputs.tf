@@ -77,3 +77,8 @@ output "master_secret_recovery_window_in_days" {
   description = "Echo of the recovery window (in days) applied to the cluster master secret. Useful for audit/plan review; AWS Secrets Manager enforces this at DeleteSecret time."
   value       = var.master_secret_recovery_window_in_days
 }
+
+output "workload_contract" {
+  description = "The normalized PostgreSQL workload contract when the additive contract input is used; null preserves the legacy caller path."
+  value       = var.workload_contract == null ? null : module.workload_contract[0].contract
+}

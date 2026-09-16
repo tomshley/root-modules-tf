@@ -4,18 +4,36 @@
 
 include:
   - project: 'tomshley/brands/global/tware/tech/products/provisioning/cicd-pipelines'
-    ref: 'v0.5.5'
+    ref: 'v0.9.0'
     file: '/adapters/gitlab/ci/adapter.yml'
 
 variables:
   BASE_CONTAINERS_REGISTRY: registry.gitlab.com/tomshley/brands/global/tware/tech/products/provisioning/base-containers
-  BASE_CONTAINERS_UPSTREAM_TAG: "0.5.0"
-  CICD_PIPELINES_RUNNER_TAG: "0.5.5"
+  BASE_CONTAINERS_UPSTREAM_TAG: "0.6.0"
+  CICD_PIPELINES_RUNNER_TAG: "0.9.0"
 
 # Disable mirror sync job (not needed for this project)
 tomshley-cicd-mirror-sync:
   rules:
     - when: never
+
+terraform-contract-tests:
+  image: ${CICD_PIPELINES_FLOW_IMAGE}
+  tags:
+    - saas-linux-medium-amd64
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - make -C terraform/tests contract-check
+    - make -C terraform/tests adapter-check
+    - make -C terraform/tests quality-check
+    - make -C terraform/tests coverage-check
+    - make -C terraform/tests compatibility-check
+    - make -C terraform/tests renderer-negative-check
+    - make -C terraform/tests package-check
 
 # ---------------------------------------------------------------------------
 # Terraform Module Upload
@@ -23,7 +41,7 @@ tomshley-cicd-mirror-sync:
 publish-terraform-modules:
   extends:
     - .flow-artifact-publish
-  image: curlimages/curl:8.12.1
+  image: ${CICD_PIPELINES_PYTHON_IMAGE}
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -60,16 +78,20 @@ publish-terraform-modules:
 
         echo "=== Uploading ${MODULE_NAME}/${MODULE_SYSTEM}/${TERRAFORM_MODULE_VERSION} ==="
 
-        if ! tar -vczf "${ARCHIVE_PATH}" -C "${MODULE_DIR}" --exclude=./.git .; then
-          echo "ERROR: Failed to package module ${MODULE_SHORTNAME}"
+        MANIFEST_PATH="/tmp/${MODULE_NAME}-${MODULE_SYSTEM}-${TERRAFORM_MODULE_VERSION}.json"
+        if ! python3 "${CI_PROJECT_DIR}/tools/module-package/package_module.py" \
+          --root "${CI_PROJECT_DIR}" \
+          --module "terraform/modules/${MODULE_SHORTNAME}" \
+          --output "${ARCHIVE_PATH}" \
+          --manifest "${MANIFEST_PATH}"; then
+          echo "ERROR: Failed to assemble dependency-closed package for module ${MODULE_SHORTNAME}"
           FAILED=$((FAILED + 1))
           continue
         fi
 
-        if ! curl --fail-with-body --location \
-          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-          --upload-file "${ARCHIVE_PATH}" \
-          "${PACKAGE_URL}"; then
+        if ! python3 "${CI_PROJECT_DIR}/tools/module-package/publish_module.py" \
+          --archive "${ARCHIVE_PATH}" \
+          --url "${PACKAGE_URL}"; then
           echo "ERROR: Failed to upload module ${MODULE_SHORTNAME}"
           FAILED=$((FAILED + 1))
         fi

@@ -102,7 +102,7 @@ variable "catalog_entries" {
   validation {
     condition = alltrue([
       for t in var.catalog_entries :
-      t.delete_retention_ms == null || t.delete_retention_ms >= 0
+      t.delete_retention_ms == null ? true : t.delete_retention_ms >= 0
     ])
     error_message = "delete_retention_ms must be >= 0 (Kafka rejects negative values for delete.retention.ms)."
   }
@@ -110,7 +110,7 @@ variable "catalog_entries" {
   validation {
     condition = alltrue([
       for t in var.catalog_entries :
-      t.min_compaction_lag_ms == null || t.min_compaction_lag_ms >= 0
+      t.min_compaction_lag_ms == null ? true : t.min_compaction_lag_ms >= 0
     ])
     error_message = "min_compaction_lag_ms must be >= 0 (Kafka rejects negative values for min.compaction.lag.ms)."
   }
@@ -118,7 +118,7 @@ variable "catalog_entries" {
   validation {
     condition = alltrue([
       for t in var.catalog_entries :
-      t.max_message_bytes == null || t.max_message_bytes >= 0
+      t.max_message_bytes == null ? true : t.max_message_bytes >= 0
     ])
     error_message = "max_message_bytes must be >= 0 (Kafka rejects negative values for max.message.bytes; managed platforms additionally cap it per cluster type at apply time)."
   }

@@ -1,0 +1,51 @@
+variable "project_id" {
+  type        = string
+  description = "GCP project ID."
+}
+
+variable "service_account_id" {
+  type        = string
+  description = "Google service-account ID for the workload."
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.service_account_id))
+    error_message = "service_account_id must be 6-30 lowercase alphanumeric characters or hyphens."
+  }
+}
+
+variable "namespace" {
+  type        = string
+  description = "Namespace of the Kubernetes ServiceAccount created by the workload chart or manifest."
+}
+
+variable "kubernetes_service_account_name" {
+  type        = string
+  description = "Name of the Kubernetes ServiceAccount created by the workload chart or manifest."
+}
+
+variable "project_roles" {
+  type        = list(string)
+  default     = []
+  description = "Project roles granted to the Google service account."
+}
+
+variable "resource_iam_members" {
+  type = set(object({
+    resource_type = string
+    resource_name = string
+    role          = string
+  }))
+  default     = []
+  description = "Unbound resource capability descriptors to grant to this workload identity. Supported resource_type: storage_bucket."
+
+  validation {
+    condition     = alltrue([for descriptor in var.resource_iam_members : descriptor.resource_type == "storage_bucket"])
+    error_message = "resource_iam_members currently supports only storage_bucket capability descriptors."
+  }
+}
+
+variable "display_name" {
+  type        = string
+  default     = null
+  description = "Optional display name for the Google service account."
+}

@@ -56,3 +56,8 @@ output "auth_secret_recovery_window_in_days" {
   description = "Echo of the recovery window (in days) applied to the AUTH secret. Useful for audit/plan review; AWS Secrets Manager enforces this at DeleteSecret time."
   value       = var.auth_secret_recovery_window_in_days
 }
+
+output "redis_contract" {
+  description = "The normalized Redis contract when the additive contract input is used; null preserves the legacy caller path."
+  value       = var.redis_contract == null ? null : module.redis_contract[0].contract
+}

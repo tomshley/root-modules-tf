@@ -7,7 +7,7 @@ output "google_project_name_prefix" {
 }
 
 output "google_compute_network_gke_network_id" {
-  value = google_compute_network.gke_network.id
+  value = var.google_compute_network_id
 }
 
 output "google_container_cluster_gke_cluster_name" {
@@ -19,11 +19,11 @@ output "google_service_account_gke_service_account_id" {
 }
 
 output "google_compute_subnetwork_region" {
-  value = google_compute_subnetwork.gke_subnet.region
+  value = var.google_region
 }
 
 output "google_compute_subnetwork_id" {
-  value = google_compute_subnetwork.gke_subnet.id
+  value = var.google_compute_subnetwork_id
 }
 
 output "google_container_cluster_gke_cluster_self_link" {

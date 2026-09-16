@@ -1,3 +1,9 @@
+module "redis_contract" {
+  count    = var.redis_contract == null ? 0 : 1
+  source   = "../redis-service-contract"
+  contract = var.redis_contract
+}
+
 # 32 alphanumeric chars → ~190 bits of entropy, comfortably above the
 # ElastiCache AUTH minimum of 16 and below the 128-byte maximum.
 # `special = false` is a deliberate operational choice: ElastiCache AUTH
@@ -166,6 +172,15 @@ resource "aws_elasticache_replication_group" "this" {
   # destructive and handled separately.
   lifecycle {
     ignore_changes = [auth_token]
+
+    precondition {
+      condition = var.redis_contract == null ? true : (
+        (!module.redis_contract[0].contract.reader_required || var.num_cache_clusters >= 2) &&
+        (module.redis_contract[0].contract.availability != "multi-zone" || var.num_cache_clusters >= 2) &&
+        (!module.redis_contract[0].contract.persistence_required || var.snapshot_retention_limit > 0)
+      )
+      error_message = "The selected Redis contract requires reader/failover capacity and retained snapshots that the adapter must explicitly provide."
+    }
   }
 }
 

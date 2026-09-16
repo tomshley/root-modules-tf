@@ -49,6 +49,16 @@ module "project" {
   project_name_prefix    = var.project_name_prefix
 }
 
+# --- Network ---
+
+module "network" {
+  source = "../../modules/gcp-network"
+
+  project_id          = module.project.google_project_id
+  project_name_prefix = var.project_name_prefix
+  region              = var.google_region
+}
+
 # --- Cluster ---
 
 module "cluster" {
@@ -60,13 +70,10 @@ module "cluster" {
   google_project_id                      = module.project.google_project_id
   project_name_prefix                    = var.project_name_prefix
   master_authorized_networks_cidr_blocks = var.master_authorized_networks_cidr_blocks
-
-  # Networking — defaults match existing hardcoded values.
-  # Override for multi-cluster or custom networking:
-  # subnet_cidr            = "10.0.0.0/16"
-  # services_cidr          = "10.4.0.0/14"
-  # pods_cidr              = "10.124.0.0/14"
-  # master_ipv4_cidr_block = "172.16.0.0/28"
+  google_compute_network_id              = module.network.network_id
+  google_compute_subnetwork_id           = module.network.subnetwork_id
+  services_secondary_range_name          = module.network.services_secondary_range_name
+  pods_secondary_range_name              = module.network.pods_secondary_range_name
 }
 
 # --- System Nodepool ---
@@ -128,7 +135,7 @@ module "nat" {
 
   project_name_prefix              = var.project_name_prefix
   project_id                       = module.project.google_project_id
-  google_compute_network_id        = module.cluster.google_compute_network_gke_network_id
-  google_compute_subnetwork_id     = module.cluster.google_compute_subnetwork_id
-  google_compute_subnetwork_region = module.cluster.google_compute_subnetwork_region
+  google_compute_network_id        = module.network.network_id
+  google_compute_subnetwork_id     = module.network.subnetwork_id
+  google_compute_subnetwork_region = module.network.subnetwork_region
 }

@@ -1,0 +1,16 @@
+output "release_name" { value = module.keycloak.release_name }
+output "release_namespace" { value = module.keycloak.release_namespace }
+output "release_version" { value = module.keycloak.release_version }
+output "release_status" { value = module.keycloak.release_status }
+output "keycloak_service_name" { value = module.keycloak.keycloak_service_name }
+output "keycloak_service_port" { value = module.keycloak.keycloak_service_port }
+output "base_url" { value = module.keycloak.base_url }
+output "jwks_uri_template" { value = module.keycloak.jwks_uri_template }
+output "admin_console_url" {
+  value = module.keycloak.admin_console_url
+
+  precondition {
+    condition     = var.admin_password != null || var.admin_secret_arn != null
+    error_message = "Either admin_password or admin_secret_arn must be provided. Without both, Keycloak would start with no usable admin credentials."
+  }
+}

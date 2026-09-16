@@ -27,6 +27,10 @@ module "gcp-project-enable-api" {
     "cloudresourcemanager.googleapis.com",
     "cloudbilling.googleapis.com",
     "iam.googleapis.com",
-    "compute.googleapis.com"
+    "compute.googleapis.com",
+    "servicenetworking.googleapis.com",
+    "sqladmin.googleapis.com",
+    "redis.googleapis.com",
+    "storage.googleapis.com"
   ]
 }
