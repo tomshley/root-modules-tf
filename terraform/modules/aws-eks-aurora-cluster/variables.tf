@@ -36,6 +36,20 @@ variable "workload_preset" {
   }
 }
 
+variable "workload_contract" {
+  type = object({
+    purpose                = string
+    reader_required        = bool
+    tls_required           = bool
+    retention_days         = number
+    authoritative          = bool
+    projection_rebuildable = bool
+  })
+  default     = null
+  nullable    = true
+  description = "Optional provider-independent PostgreSQL workload contract. Null preserves the legacy workload_preset path exactly."
+}
+
 variable "vpc_id" {
   type        = string
   description = "VPC ID for security group placement"

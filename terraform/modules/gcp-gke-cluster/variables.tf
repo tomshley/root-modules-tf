@@ -18,22 +18,24 @@ variable "project_name_prefix" {
   type = string
 }
 
-variable "subnet_cidr" {
+variable "google_compute_network_id" {
   type        = string
-  default     = "10.0.0.0/16"
-  description = "Primary subnet CIDR for GKE nodes"
+  description = "Network ID from gcp-network."
 }
 
-variable "services_cidr" {
+variable "google_compute_subnetwork_id" {
   type        = string
-  default     = "10.4.0.0/14"
-  description = "Secondary range CIDR for Kubernetes services (alias IP range, may be outside VPC CIDR)"
+  description = "Subnetwork ID from gcp-network."
 }
 
-variable "pods_cidr" {
+variable "services_secondary_range_name" {
   type        = string
-  default     = "10.124.0.0/14"
-  description = "Secondary range CIDR for Kubernetes pods (alias IP range, may be outside VPC CIDR)"
+  description = "Services secondary range name from gcp-network."
+}
+
+variable "pods_secondary_range_name" {
+  type        = string
+  description = "Pods secondary range name from gcp-network."
 }
 
 variable "master_ipv4_cidr_block" {
@@ -42,27 +44,30 @@ variable "master_ipv4_cidr_block" {
   description = "Private IP CIDR for GKE control plane"
 }
 
-variable "ipv6_access_type" {
-  type        = string
-  default     = "INTERNAL"
-  description = "IPv6 access type for subnetwork (INTERNAL or EXTERNAL)"
-}
-
 variable "labels" {
   type        = map(string)
   default     = {}
   description = "Additional labels to apply to GKE resources where supported"
 }
 
+variable "enable_private_endpoint" {
+  type        = bool
+  default     = true
+  description = "Whether the GKE control plane uses a private endpoint. Public endpoint access requires explicit authorized CIDRs."
+}
+
 variable "master_authorized_networks_cidr_blocks" {
-  type = list(string)
+  type    = list(string)
+  default = []
 
   validation {
-    condition     = length(var.master_authorized_networks_cidr_blocks) > 0
-    error_message = "master_authorized_networks_cidr_blocks must be set."
+    condition = alltrue([
+      for cidr in var.master_authorized_networks_cidr_blocks : can(cidrhost(cidr, 0))
+    ]) && (var.enable_private_endpoint || length(var.master_authorized_networks_cidr_blocks) > 0)
+    error_message = "master_authorized_networks_cidr_blocks must contain valid CIDRs and cannot be empty when the public endpoint is enabled."
   }
 
-  description = "CIDR blocks allowed to access the GKE control plane."
+  description = "CIDR blocks allowed to access the GKE control plane when its public endpoint is enabled."
 }
 
 variable "deletion_protection" {

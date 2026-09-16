@@ -1,54 +1,34 @@
+locals {
+  gke_service_account_id = lower("${var.project_name_prefix}-${var.google_organization_id}")
+}
+
 resource "google_service_account" "gke_service_account" {
-  account_id = "${var.project_name_prefix}-${var.google_organization_id}"
+  account_id = local.gke_service_account_id
   project    = var.google_project_id
-}
 
-resource "google_compute_network" "gke_network" {
-  project = var.google_project_id
-  name    = "${var.project_name_prefix}-network"
-
-  auto_create_subnetworks  = false
-  enable_ula_internal_ipv6 = true
-}
-
-resource "google_compute_subnetwork" "gke_subnet" {
-  depends_on = [google_compute_network.gke_network]
-  project    = var.google_project_id
-  name       = "${var.project_name_prefix}-subnetwork"
-
-  ip_cidr_range = var.subnet_cidr
-  region        = var.google_region
-
-  stack_type       = "IPV4_IPV6"
-  ipv6_access_type = var.ipv6_access_type
-
-  network = google_compute_network.gke_network.id
-  secondary_ip_range {
-    range_name    = "${var.project_name_prefix}-subnetwork-services-range"
-    ip_cidr_range = var.services_cidr
-  }
-
-  secondary_ip_range {
-    range_name    = "${var.project_name_prefix}-subnetwork-pod-ranges"
-    ip_cidr_range = var.pods_cidr
+  lifecycle {
+    precondition {
+      condition     = can(regex("^[a-z][a-z0-9-]{5,29}$", local.gke_service_account_id))
+      error_message = "The derived GKE service-account ID must be 6-30 characters of lowercase letters, digits, and hyphens, starting with a letter."
+    }
   }
 }
 
 resource "google_container_cluster" "gke_cluster" {
-  depends_on = [
-    google_service_account.gke_service_account,
-    google_compute_network.gke_network,
-    google_compute_subnetwork.gke_subnet
-  ]
+  depends_on     = [google_service_account.gke_service_account]
   name           = "${var.project_name_prefix}-standard-cluster"
   project        = var.google_project_id
   location       = var.google_region
   node_locations = [var.google_region_zone]
 
-  network                  = google_compute_network.gke_network.id
-  subnetwork               = google_compute_subnetwork.gke_subnet.id
+  network                  = var.google_compute_network_id
+  subnetwork               = var.google_compute_subnetwork_id
   enable_l4_ilb_subsetting = true
   datapath_provider        = "ADVANCED_DATAPATH"
+
+  workload_identity_config {
+    workload_pool = "${var.google_project_id}.svc.id.goog"
+  }
 
   master_auth {
     client_certificate_config {
@@ -58,7 +38,7 @@ resource "google_container_cluster" "gke_cluster" {
 
   private_cluster_config {
     master_ipv4_cidr_block  = var.master_ipv4_cidr_block
-    enable_private_endpoint = false
+    enable_private_endpoint = var.enable_private_endpoint
     enable_private_nodes    = true
   }
 
@@ -74,8 +54,8 @@ resource "google_container_cluster" "gke_cluster" {
 
   ip_allocation_policy {
     stack_type                    = "IPV4_IPV6"
-    services_secondary_range_name = google_compute_subnetwork.gke_subnet.secondary_ip_range[0].range_name
-    cluster_secondary_range_name  = google_compute_subnetwork.gke_subnet.secondary_ip_range[1].range_name
+    services_secondary_range_name = var.services_secondary_range_name
+    cluster_secondary_range_name  = var.pods_secondary_range_name
   }
 
   maintenance_policy {

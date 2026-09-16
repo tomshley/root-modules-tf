@@ -1,3 +1,14 @@
+module "tenancy_contract" {
+  source  = "../postgres-tenancy-contract"
+  tenants = var.tenants
+}
+
+module "workload_contract" {
+  count    = var.workload_contract == null ? 0 : 1
+  source   = "../postgres-workload-contract"
+  contract = var.workload_contract
+}
+
 # 32 alphanumeric chars → ~190 bits of entropy, adequate for a bootstrap
 # credential. `special = false` is a deliberate operational choice rather than
 # a security one: Aurora PostgreSQL accepts a broad symbol set, but every tenant
@@ -102,6 +113,14 @@ resource "aws_rds_cluster_parameter_group" "this" {
     }
   }
 
+  dynamic "parameter" {
+    for_each = local.resolved_force_ssl != null ? [local.resolved_force_ssl] : []
+    content {
+      name  = "rds.force_ssl"
+      value = parameter.value
+    }
+  }
+
   # --- Always-on audit parameters ---
 
   parameter {
@@ -135,7 +154,7 @@ resource "aws_rds_cluster" "this" {
   vpc_security_group_ids          = [aws_security_group.this.id]
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.this.name
   storage_encrypted               = true
-  backup_retention_period         = var.backup_retention_period
+  backup_retention_period         = local.resolved_backup_retention_period
   deletion_protection             = var.deletion_protection
   skip_final_snapshot             = var.skip_final_snapshot
   final_snapshot_identifier       = var.skip_final_snapshot ? null : "${var.project_name_prefix}-${var.workload_name}-final"
@@ -190,6 +209,11 @@ resource "aws_rds_cluster" "this" {
   # Mirrored on writer/reader instances below.
   lifecycle {
     ignore_changes = [master_password, engine_version]
+
+    precondition {
+      condition     = var.workload_contract == null ? true : (!module.workload_contract[0].requires_reader || var.reader_instance_count > 0)
+      error_message = "The selected PostgreSQL workload contract requires at least one dedicated reader instance."
+    }
   }
 }
 

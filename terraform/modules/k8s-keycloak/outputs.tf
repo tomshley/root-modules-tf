@@ -1,0 +1,9 @@
+output "release_name" { value = helm_release.keycloak.name }
+output "release_namespace" { value = helm_release.keycloak.namespace }
+output "release_version" { value = helm_release.keycloak.version }
+output "release_status" { value = helm_release.keycloak.status }
+output "keycloak_service_name" { value = helm_release.keycloak.name }
+output "keycloak_service_port" { value = var.service_port }
+output "base_url" { value = "http://${local.service_host}${local.port_suffix}" }
+output "jwks_uri_template" { value = "http://${local.service_host}${local.port_suffix}/realms/{realm}/protocol/openid-connect/certs" }
+output "admin_console_url" { value = "http://${local.service_host}${local.port_suffix}/admin" }

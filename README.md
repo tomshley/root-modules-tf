@@ -26,19 +26,36 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | Module | Cloud | Description | Status |
 |---|---|---|---|
 | `gcp-project-with-api` | GCP | Project factory with API enablement | Stable |
-| `gcp-gke-cluster` | GCP | GKE cluster with parameterized networking | Stable |
+| `gcp-network` | GCP | Dedicated dual-stack GKE network with private service access | **New** |
+| `gcp-gke-cluster` | GCP | GKE cluster consuming an explicit network contract with Workload Identity | Stable |
 | `gcp-gke-nodepool` | GCP | Generic single-pool nodepool (instantiate N times) | Stable |
 | `gcp-gke-external-nat` | GCP | Cloud NAT for private GKE clusters | Stable |
+| `gcp-gke-metrics-server` | GCP | Compatibility shim for k8s-metrics-server | **New** |
+| `gcp-gke-grafana-alloy` | GCP | Compatibility shim for k8s-grafana-alloy | **New** |
+| `gcp-gke-keycloak` | GCP | Compatibility shim for gcp-keycloak and k8s-keycloak | **New** |
+| `gcp-gke-secure-gcs` | GCP | Compatibility shim for gcp-secure-gcs | **New** |
+| `gcp-gke-karpenter-controller` | GCP | Compatibility shim for gcp-karpenter-controller shipping a GCENodeClass network-tag manifest template | **New** |
+| `gcp-gke-workload-identity` | GCP | Google service account and Kubernetes Workload Identity grants | **New** |
+| `gcp-secure-gcs` | GCP | Hardened Cloud Storage bucket with unbound access descriptors | **New** |
+| `gcp-cloudsql-postgres` | GCP | Private Cloud SQL PostgreSQL primary and optional readers | **New** |
+| `gcp-memorystore-redis` | GCP | Private authenticated Memorystore for Redis | **New** |
+| `gcp-karpenter-prereqs` | GCP | Pre-1.0 Karpenter GCP identity and least-privilege IAM | **New** |
+| `gcp-karpenter-controller` | GCP | Pre-1.0 Karpenter GCP controller Helm releases | **New** |
+| `k8s-grafana-alloy` | Kubernetes | Portable Grafana Alloy base module | **New** |
+| `k8s-metrics-server` | Kubernetes | Portable Metrics Server base module | **New** |
+| `k8s-keycloak` | Kubernetes | Portable Keycloak deployment from resolved credentials | **New** |
+| `aws-keycloak` | AWS | Secrets Manager credential resolution for k8s-keycloak | **New** |
+| `gcp-keycloak` | GCP | Secret Manager credential resolution for k8s-keycloak | **New** |
 | `aws-eks-vpc` | AWS | Dedicated VPC with public/private subnets, NAT per AZ | **New** |
 | `aws-eks-cluster` | AWS | EKS control plane with KMS, OIDC, CloudWatch | **New** |
 | `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times) | **New** |
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
 | `aws-eks-karpenter-controller` | AWS | Karpenter controller deployment on EKS with service account and configuration | **New** |
-| `aws-eks-metrics-server` | AWS | Metrics Server deployment on EKS for HPA and autoscaling metrics | **New** |
-| `aws-eks-grafana-alloy` | AWS | Grafana k8s-monitoring (Alloy) collectors for cluster metrics, pod logs, and opt-in application metrics autodiscovery | **New** |
+| `aws-eks-metrics-server` | AWS | Compatibility shim for k8s-metrics-server | **New** |
+| `aws-eks-grafana-alloy` | AWS | Compatibility shim for k8s-grafana-alloy | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
 | `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic) and per-field overrides | **New** |
-| `aws-eks-keycloak` | AWS | Keycloak identity server on EKS via Bitnami Helm chart, DB credentials via Secrets Manager ARN, optional realm import | **New** |
+| `aws-eks-keycloak` | AWS | Compatibility shim for aws-keycloak and k8s-keycloak | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
 | `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
 | `cloudflare-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
@@ -54,10 +71,17 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-ci-oidc-role` | AWS | CI platform OIDC federation to a plain IAM role (no cluster coupling) — for pipelines that exist before, or independent of, any cluster | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
+| `postgres-workload-contract` | Generic | Resource-less PostgreSQL workload-purpose and authority contract | **New** |
+| `postgres-tenancy-contract` | Generic | Resource-less tenant identity, database, and role contract | **New** |
+| `postgres-binding` | Generic | Resource-less portable PostgreSQL connection binding | **New** |
+| `redis-service-contract` | Generic | Resource-less Redis persistence, availability, and access contract | **New** |
+| `node-provisioning-contract` | Generic | Resource-less scheduling, capacity, and disruption contract | **New** |
 
 ### Examples
 
-- `terraform/examples/gcp-gke-full-stack/` — GKE cluster + system/workload pools + NAT
+- `terraform/examples/gcp-gke-full-stack/` — GKE network + cluster + system/workload pools + NAT
+- `terraform/examples/gcp-cloudsql-connection-contract/` — Private Cloud SQL connection and writer-only reader endpoint contract
+- `terraform/examples/gcp-gke-karpenter-network-tag-contract/` — Karpenter GCENodeClass network-tag contract
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
 - `terraform/examples/aws-eks-grafana-alloy/` — EKS Grafana Alloy/k8s-monitoring collectors with inline-token credential path and annotation autodiscovery
 - `terraform/examples/aws-eks-aurora-event-store/` — Write-optimized Aurora cluster (event-store preset)

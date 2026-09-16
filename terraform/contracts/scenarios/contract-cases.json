@@ -1,0 +1,21 @@
+{
+  "schema_revision": "contract-cases-v1",
+  "cases": [
+    {"name": "postgres-event-store-valid", "module": "postgres-workload-contract", "outcome": "pass", "description": "An authoritative event store is accepted."},
+    {"name": "postgres-purpose-invalid", "module": "postgres-workload-contract", "outcome": "fail", "description": "An unknown PostgreSQL purpose is rejected."},
+    {"name": "postgres-authority-mismatch", "module": "postgres-workload-contract", "outcome": "fail", "description": "An event store without authoritative ownership is rejected."},
+    {"name": "tenancy-valid", "module": "postgres-tenancy-contract", "outcome": "pass", "description": "Distinct tenant database and role bindings are accepted."},
+    {"name": "tenancy-duplicate-database", "module": "postgres-tenancy-contract", "outcome": "fail", "description": "Two tenant keys cannot map to one database."},
+    {"name": "tenancy-long-key-explicit-role", "module": "postgres-tenancy-contract", "outcome": "pass", "description": "A long logical key with a short explicit database role remains accepted."},
+    {"name": "tenancy-derived-role-valid", "module": "postgres-tenancy-contract", "outcome": "pass", "description": "Default role derivation preserves tenant keys and replaces hyphens with underscores."},
+    {"name": "tenancy-derived-role-too-long", "module": "postgres-tenancy-contract", "outcome": "fail", "description": "A derived database role exceeding the PostgreSQL identifier limit is rejected."},
+    {"name": "tenancy-explicit-role-too-long", "module": "postgres-tenancy-contract", "outcome": "fail", "description": "An explicit database role exceeding the PostgreSQL identifier limit is rejected."},
+    {"name": "redis-cache-valid", "module": "redis-service-contract", "outcome": "pass", "description": "An authenticated TLS cache contract is accepted."},
+    {"name": "redis-retained-state-without-persistence", "module": "redis-service-contract", "outcome": "fail", "description": "Retained state cannot disable persistence."},
+    {"name": "redis-reader-single-zone", "module": "redis-service-contract", "outcome": "fail", "description": "Dedicated reader capability requires multi-zone availability."},
+    {"name": "node-contract-valid", "module": "node-provisioning-contract", "outcome": "pass", "description": "A bounded scheduling and disruption contract is accepted."},
+    {"name": "node-capacity-invalid", "module": "node-provisioning-contract", "outcome": "fail", "description": "An unsupported capacity type is rejected."},
+    {"name": "postgres-binding-valid", "module": "postgres-binding", "outcome": "pass", "description": "A TLS binding with a dedicated reader is accepted."},
+    {"name": "postgres-binding-reader-mismatch", "module": "postgres-binding", "outcome": "fail", "description": "Reader capability cannot be claimed without a reader endpoint."}
+  ]
+}

@@ -1,0 +1,10 @@
+apiVersion: karpenter.k8s.gcp/v1alpha1
+kind: GCENodeClass
+metadata:
+  name: ${name}
+spec:
+  serviceAccount: ${node_service_account_email}
+  networkTags:
+%{ for tag in node_network_tags ~}
+    - ${tag}
+%{ endfor ~}

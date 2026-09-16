@@ -35,6 +35,20 @@ variable "workload_name" {
   }
 }
 
+variable "redis_contract" {
+  type = object({
+    mode                 = string
+    auth_required        = bool
+    tls_required         = bool
+    reader_required      = bool
+    persistence_required = bool
+    availability         = string
+  })
+  default     = null
+  nullable    = true
+  description = "Optional provider-independent Redis contract. Null preserves the legacy inputs exactly."
+}
+
 variable "vpc_id" {
   type        = string
   description = "VPC ID for security group placement."
