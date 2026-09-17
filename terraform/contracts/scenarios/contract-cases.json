@@ -22,6 +22,8 @@
     {"name": "preview-tunnel-combined", "module": "cloudflare-preview-website", "outcome": "pass", "description": "The single-hostname input combines with additional hostnames on one tunnel."},
     {"name": "preview-tunnel-duplicate-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "Duplicate hostnames are rejected case-insensitively."},
     {"name": "preview-tunnel-missing-origin", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname with no origin of its own and no default origin is rejected."},
-    {"name": "preview-tunnel-no-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "At least one published hostname is required."}
+    {"name": "preview-tunnel-no-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "At least one published hostname is required."},
+    {"name": "preview-tunnel-entry-origin-invalid", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname entry whose origin is not an HTTP URL is rejected."},
+    {"name": "preview-tunnel-empty-origin", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname entry with a blank origin and no default origin is rejected."}
   ]
 }

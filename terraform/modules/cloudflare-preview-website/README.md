@@ -33,9 +33,12 @@ This module does not create a zone, manage Access policies, manage cache rules, 
     default origin for `hostnames` entries that omit their own.
 - `hostnames`
   - Additional hostnames published through the same tunnel. Each entry takes
-    `hostname`, `zone_id`, an optional per-hostname `origin_url` override, and
-    an optional `proxied` flag (default `true`). Entries may live in different
-    zones; hostnames must be unique across `preview_hostname` and the list.
+    `hostname`, `zone_id`, and an optional per-hostname `origin_url` override
+    which, when supplied, must be a non-empty `http://` or `https://` URL;
+    entries that omit it use the module-level `origin_url`, which is then
+    required. Entries may live in different zones; hostnames must be unique
+    across `preview_hostname` and the list. Every record is proxied — a
+    `cfargotunnel.com` target only resolves through Cloudflare's proxy.
 - `expose_tunnel_token`
   - When `true`, read the connector token through the
     `cloudflare_zero_trust_tunnel_cloudflared_token` data source and expose it

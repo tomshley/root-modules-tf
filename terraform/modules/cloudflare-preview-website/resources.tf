@@ -10,13 +10,11 @@ locals {
     hostname   = lower(trimspace(var.preview_hostname))
     zone_id    = trimspace(var.zone_id)
     origin_url = trimspace(var.origin_url)
-    proxied    = true
   }]
   list_entries = [for h in var.hostnames : {
     hostname   = lower(trimspace(h.hostname))
     zone_id    = trimspace(h.zone_id)
     origin_url = trimspace(coalesce(h.origin_url, var.origin_url))
-    proxied    = h.proxied
   }]
   all_entries = concat(local.legacy_entries, local.list_entries)
 
@@ -56,7 +54,7 @@ resource "cloudflare_dns_record" "published" {
   name    = each.value.hostname
   type    = "CNAME"
   ttl     = 1
-  proxied = each.value.proxied
+  proxied = true
   content = format("%s.cfargotunnel.com", cloudflare_zero_trust_tunnel_cloudflared.preview.id)
 }
 

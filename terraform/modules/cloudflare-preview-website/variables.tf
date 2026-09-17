@@ -102,11 +102,10 @@ variable "hostnames" {
     hostname   = string
     zone_id    = string
     origin_url = optional(string)
-    proxied    = optional(bool, true)
   }))
   default     = []
   nullable    = false
-  description = "Additional hostnames to publish through the same tunnel. Entries may live in different zones and may override the default origin_url per hostname."
+  description = "Additional hostnames to publish through the same tunnel. Entries may live in different zones and may override the default origin_url per hostname. Records are always proxied: a cfargotunnel.com target only resolves through Cloudflare's proxy."
 
   validation {
     condition     = length(var.hostnames) > 0 || var.preview_hostname != null
@@ -129,7 +128,21 @@ variable "hostnames" {
 
   validation {
     condition = alltrue([
-      for h in var.hostnames : h.origin_url != null || var.origin_url != null
+      for h in var.hostnames : h.origin_url == null || trimspace(h.origin_url) != ""
+    ])
+    error_message = "Every hostnames entry origin_url must be non-empty when supplied."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : h.origin_url == null || can(regex("^https?://", trimspace(h.origin_url)))
+    ])
+    error_message = "Every hostnames entry origin_url must start with http:// or https://."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : (h.origin_url != null && trimspace(h.origin_url) != "") || var.origin_url != null
     ])
     error_message = "A hostnames entry without its own origin_url requires origin_url to be set."
   }

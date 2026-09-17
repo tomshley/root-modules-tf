@@ -303,6 +303,34 @@ module "contract" {
   tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
 }
 """,
+    "preview-tunnel-entry-origin-invalid": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname   = "beta.example.com"
+      zone_id    = "00000000000000000000000000000001"
+      origin_url = "not-a-url"
+    },
+  ]
+}
+""",
+    "preview-tunnel-empty-origin": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname   = "beta.example.com"
+      zone_id    = "00000000000000000000000000000001"
+      origin_url = "   "
+    },
+  ]
+}
+""",
 }
 
 
@@ -351,6 +379,8 @@ EXPECTED_DIAGNOSTICS = {
     "preview-tunnel-duplicate-hostname": "must be unique across preview_hostname and hostnames",
     "preview-tunnel-missing-origin": "requires origin_url to be set",
     "preview-tunnel-no-hostname": "At least one of preview_hostname or hostnames",
+    "preview-tunnel-entry-origin-invalid": "entry origin_url must start with http:// or https://",
+    "preview-tunnel-empty-origin": "entry origin_url must be non-empty",
 }
 
 
