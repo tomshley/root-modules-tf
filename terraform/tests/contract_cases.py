@@ -17,6 +17,7 @@ MODULES = {
     "redis-service-contract",
     "node-provisioning-contract",
     "postgres-binding",
+    "cloudflare-preview-website",
 }
 
 CASE_CONFIGS = {
@@ -213,6 +214,95 @@ module "contract" {
   }
 }
 """,
+    "preview-tunnel-single": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "preview.example.com"
+  origin_url       = "http://localhost:8080"
+}
+""",
+    "preview-tunnel-multi-zone": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  origin_url    = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = "zeta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname   = "alpha.example.org"
+      zone_id    = "00000000000000000000000000000002"
+      origin_url = "https://alpha.internal.example.com:8443"
+    },
+    {
+      hostname = "mid.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-combined": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "preview.example.com"
+  origin_url       = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = "zzz.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname = "aaa.example.com"
+      zone_id  = "00000000000000000000000000000003"
+    },
+  ]
+}
+""",
+    "preview-tunnel-duplicate-hostname": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "Same.Example.com"
+  origin_url       = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = " same.example.com "
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-missing-origin": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname = "beta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-no-hostname": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+}
+""",
 }
 
 
@@ -229,6 +319,25 @@ EXPECTED_BINDINGS = {
     },
 }
 
+EXPECTED_INGRESS = {
+    "preview-tunnel-single": [
+        {"hostname": "preview.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+    "preview-tunnel-multi-zone": [
+        {"hostname": "alpha.example.org", "service": "https://alpha.internal.example.com:8443"},
+        {"hostname": "mid.example.com", "service": "http://localhost:8080"},
+        {"hostname": "zeta.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+    "preview-tunnel-combined": [
+        {"hostname": "aaa.example.com", "service": "http://localhost:8080"},
+        {"hostname": "preview.example.com", "service": "http://localhost:8080"},
+        {"hostname": "zzz.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+}
+
 EXPECTED_DIAGNOSTICS = {
     "postgres-purpose-invalid": "contract.purpose must be generic",
     "postgres-authority-mismatch": "An authoritative store is not",
@@ -239,6 +348,9 @@ EXPECTED_DIAGNOSTICS = {
     "postgres-binding-reader-mismatch": "reader_capable must match",
     "tenancy-derived-role-too-long": "Tenant role names after default derivation",
     "tenancy-explicit-role-too-long": "Tenant role names must be valid lowercase PostgreSQL identifiers",
+    "preview-tunnel-duplicate-hostname": "must be unique across preview_hostname and hostnames",
+    "preview-tunnel-missing-origin": "requires origin_url to be set",
+    "preview-tunnel-no-hostname": "At least one of preview_hostname or hostnames",
 }
 
 
@@ -254,6 +366,9 @@ def main() -> int:
         raise SystemExit("case manifest does not cover every contract module")
 
     tofu = os.environ.get("TOFU", "tofu")
+    # Plans run with -refresh=false against empty state and never reach the
+    # Cloudflare API, but the provider must still configure itself.
+    os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="root-modules-contract-") as temp:
         temp_root = Path(temp)
@@ -285,6 +400,25 @@ def main() -> int:
                         values = json.loads(shown.stdout)["planned_values"]["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
                             failures.append(f"{name}: planned bindings changed")
+                            continue
+                    if name in EXPECTED_INGRESS:
+                        shown = run([tofu, "show", "-json", "case.plan"], work)
+                        if shown.returncode != 0:
+                            failures.append(f"{name}: could not inspect planned ingress")
+                            continue
+                        root = json.loads(shown.stdout)["planned_values"]["root_module"]
+                        configs = [
+                            resource
+                            for module in [root, *root.get("child_modules", [])]
+                            for resource in module.get("resources", [])
+                            if resource["type"] == "cloudflare_zero_trust_tunnel_cloudflared_config"
+                        ]
+                        ingress = [
+                            {key: rule[key] for key in ("hostname", "service") if rule.get(key) is not None}
+                            for rule in configs[0]["values"]["config"]["ingress"]
+                        ] if len(configs) == 1 else []
+                        if ingress != EXPECTED_INGRESS[name]:
+                            failures.append(f"{name}: planned ingress changed")
                             continue
                     print(f"PASS {name} (pass)")
                 continue

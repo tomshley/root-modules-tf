@@ -16,6 +16,12 @@
     {"name": "node-contract-valid", "module": "node-provisioning-contract", "outcome": "pass", "description": "A bounded scheduling and disruption contract is accepted."},
     {"name": "node-capacity-invalid", "module": "node-provisioning-contract", "outcome": "fail", "description": "An unsupported capacity type is rejected."},
     {"name": "postgres-binding-valid", "module": "postgres-binding", "outcome": "pass", "description": "A TLS binding with a dedicated reader is accepted."},
-    {"name": "postgres-binding-reader-mismatch", "module": "postgres-binding", "outcome": "fail", "description": "Reader capability cannot be claimed without a reader endpoint."}
+    {"name": "postgres-binding-reader-mismatch", "module": "postgres-binding", "outcome": "fail", "description": "Reader capability cannot be claimed without a reader endpoint."},
+    {"name": "preview-tunnel-single", "module": "cloudflare-preview-website", "outcome": "pass", "description": "The single-hostname inputs publish one hostname through one tunnel."},
+    {"name": "preview-tunnel-multi-zone", "module": "cloudflare-preview-website", "outcome": "pass", "description": "Hostnames across different zones share one tunnel."},
+    {"name": "preview-tunnel-combined", "module": "cloudflare-preview-website", "outcome": "pass", "description": "The single-hostname input combines with additional hostnames on one tunnel."},
+    {"name": "preview-tunnel-duplicate-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "Duplicate hostnames are rejected case-insensitively."},
+    {"name": "preview-tunnel-missing-origin", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname with no origin of its own and no default origin is rejected."},
+    {"name": "preview-tunnel-no-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "At least one published hostname is required."}
   ]
 }
