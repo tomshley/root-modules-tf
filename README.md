@@ -70,6 +70,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `ci-oidc-trust` | Generic | CI OIDC federation trust contract — resource-less normalization and validation consumed by every per-platform implementation | **New** |
 | `aws-ci-oidc-role` | AWS | CI platform OIDC federation to a plain IAM role (no cluster coupling) — for pipelines that exist before, or independent of, any cluster | **New** |
 | `aws-eks-ci-oidc-access` | AWS | CI platform OIDC federation to EKS (IAM role, access entry) | **New** |
+| `gcp-ci-oidc-role` | GCP | CI platform OIDC federation to a plain service account via Workload Identity (no cluster coupling) — for pipelines that exist before, or independent of, any cluster | **New** |
 | `gcp-gke-ci-oidc-access` | GCP | CI platform OIDC federation to GKE (Workload Identity, service account) | **New** |
 | `postgres-workload-contract` | Generic | Resource-less PostgreSQL workload-purpose and authority contract | **New** |
 | `postgres-tenancy-contract` | Generic | Resource-less tenant identity, database, and role contract | **New** |
