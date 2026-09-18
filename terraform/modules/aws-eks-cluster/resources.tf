@@ -1,5 +1,9 @@
+locals {
+  eks_cluster_role_name = "${var.project_name_prefix}-eks-cluster-role"
+}
+
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "${var.project_name_prefix}-eks-cluster-role"
+  name = local.eks_cluster_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -15,8 +19,15 @@ resource "aws_iam_role" "eks_cluster_role" {
   })
 
   tags = merge(var.tags, {
-    Name = "${var.project_name_prefix}-eks-cluster-role"
+    Name = local.eks_cluster_role_name
   })
+
+  lifecycle {
+    precondition {
+      condition     = can(regex("^[A-Za-z0-9_+=,.@-]{1,64}$", local.eks_cluster_role_name))
+      error_message = "The derived EKS cluster role name '${local.eks_cluster_role_name}' violates IAM's rules: at most 64 characters of alphanumerics and '_+=,.@-'. Shorten project_name_prefix."
+    }
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {

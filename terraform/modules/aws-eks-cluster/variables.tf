@@ -5,6 +5,11 @@ variable "project_name_prefix" {
 variable "cluster_name" {
   type        = string
   description = "EKS cluster name. Explicit — not derived internally."
+
+  validation {
+    condition     = can(regex("^[0-9A-Za-z][A-Za-z0-9_-]{0,99}$", var.cluster_name))
+    error_message = "cluster_name must be at most 100 characters of alphanumerics, hyphens, and underscores, starting with an alphanumeric character — the EKS cluster-name limit."
+  }
 }
 
 variable "vpc_id" {
