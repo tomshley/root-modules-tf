@@ -357,6 +357,14 @@ def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
 
 
+def planned_resources(root: dict) -> list[dict]:
+    return [
+        resource
+        for module in [root, *root.get("child_modules", [])]
+        for resource in module.get("resources", [])
+    ]
+
+
 EXPECTED_BINDINGS = {
     "tenancy-long-key-explicit-role": {
         "a" * 64: {"tenant_key": "a" * 64, "database_name": "alpha_db", "db_role_name": "alpha_role"},
@@ -429,11 +437,16 @@ def main() -> int:
 
     tofu = os.environ.get("TOFU", "tofu")
     # Plans run with -refresh=false against empty state and never reach the
-    # Cloudflare API, but the provider must still configure itself.
+    # Cloudflare API, but the provider must still configure itself. The plugin
+    # cache created inside the temporary directory lets provider-backed cases
+    # share one provider download per run.
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="root-modules-contract-") as temp:
         temp_root = Path(temp)
+        cache = temp_root / ".plugin-cache"
+        cache.mkdir()
+        os.environ.setdefault("TF_PLUGIN_CACHE_DIR", str(cache))
         for case in cases:
             name = case["name"]
             work = temp_root / name
@@ -454,25 +467,22 @@ def main() -> int:
                     failures.append(f"{name}: valid case failed during plan")
                     print(diagnostics[-4000:])
                 else:
-                    if name in EXPECTED_BINDINGS:
+                    planned = None
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
-                            failures.append(f"{name}: could not inspect planned bindings")
+                            failures.append(f"{name}: could not inspect plan")
                             continue
-                        values = json.loads(shown.stdout)["planned_values"]["outputs"]["bindings"]["value"]
+                        planned = json.loads(shown.stdout)["planned_values"]
+                    if name in EXPECTED_BINDINGS:
+                        values = planned["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
                             failures.append(f"{name}: planned bindings changed")
                             continue
                     if name in EXPECTED_INGRESS:
-                        shown = run([tofu, "show", "-json", "case.plan"], work)
-                        if shown.returncode != 0:
-                            failures.append(f"{name}: could not inspect planned ingress")
-                            continue
-                        root = json.loads(shown.stdout)["planned_values"]["root_module"]
                         configs = [
                             resource
-                            for module in [root, *root.get("child_modules", [])]
-                            for resource in module.get("resources", [])
+                            for resource in planned_resources(planned["root_module"])
                             if resource["type"] == "cloudflare_zero_trust_tunnel_cloudflared_config"
                         ]
                         ingress = [
@@ -483,15 +493,9 @@ def main() -> int:
                             failures.append(f"{name}: planned ingress changed")
                             continue
                     if name in EXPECTED_RESOURCE_COUNTS:
-                        shown = run([tofu, "show", "-json", "case.plan"], work)
-                        if shown.returncode != 0:
-                            failures.append(f"{name}: could not inspect planned resources")
-                            continue
-                        root = json.loads(shown.stdout)["planned_values"]["root_module"]
                         counts: dict[str, int] = {}
-                        for module in [root, *root.get("child_modules", [])]:
-                            for resource in module.get("resources", []):
-                                counts[resource["type"]] = counts.get(resource["type"], 0) + 1
+                        for resource in planned_resources(planned["root_module"]):
+                            counts[resource["type"]] = counts.get(resource["type"], 0) + 1
                         if any(counts.get(t, 0) != n for t, n in EXPECTED_RESOURCE_COUNTS[name].items()):
                             failures.append(f"{name}: planned resource counts changed")
                             continue

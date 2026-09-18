@@ -2,6 +2,8 @@
 
 This directory contains non-mutating tests for the resource-free architecture contracts. The runner executes OpenTofu validation in disposable temporary directories and includes deliberate invalid cases. A passing positive case is not sufficient: every named negative case must fail for its intended contract reason.
 
+Cases for provider-backed modules (currently `cloudflare-preview-website`) plan with `-refresh=false` against empty state; the runner exports a placeholder `CLOUDFLARE_API_TOKEN` so the provider can configure itself, and no request ever reaches the Cloudflare API. Provider downloads are shared across cases through `TF_PLUGIN_CACHE_DIR` unless the environment already sets one.
+
 Run through the wrapper:
 
 ```text
