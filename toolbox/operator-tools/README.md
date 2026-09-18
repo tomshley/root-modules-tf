@@ -250,6 +250,8 @@ Each bundle maps 1:1 to a root-modules-tf module's outputs. Run `--list` to see 
 | `aurora-master` | `aws-eks-aurora-cluster` | Aurora creds from cluster master secret |
 | `aurora-tenant` | `aws-eks-aurora-cluster` | Aurora creds from a tenant secret (multi-tenant pattern) |
 | `redis-config` | `aws-eks-elasticache-redis` | Redis connection metadata (AUTH stays in Secrets Manager) |
+| `cloudsql-config` | `gcp-cloudsql-postgres` | Cloud SQL connection `.env` (host, port, database) |
+| `cloudsql-master` | `gcp-cloudsql-postgres` | Cloud SQL master creds from Secret Manager |
 | `keycloak` | `aws-eks-keycloak` | Cluster-internal JWKS / issuer / token URLs |
 | `s3-config` | `aws-eks-secure-s3` | Bucket name + region |
 | `kafka-workload` | `confluent-streaming-workload-access` | Per-workload Kafka + SR credentials |
@@ -257,7 +259,7 @@ Each bundle maps 1:1 to a root-modules-tf module's outputs. Run `--list` to see 
 | `aws-arns` | (generic) | Project N TF outputs from N stacks into a single `.env` |
 | `registry` | (Tomshley CI convention) | GitLab container registry creds from `.credentials.gitlab` |
 
-Each bundle defaults its TF output keys to the names the matching root-modules-tf module ships. Override per-bundle via flags like `--cluster-output`, `--host-output`, `--secret-arn-output` if your stack renames them.
+Each bundle defaults its TF output keys to the names the matching root-modules-tf module ships. Override per-bundle via flags like `--cluster-output`, `--host-output`, `--secret-arn-output` (AWS) or `--secret-id-output` (GCP) if your stack renames them.
 
 ### Examples
 

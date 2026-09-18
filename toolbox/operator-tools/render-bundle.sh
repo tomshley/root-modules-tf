@@ -20,6 +20,8 @@
 #   aurora-tenant    Aurora tenant credentials from Secrets Manager
 #   redis-config     ElastiCache Redis connection metadata (host/port/tls)
 #   redis-auth       ElastiCache Redis AUTH credentials from Secrets Manager
+#   cloudsql-config  Cloud SQL connection: host, port, database
+#   cloudsql-master  Cloud SQL master credentials from Secret Manager
 #   keycloak         Keycloak cluster-internal URLs
 #   keycloak-admin   Keycloak master-realm admin credentials from Secrets Manager
 #   keycloak-bootstrap-client  Bootstrap service-account client credentials
@@ -49,6 +51,8 @@ BUNDLE_CATALOG=(
   "aurora-tenant:aws-eks-aurora-cluster:Aurora credentials from a tenant secret (multi-tenant)"
   "redis-config:aws-eks-elasticache-redis:Redis connection metadata (host/port/tls; non-secret)"
   "redis-auth:aws-eks-elasticache-redis:Redis AUTH credentials from the AUTH-token Secrets Manager secret"
+  "cloudsql-config:gcp-cloudsql-postgres:Cloud SQL connection config (host, port, database)"
+  "cloudsql-master:gcp-cloudsql-postgres:Cloud SQL credentials from the master Secret Manager secret"
   "keycloak:aws-eks-keycloak:Keycloak cluster-internal URLs (JWKS, issuer, token)"
   "keycloak-admin:aws-eks-keycloak:Keycloak master-realm admin credentials from Secrets Manager"
   "keycloak-bootstrap-client:keycloak-bootstrap-admin:Bootstrap service-account client credentials (clientId + secret)"
@@ -554,6 +558,168 @@ _run_redis_auth() {
 
   write_file_secure "$out" 600 <<EOF
 password=$redis_pass
+EOF
+  emit_ok "$out"
+}
+
+# ========================================================================
+# Bundle: cloudsql-config
+# ========================================================================
+
+_help_cloudsql_config() {
+  cat <<'EOF'
+cloudsql-config — Cloud SQL connection config (host, port, database).
+Anchored to: gcp-cloudsql-postgres.
+
+Usage:
+  render-bundle.sh cloudsql-config --out FILE --data-dir DIR
+                                  [--host-output KEY] [--port-output KEY]
+                                  [--database-output KEY[MAP_KEY]] [--ssl-require]
+
+Required flags:
+  --out FILE          Output .env file path
+  --data-dir DIR      Data stack directory
+
+Optional flags:
+  --host-output KEY        TF output for the instance endpoint (default: cluster_endpoint)
+  --port-output KEY        TF output for port (default: port; defaults to 5432 if missing)
+  --database-output KEY    TF output for database name (default: database_name). May be a
+                           map(string) lookup via KEY[MAP_KEY] syntax. If the resolved
+                           value is empty, the "database=" line is omitted.
+  --ssl-require            Append "ssl=require" to the output.
+
+Output file format (lines optional based on flags):
+  host=..., port=..., database=..., [ssl=require]
+EOF
+}
+
+_run_cloudsql_config() {
+  local out="" data_dir="" host_key="cluster_endpoint" port_key="port"
+  local db_key="database_name" ssl_require="false"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)              out="$2";        shift 2 ;;
+      --data-dir)         data_dir="$2";   shift 2 ;;
+      --host-output)      host_key="$2";   shift 2 ;;
+      --port-output)      port_key="$2";   shift 2 ;;
+      --database-output)  db_key="$2";     shift 2 ;;
+      --ssl-require)      ssl_require="true"; shift ;;
+      --help)             _help_cloudsql_config; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]      && { echo "cloudsql-config: --out is required" >&2; exit 1; }
+  [[ -z "$data_dir" ]] && { echo "cloudsql-config: --data-dir is required" >&2; exit 1; }
+
+  local host port db_name=""
+  host=$(read_tf_output_required "$data_dir" "$host_key" "data")
+  port=$(read_tf_output "$data_dir" "$port_key")
+  port="${port:-5432}"
+
+  if [[ -n "$db_key" ]]; then
+    if [[ "$db_key" == *"["*"]" ]]; then
+      local key="${db_key%%\[*}"
+      local map_key="${db_key#*\[}"; map_key="${map_key%\]}"
+      db_name=$(read_tf_output_map_value "$data_dir" "$key" "$map_key")
+      if [[ -z "$db_name" ]]; then
+        echo "cloudsql-config: $key[$map_key] is empty in data stack" >&2
+        exit 1
+      fi
+    else
+      db_name=$(read_tf_output "$data_dir" "$db_key")
+    fi
+  fi
+
+  # Same trailing-[[ ]] guard as aurora-config: keep the group returning 0
+  # when no optional line is emitted.
+  {
+    echo "host=$host"
+    echo "port=$port"
+    if [[ -n "$db_name" ]]; then echo "database=$db_name"; fi
+    if [[ "$ssl_require" == "true" ]]; then echo "ssl=require"; fi
+  } | write_file_secure "$out" 600
+  emit_ok "$out"
+}
+
+# ========================================================================
+# Bundle: cloudsql-master
+# ========================================================================
+
+_help_cloudsql_master() {
+  cat <<'EOF'
+cloudsql-master — Cloud SQL credentials from the master Secret Manager secret.
+Anchored to: gcp-cloudsql-postgres (master_secret_id).
+
+Usage:
+  render-bundle.sh cloudsql-master --out FILE --project PROJECT
+                                  (--secret-id ID | --secret-id-output KEY --data-dir DIR)
+                                  [--default-username USER]
+
+Required flags:
+  --out FILE              Output .env file path
+  --project PROJECT       GCP project containing the secret
+  --secret-id ID          Direct Secret Manager secret id (short name or a
+                          projects/*/secrets/* resource id), OR
+  --secret-id-output KEY  TF output key for the secret id (in --data-dir);
+                          the module publishes it as master_secret_id
+  --data-dir DIR          Data stack directory (required if --secret-id-output is used)
+
+Optional flags:
+  --default-username USER Default if .username is missing in the secret JSON (default: postgres)
+
+Output file format:
+  username=..., password=...
+
+Skip behaviour: if the secret cannot be read or the password is empty, emits
+a skip and writes nothing.
+EOF
+}
+
+_run_cloudsql_master() {
+  local out="" project="" secret_id="" secret_id_key="" data_dir=""
+  local default_user="postgres"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out)                out="$2";            shift 2 ;;
+      --project)            project="$2";        shift 2 ;;
+      --secret-id)          secret_id="$2";      shift 2 ;;
+      --secret-id-output)   secret_id_key="$2";  shift 2 ;;
+      --data-dir)           data_dir="$2";       shift 2 ;;
+      --default-username)   default_user="$2";   shift 2 ;;
+      --help)               _help_cloudsql_master; exit 0 ;;
+      *) echo "Unknown flag: $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -z "$out" ]]     && { echo "cloudsql-master: --out is required" >&2; exit 1; }
+  [[ -z "$project" ]] && { echo "cloudsql-master: --project is required" >&2; exit 1; }
+
+  if [[ -z "$secret_id" ]]; then
+    [[ -z "$secret_id_key" ]] && { echo "cloudsql-master: provide --secret-id or --secret-id-output" >&2; exit 1; }
+    [[ -z "$data_dir" ]] && { echo "cloudsql-master: --data-dir is required when using --secret-id-output" >&2; exit 1; }
+    secret_id=$(read_tf_output "$data_dir" "$secret_id_key")
+  fi
+
+  if [[ -z "$secret_id" ]]; then
+    emit_skip "$(basename "$out") (master secret id not in stack outputs)"
+    return
+  fi
+
+  local secret_json db_user db_pass
+  secret_json=$(get_secret_string_gcp "$secret_id" "$project")
+  if [[ -z "$secret_json" ]]; then
+    emit_skip "$(basename "$out") (could not read Secret Manager: $secret_id)"
+    return
+  fi
+  db_user=$(echo "$secret_json" | jq -r --arg d "$default_user" '.username // $d')
+  db_pass=$(echo "$secret_json" | jq -r '.password // empty')
+  if [[ -z "$db_pass" ]]; then
+    emit_skip "$(basename "$out") (password empty in Secret Manager)"
+    return
+  fi
+
+  write_file_secure "$out" 600 <<EOF
+username=$db_user
+password=$db_pass
 EOF
   emit_ok "$out"
 }
@@ -1343,6 +1509,8 @@ case "$bundle" in
   aurora-tenant)             _run_aurora_tenant "$@" ;;
   redis-config)              _run_redis_config "$@" ;;
   redis-auth)                _run_redis_auth "$@" ;;
+  cloudsql-config)           _run_cloudsql_config "$@" ;;
+  cloudsql-master)           _run_cloudsql_master "$@" ;;
   keycloak)                  _run_keycloak "$@" ;;
   keycloak-admin)            _run_keycloak_admin "$@" ;;
   keycloak-bootstrap-client) _run_keycloak_bootstrap_client "$@" ;;
