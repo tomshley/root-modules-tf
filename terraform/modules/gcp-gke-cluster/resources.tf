@@ -1,5 +1,6 @@
 locals {
   gke_service_account_id = lower("${var.project_name_prefix}-${var.google_organization_id}")
+  gke_cluster_name       = "${var.project_name_prefix}-standard-cluster"
 }
 
 resource "google_service_account" "gke_service_account" {
@@ -16,7 +17,7 @@ resource "google_service_account" "gke_service_account" {
 
 resource "google_container_cluster" "gke_cluster" {
   depends_on     = [google_service_account.gke_service_account]
-  name           = "${var.project_name_prefix}-standard-cluster"
+  name           = local.gke_cluster_name
   project        = var.google_project_id
   location       = var.google_region
   node_locations = [var.google_region_zone]
@@ -71,5 +72,12 @@ resource "google_container_cluster" "gke_cluster" {
   # Set `deletion_protection` to `true` will ensure that one cannot
   # accidentally delete this instance by use of Terraform.
   deletion_protection = var.deletion_protection
+
+  lifecycle {
+    precondition {
+      condition     = can(regex("^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$", local.gke_cluster_name))
+      error_message = "The derived GKE cluster name '${local.gke_cluster_name}' violates GKE's rules: at most 40 characters of lowercase letters, digits, and hyphens, starting with a letter and not ending with a hyphen. Shorten project_name_prefix."
+    }
+  }
 }
 
