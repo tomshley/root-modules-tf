@@ -3,7 +3,7 @@
 #
 # Provides reusable helpers for consumer-side render scripts that need to:
 #   - Read OpenTofu/Terraform stack outputs
-#   - Resolve AWS Secrets Manager secret values
+#   - Resolve AWS Secrets Manager / GCP Secret Manager secret values
 #   - Download the Amazon RDS root CA bundle
 #   - Write secured (chmod 600) .env files
 #
@@ -37,7 +37,7 @@
 # REQUIREMENTS
 #   bash >= 4 (for `local -n` not used; `set -u` safe)
 #   tofu (or terraform — set TOFU env var to override)
-#   jq, curl, aws CLI
+#   jq, curl, aws CLI (AWS bundles), gcloud CLI (GCP bundles)
 
 # Note: Do NOT enable `set -e` here -- this file is sourced. Callers control
 # their own shell options. Functions return non-zero on error and use the
@@ -129,20 +129,31 @@ require_env_var() {
 # read_tf_output STACK_DIR KEY
 #   Echo the raw value of a single TF output, or empty string on failure.
 #   Tries `make output` first (consumers commonly wrap tofu via Makefile)
-#   and falls back to `tofu output -raw`.
+#   and falls back to `tofu output -json` for the single key. The JSON form
+#   matters: `tofu output -raw` prints a "No outputs found" warning on
+#   stdout and still exits 0 in a directory whose state holds no outputs,
+#   so its text looked like a real value here and silently rendered into
+#   .env files. `-json` prints nothing and exits 1 in that case, which is
+#   the honest empty signal. Strings come back unquoted to match -raw; a
+#   non-string value comes back as compact JSON.
 #   Coerces the literal string "null" to empty: `make output` grep of a
 #   `key = value` table returns the 4-char string "null" for TF null
-#   outputs, whereas `tofu output -raw` returns empty. Without this
-#   normalisation, caller-side guards like `if [[ -n "$val" ]]` would
-#   treat "null" as a populated value and emit `KEY=null` into `.env`
-#   files instead of omitting the line.
+#   outputs, whereas `tofu output -json` returns JSON null (normalised to
+#   empty by the jq below). Without this normalisation, caller-side guards
+#   like `if [[ -n "$val" ]]` would treat "null" as a populated value and
+#   emit `KEY=null` into `.env` files instead of omitting the line.
 read_tf_output() {
   local dir="$1" key="$2" val=""
   val=$(cd "$dir" && make output 2>/dev/null \
     | grep -E "^${key}\\s" \
     | awk -F'= ' '{print $2}' | tr -d '"' | tr -d ' ')
   if [[ -z "$val" ]]; then
-    val=$(cd "$dir" && $TOFU output -raw "$key" 2>/dev/null || echo "")
+    local raw
+    if raw=$(cd "$dir" && $TOFU output -json "$key" 2>/dev/null); then
+      val=$(printf '%s' "$raw" | jq -r 'if . == null then "" elif type == "string" then . else tojson end')
+    else
+      val=""
+    fi
   fi
   if [[ "$val" == "null" ]]; then
     val=""
@@ -221,6 +232,35 @@ get_secret_field() {
   local arn="$1" region="$2" field="$3"
   local json
   json=$(get_secret_string "$arn" "$region")
+  if [[ -z "$json" ]]; then
+    echo ""
+    return
+  fi
+  echo "$json" | jq -r --arg f "$field" '.[$f] // empty'
+}
+
+# ========================================================================
+# GCP Secret Manager helpers
+# ========================================================================
+
+# get_secret_string_gcp SECRET_ID PROJECT
+#   Echo the raw payload of the secret's latest enabled version, or empty
+#   string on failure (missing gcloud, IAM denied, secret-without-version,
+#   etc). SECRET_ID may be a short name or a full projects/*/secrets/*
+#   resource id — gcloud accepts either.
+get_secret_string_gcp() {
+  local secret="$1" project="$2"
+  gcloud secrets versions access latest \
+    --secret="$secret" --project="$project" 2>/dev/null || echo ""
+}
+
+# get_secret_field_gcp SECRET_ID PROJECT FIELD
+#   Echo the value of .FIELD inside the payload JSON, or empty on
+#   any failure.
+get_secret_field_gcp() {
+  local secret="$1" project="$2" field="$3"
+  local json
+  json=$(get_secret_string_gcp "$secret" "$project")
   if [[ -z "$json" ]]; then
     echo ""
     return

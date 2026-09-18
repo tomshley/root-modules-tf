@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -24,6 +26,212 @@ def listing(toolbox: Path) -> str:
     if result.returncode != 0:
         raise SystemExit(result.stdout + result.stderr)
     return result.stdout
+
+
+def run_bundle(toolbox: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    # TOFU=true neutralises the raw-tofu fallback in read_tf_output: against a
+    # fake stack dir with no .tf files, `tofu output -raw` prints a "No outputs
+    # found" warning on STDOUT, which the helper would capture as a non-empty
+    # value. A stub make-output table plus TOFU=true keeps reads deterministic.
+    merged = {**os.environ, "TOFU": "true", **(env or {})}
+    return subprocess.run(
+        ["bash", str(toolbox / RENDERER), *args],
+        cwd=toolbox,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=merged,
+    )
+
+
+def expect_failure(result: subprocess.CompletedProcess[str], fragment: str, label: str) -> None:
+    if result.returncode == 0 or fragment not in (result.stdout + result.stderr):
+        raise SystemExit(f"{label}: expected failure containing '{fragment}'\n{result.stdout}{result.stderr}")
+
+
+def expect_skip(result: subprocess.CompletedProcess[str], out: Path, label: str) -> None:
+    if result.returncode != 0 or out.exists():
+        raise SystemExit(f"{label}: expected a skip with no file written\n{result.stdout}{result.stderr}")
+
+
+def write_stub_stack(directory: Path, outputs: dict[str, str]) -> None:
+    """A fake applied stack: `make output` prints the `key = "value"` table
+    that read_tf_output greps, so no tofu state is needed."""
+    lines = "\n".join(f'\t@echo \'{key} = "{value}"\'' for key, value in outputs.items())
+    (directory / "Makefile").write_text(f".PHONY: output\noutput:\n{lines}\n")
+
+
+def check_cloudsql_bundles(toolbox: Path, work: Path) -> None:
+    out = work / "cloudsql.env"
+
+    # Argument validation.
+    expect_failure(run_bundle(toolbox, "cloudsql-config", "--data-dir", str(work)),
+                   "--out is required", "cloudsql-config missing --out")
+    expect_failure(run_bundle(toolbox, "cloudsql-config", "--out", str(out)),
+                   "--data-dir is required", "cloudsql-config missing --data-dir")
+    expect_failure(run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--secret-id", "s"),
+                   "--project is required", "cloudsql-master missing --project")
+    expect_failure(run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p"),
+                   "provide --secret-id or --secret-id-output", "cloudsql-master missing secret selector")
+    expect_failure(
+        run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
+                   "--secret-id-output", "master_secret_id"),
+        "--data-dir is required when using --secret-id-output",
+        "cloudsql-master missing --data-dir")
+
+    # Refusal paths: required output absent, or the secret is unreadable.
+    empty_stack = work / "empty-stack"
+    empty_stack.mkdir()
+    expect_failure(run_bundle(toolbox, "cloudsql-config", "--out", str(out), "--data-dir", str(empty_stack)),
+                   "empty or missing", "cloudsql-config unapplied data stack")
+    expect_skip(run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
+                           "--secret-id-output", "master_secret_id", "--data-dir", str(empty_stack)),
+                out, "cloudsql-master secret id absent from outputs")
+
+    failing_gcloud = work / "bin-fail"
+    failing_gcloud.mkdir()
+    stub = failing_gcloud / "gcloud"
+    stub.write_text("#!/usr/bin/env bash\nexit 1\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    fail_env = {**os.environ, "PATH": f"{failing_gcloud}:{os.environ['PATH']}"}
+    expect_skip(run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
+                           "--secret-id", "db-master", env=fail_env),
+                out, "cloudsql-master unreadable secret")
+
+    # Happy paths: stub TF outputs and a stub gcloud serving the payload.
+    stack = work / "data-stack"
+    stack.mkdir()
+    write_stub_stack(stack, {
+        "cluster_endpoint": "10.0.0.5",
+        "port": "5433",
+        "database_name": "appdb",
+        "master_secret_id": "projects/p/secrets/db-master",
+    })
+    config = run_bundle(toolbox, "cloudsql-config", "--out", str(out), "--data-dir", str(stack))
+    if config.returncode != 0 or not out.exists():
+        raise SystemExit(f"cloudsql-config render failed\n{config.stdout}{config.stderr}")
+    content = out.read_text()
+    for line in ("host=10.0.0.5", "port=5433", "database=appdb"):
+        if line not in content:
+            raise SystemExit(f"cloudsql-config output missing '{line}':\n{content}")
+    if stat.S_IMODE(out.stat().st_mode) != 0o600:
+        raise SystemExit("cloudsql-config did not chmod 600 the rendered file")
+
+    ok_gcloud = work / "bin-ok"
+    ok_gcloud.mkdir()
+    stub = ok_gcloud / "gcloud"
+    stub.write_text("#!/usr/bin/env bash\nprintf '%s\\n' '{\"username\":\"appuser\",\"password\":\"s3cret-pass\"}'\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    ok_env = {**os.environ, "PATH": f"{ok_gcloud}:{os.environ['PATH']}"}
+    master_out = work / "cloudsql-master.env"
+    master = run_bundle(toolbox, "cloudsql-master", "--out", str(master_out), "--project", "p",
+                        "--secret-id-output", "master_secret_id", "--data-dir", str(stack), env=ok_env)
+    if master.returncode != 0 or not master_out.exists():
+        raise SystemExit(f"cloudsql-master render failed\n{master.stdout}{master.stderr}")
+    content = master_out.read_text()
+    for line in ("username=appuser", "password=s3cret-pass"):
+        if line not in content:
+            raise SystemExit(f"cloudsql-master output missing '{line}':\n{content}")
+
+    print("PASS renderer-cases cloudsql-config")
+    print("PASS renderer-cases cloudsql-master")
+    print("PASS renderer-negative cloudsql-flag-validation")
+    print("PASS renderer-negative cloudsql-missing-secret")
+
+
+def write_stub_tofu(directory: Path) -> Path:
+    """A stub `tofu` reproducing the real binary's observable contract:
+    `output -raw` prints a "No outputs found" warning on STDOUT and exits 0
+    in a stateless directory (the captured-warning defect this tests);
+    `output -json` prints nothing and exits 1 for an absent output, and
+    prints the JSON value for a present one (keyed by output name)."""
+    stub = directory / "tofu"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$1 $2" == "output -json" ]]; then\n'
+        '  case "$3" in\n'
+        '    present_string) printf \'"10.114.0.3"\\n\'; exit 0 ;;\n'
+        '    present_number) printf \'42\\n\'; exit 0 ;;\n'
+        '    present_object) printf \'{"tls":true,"n":1}\\n\'; exit 0 ;;\n'
+        '    present_null)   printf \'null\\n\'; exit 0 ;;\n'
+        '    *) exit 1 ;;\n'
+        '  esac\n'
+        'elif [[ "$1 $2" == "output -raw" ]]; then\n'
+        "  printf '\\033[33mWarning:\\033[0m No outputs found\\n'\n"
+        '  exit 0\n'
+        'elif [[ "$1" == "output" ]]; then\n'
+        "  printf '{}\\n'; exit 0\n"
+        'fi\n'
+        'exit 1\n'
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return stub
+
+
+def read_helper(toolbox: Path, stack: Path, key: str, env: dict[str, str]) -> str:
+    """Invoke read_tf_output directly — the sharpest assertion for the
+    fallback's unquoting/null/compaction behaviour."""
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1" && read_tf_output "$2" "$3"',
+         "_", str(toolbox / "lib" / "render-helpers.sh"), str(stack), key],
+        text=True, capture_output=True, check=False,
+        env={**os.environ, "TOFU": "true", **env},
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"read_tf_output {key} failed:\n{result.stdout}{result.stderr}")
+    return result.stdout.rstrip("\n")
+
+
+def check_read_tf_output_fallback(toolbox: Path, work: Path) -> None:
+    stub_dir = work / "bin-tofu"
+    stub_dir.mkdir()
+    stub = write_stub_tofu(stub_dir)
+    env = {"TOFU": str(stub)}
+    stateless = work / "stateless-stack"
+    stateless.mkdir()
+
+    # The defect itself: a stateless dir must now refuse rather than write
+    # the captured warning into the rendered file.
+    out = work / "refusal.env"
+    result = run_bundle(toolbox, "cloudsql-config", "--out", str(out),
+                        "--data-dir", str(stateless), env=env)
+    expect_failure(result, "empty or missing", "stateless dir must refuse")
+    expect_failure(result, "Has the stack been applied", "stateless dir must say why")
+    if out.exists():
+        raise SystemExit("stateless dir wrote a file — captured-warning defect still present")
+
+    # An absent OPTIONAL output yields empty: the line is omitted and no
+    # warning text leaks into the file.
+    ok = work / "partial.env"
+    result = run_bundle(toolbox, "cloudsql-config", "--out", str(ok),
+                        "--data-dir", str(stateless),
+                        "--host-output", "present_string",
+                        "--database-output", "absent_db", env=env)
+    if result.returncode != 0 or not ok.exists():
+        raise SystemExit(f"optional-missing render failed\n{result.stdout}{result.stderr}")
+    content = ok.read_text()
+    for line in ("host=10.114.0.3", "port=5432"):
+        if line not in content:
+            raise SystemExit(f"rendered file missing '{line}':\n{content}")
+    if "database=" in content or "Warning" in content or "\x1b" in content:
+        raise SystemExit(f"rendered file contains an absent-output leak:\n{content}")
+
+    # Helper-level contract: string unquoted, non-string compacted to JSON,
+    # null and absent both empty — byte-identical happy path to -raw.
+    cases = {
+        "present_string": "10.114.0.3",
+        "present_number": "42",
+        "present_object": '{"tls":true,"n":1}',
+        "present_null": "",
+        "absent_key": "",
+    }
+    for key, expected in cases.items():
+        actual = read_helper(toolbox, stateless, key, env)
+        if actual != expected:
+            raise SystemExit(f"read_tf_output {key}: expected {expected!r}, got {actual!r}")
+
+    print("PASS renderer-cases read-tf-output-json-fallback")
+    print("PASS renderer-negative read-tf-output-stateless")
 
 
 def main() -> int:
@@ -61,6 +269,10 @@ def main() -> int:
             raise SystemExit("operator renderer mutation was not rejected by the independent comparator")
         print("PASS renderer-cases independent-baseline-candidate")
         print("PASS renderer-negative catalog-mutation")
+        gcp_work = work / "gcp"
+        gcp_work.mkdir()
+        check_cloudsql_bundles(baseline, gcp_work)
+        check_read_tf_output_fallback(baseline, gcp_work)
     return 0
 
 
