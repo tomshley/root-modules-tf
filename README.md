@@ -59,7 +59,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
 | `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
 | `cloudflare-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
-| `cloudflare-preview-website` | Cloudflare | Tunnel-backed preview publication for an existing zone | **New** |
+| `cloudflare-preview-website` | Cloudflare | Tunnel-backed publication of one or more hostnames, across zones, through a single tunnel | **New** |
 | `cloudflare-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
 | `cloudflare-redirect-domain` | Cloudflare | Standalone redirect domain with owned zone lifecycle | **New** |
 | `cloudflare-mail-foundation` | Cloudflare | Mail DNS publication for an existing zone | **New** |
@@ -94,6 +94,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/cloudflare-public-website-standard/` — public website acceleration with the standard profile
 - `terraform/examples/cloudflare-public-website-aggressive/` — public website acceleration with the aggressive profile
 - `terraform/examples/cloudflare-preview-website-tunnel/` — tunnel-backed preview hostname publication
+- `terraform/examples/cloudflare-preview-website-multi-hostname/` — several hostnames across two zones published through one tunnel
 - `terraform/examples/cloudflare-access-guard-standalone/` — standalone Access protection for an existing hostname
 - `terraform/examples/cloudflare-redirect-domain/` — redirect-only domain publication
 - `terraform/examples/cloudflare-mail-foundation/` — standalone mail DNS publication

@@ -14,7 +14,7 @@ output "preview_hostname" {
 }
 
 output "dns_record_id" {
-  description = "Cloudflare DNS record ID for the preview_hostname CNAME, or null when preview_hostname is unset."
+  description = "Cloudflare DNS record ID for the preview_hostname CNAME; null when preview_hostname is unset or manage_dns_records is false."
   value       = one(cloudflare_dns_record.preview[*].id)
 }
 
@@ -24,7 +24,7 @@ output "hostnames" {
 }
 
 output "dns_record_ids" {
-  description = "Map of published hostname to Cloudflare DNS record ID, covering both preview_hostname and hostnames entries."
+  description = "Map of published hostname to Cloudflare DNS record ID, covering both preview_hostname and hostnames entries; empty when manage_dns_records is false."
   value = merge(
     { for r in cloudflare_dns_record.preview : local.normalized_preview_hostname => r.id },
     { for hostname, r in cloudflare_dns_record.published : hostname => r.id },

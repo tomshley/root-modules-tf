@@ -1,8 +1,9 @@
 # cloudflare-preview-website
 
 Publish one or more hostnames through a single Cloudflare Tunnel. Despite its
-name, the module is not preview-specific: it publishes any hostnames through a
-tunnel and leaves tunnel lifecycle and naming to the caller.
+name, the module is not preview-specific: it creates the tunnel, its ingress
+rules, and the DNS records for any set of hostnames, and leaves tunnel naming,
+the cloudflared connector deployment, and access policy to the caller.
 
 This module manages:
 - A remotely managed Cloudflare Tunnel
@@ -13,6 +14,8 @@ This module manages:
 This module does not create a zone, manage Access policies, manage cache rules, manage public website acceleration, or manage mail DNS.
 
 ## Inputs
+
+Requires OpenTofu or Terraform 1.9 or later: the input validations cross-reference `preview_hostname`.
 
 - `zone_id`
   - Existing Cloudflare zone ID where `preview_hostname` is published. Optional
@@ -46,7 +49,12 @@ This module does not create a zone, manage Access policies, manage cache rules, 
     ownership are separate concerns: a tunnel must be live and healthy before
     DNS is repointed to it, so staged cutovers run this module with
     `manage_dns_records = false` while another module keeps owning every
-    record.
+    record. Flipping an existing deployment from `true` to `false` plans a
+    destroy of every record this module created; to hand live records to
+    another owner without an outage, first add a root-level `removed` block
+    for `module.<name>.cloudflare_dns_record.preview` and
+    `module.<name>.cloudflare_dns_record.published` with
+    `lifecycle { destroy = false }`, apply, and only then flip the flag.
 - `expose_tunnel_token`
   - When `true`, read the connector token through the
     `cloudflare_zero_trust_tunnel_cloudflared_token` data source and expose it
@@ -71,13 +79,13 @@ Implemented with the Cloudflare v5 provider using:
 - `preview_hostname`
   - Hostname published through `preview_hostname`, or null when unset.
 - `dns_record_id`
-  - Cloudflare DNS record ID for the `preview_hostname` CNAME, or null when
-    `preview_hostname` is unset.
+  - Cloudflare DNS record ID for the `preview_hostname` CNAME; null when
+    `preview_hostname` is unset or `manage_dns_records` is `false`.
 - `hostnames`
   - Every published hostname, sorted ascending.
 - `dns_record_ids`
   - Map of hostname to DNS record ID covering both `preview_hostname` and
-    `hostnames` entries.
+    `hostnames` entries. Empty when `manage_dns_records` is `false`.
 - `tunnel_token`
   - Connector token, sensitive, present only when `expose_tunnel_token` is set.
 
@@ -89,5 +97,8 @@ Implemented with the Cloudflare v5 provider using:
 - A consumer passing only `preview_hostname` gets byte-identical resources to
   earlier releases: the legacy record moves to `cloudflare_dns_record.preview[0]`
   through a `moved` block, so existing state re-plans to zero changes.
+- `manage_dns_records = false` on a fresh deployment never creates records;
+  on an existing one it removes them — see the input description for the
+  ownership-transfer sequence.
 - Access control is intentionally separate and should be composed with `cloudflare-access-guard` when published hostnames must be restricted.
 - This module does not own cache rules.

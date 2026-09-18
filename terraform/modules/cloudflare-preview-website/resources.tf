@@ -7,9 +7,9 @@ locals {
   normalized_origin_url       = var.origin_url == null ? null : trimspace(var.origin_url)
 
   legacy_entries = var.preview_hostname == null ? [] : [{
-    hostname   = lower(trimspace(var.preview_hostname))
-    zone_id    = trimspace(var.zone_id)
-    origin_url = trimspace(var.origin_url)
+    hostname   = local.normalized_preview_hostname
+    zone_id    = local.normalized_zone_id
+    origin_url = local.normalized_origin_url
   }]
   list_entries = [for h in var.hostnames : {
     hostname   = lower(trimspace(h.hostname))
