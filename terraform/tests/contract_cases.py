@@ -18,6 +18,7 @@ MODULES = {
     "node-provisioning-contract",
     "postgres-binding",
     "cloudflare-preview-website",
+    "gcp-ci-oidc-role",
 }
 
 CASE_CONFIGS = {
@@ -350,6 +351,197 @@ module "contract" {
   ]
 }
 """,
+    # The gcp-ci-oidc-role cases source the module through the ./modules
+    # symlink the runner creates in every work dir, because its
+    # ../ci-oidc-trust reference must resolve inside the same package — an
+    # absolute local source would make the submodule escape the package
+    # boundary and fail to install.
+    "gcp-ci-oidc-exact-only": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com"] },
+    { claim = "ref_protected", match = "exact", values = ["true"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-wildcard-only": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "sub", match = "wildcard", values = ["project_path:my-group/*:ref_type:branch:ref:*"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-combined": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com"] },
+    { claim = "sub", match = "wildcard", values = ["project_path:my-group/my-repo:ref_type:branch:ref:*"] },
+    { claim = "ref_protected", match = "exact", values = ["true"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-multi-value-or": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com", "custom-audience"] },
+    { claim = "ref_protected", match = "exact", values = ["true"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-re2-escaping": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "sub", match = "wildcard", values = ["refs/(heads|tags)/v1.2+build-*", "env?[a-b]{2}^$\\\\x-*"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-name-too-long": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "a-very-long-project-prefix"
+  role_name_suffix    = "infrastructure-deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-pool-id-too-long": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "POOLPREFIX"
+  role_name_suffix    = "x"
+  issuer_url          = "https://gitlab.com"
+  provider_id         = "ci-oidc"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com"] },
+  ]
+}
+""".replace("POOLPREFIX", "a" * 25),
+    "gcp-ci-oidc-reserved-prefix": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+  pool_id             = "gcp-ci-pool"
+
+  conditions = [
+    { claim = "aud", match = "exact", values = ["https://gitlab.com"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-unsupported-match": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "sub", match = "regex", values = ["^project_path:.*$"] },
+  ]
+}
+""",
+    "gcp-ci-oidc-claim-not-identifier": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "./modules/gcp-ci-oidc-role"
+
+  project_id          = "contract-test-project"
+  project_name_prefix = "my-project"
+  role_name_suffix    = "deploy"
+  issuer_url          = "https://gitlab.com"
+
+  conditions = [
+    { claim = "ci-runner", match = "exact", values = ["shared"] },
+  ]
+}
+""",
 }
 
 
@@ -406,6 +598,17 @@ EXPECTED_RESOURCE_COUNTS = {
     },
 }
 
+# The generated CEL attribute_condition is asserted verbatim — escaping and
+# grouping cases are only meaningful if the emitted text is checked, not
+# merely that the plan succeeded.
+EXPECTED_ATTRIBUTE_CONDITIONS = {
+    "gcp-ci-oidc-exact-only": "assertion.aud == 'https://gitlab.com' && assertion.ref_protected == 'true'",
+    "gcp-ci-oidc-wildcard-only": "assertion.sub.matches('^project_path:my-group/.*:ref_type:branch:ref:.*$')",
+    "gcp-ci-oidc-combined": "assertion.aud == 'https://gitlab.com' && assertion.sub.matches('^project_path:my-group/my-repo:ref_type:branch:ref:.*$') && assertion.ref_protected == 'true'",
+    "gcp-ci-oidc-multi-value-or": "(assertion.aud == 'https://gitlab.com' || assertion.aud == 'custom-audience') && assertion.ref_protected == 'true'",
+    "gcp-ci-oidc-re2-escaping": "(assertion.sub.matches('^refs/\\\\(heads\\\\|tags\\\\)/v1\\\\.2\\\\+build-.*$') || assertion.sub.matches('^env.\\\\[a-b\\\\]\\\\{2\\\\}\\\\^\\\\$\\\\\\\\x-.*$'))",
+}
+
 EXPECTED_DIAGNOSTICS = {
     "postgres-purpose-invalid": "contract.purpose must be generic",
     "postgres-authority-mismatch": "An authoritative store is not",
@@ -421,6 +624,11 @@ EXPECTED_DIAGNOSTICS = {
     "preview-tunnel-no-hostname": "At least one of preview_hostname or hostnames",
     "preview-tunnel-entry-origin-invalid": "entry origin_url must start with http:// or https://",
     "preview-tunnel-empty-origin": "entry origin_url must be non-empty",
+    "gcp-ci-oidc-name-too-long": "GCP's 30-character limit",
+    "gcp-ci-oidc-pool-id-too-long": "violates GCP's",
+    "gcp-ci-oidc-reserved-prefix": "reserved prefix 'gcp-'",
+    "gcp-ci-oidc-unsupported-match": 'match must be "exact" or "wildcard"',
+    "gcp-ci-oidc-claim-not-identifier": "must be a CEL-safe identifier",
 }
 
 
@@ -454,6 +662,10 @@ def main() -> int:
             name = case["name"]
             work = temp_root / name
             work.mkdir()
+            # Cases whose module references sibling modules (gcp-ci-oidc-role
+            # -> ../ci-oidc-trust) source through this symlink so the relative
+            # reference stays inside the work dir's package boundary.
+            os.symlink(ROOT / "terraform" / "modules", work / "modules")
             config = CASE_CONFIGS[name].replace("../../../modules", str(ROOT / "terraform" / "modules"))
             (work / "main.tf").write_text("terraform { required_version = \">= 1.9\" }\n" + config + "\n")
             init = run([tofu, "init", "-backend=false", "-input=false", "-no-color"], work)
@@ -471,7 +683,7 @@ def main() -> int:
                     print(diagnostics[-4000:])
                 else:
                     planned = None
-                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS:
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
                             failures.append(f"{name}: could not inspect plan")
@@ -501,6 +713,16 @@ def main() -> int:
                             counts[resource["type"]] = counts.get(resource["type"], 0) + 1
                         if any(counts.get(t, 0) != n for t, n in EXPECTED_RESOURCE_COUNTS[name].items()):
                             failures.append(f"{name}: planned resource counts changed")
+                            continue
+                    if name in EXPECTED_ATTRIBUTE_CONDITIONS:
+                        wip_providers = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_iam_workload_identity_pool_provider"
+                        ]
+                        condition = wip_providers[0]["values"]["attribute_condition"] if len(wip_providers) == 1 else None
+                        if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
+                            failures.append(f"{name}: planned attribute_condition changed")
                             continue
                     print(f"PASS {name} (pass)")
                 continue
