@@ -120,7 +120,15 @@ def check_cloudsql_bundles(toolbox: Path, work: Path) -> None:
     ok_gcloud = work / "bin-ok"
     ok_gcloud.mkdir()
     stub = ok_gcloud / "gcloud"
-    stub.write_text("#!/usr/bin/env bash\nprintf '%s\\n' '{\"username\":\"appuser\",\"password\":\"s3cret-pass\"}'\n")
+    # Reproduces the real binary's contract: `secrets versions access
+    # --secret=` rejects the projects/*/secrets/* resource-id form with a
+    # 404 — only the short name is accepted.
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        "for arg in \"$@\"; do\n"
+        "  case \"$arg\" in --secret=*/*) exit 1 ;; esac\n"
+        "done\n"
+        "printf '%s\\n' '{\"username\":\"appuser\",\"password\":\"s3cret-pass\"}'\n")
     stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     ok_env = {**os.environ, "PATH": f"{ok_gcloud}:{os.environ['PATH']}"}
     master_out = work / "cloudsql-master.env"
