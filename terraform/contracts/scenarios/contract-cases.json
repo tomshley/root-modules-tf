@@ -35,6 +35,14 @@
     {"name": "gcp-ci-oidc-pool-id-too-long", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A derived workload identity pool ID violating GCP naming rules is rejected."},
     {"name": "gcp-ci-oidc-reserved-prefix", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A pool ID starting with the reserved gcp- prefix is rejected."},
     {"name": "gcp-ci-oidc-unsupported-match", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "An unknown match kind is rejected by the contract before translation."},
-    {"name": "gcp-ci-oidc-claim-not-identifier", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A claim that is not a CEL-safe identifier is rejected at plan time."}
+    {"name": "gcp-ci-oidc-claim-not-identifier", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A claim that is not a CEL-safe identifier is rejected at plan time."},
+    {"name": "gke-cluster-name-at-limit", "module": "gcp-gke-cluster", "outcome": "pass", "description": "A derived cluster name at GKE's 40-character limit is accepted."},
+    {"name": "gke-cluster-name-too-long", "module": "gcp-gke-cluster", "outcome": "fail", "description": "A derived cluster name over GKE's 40-character limit is rejected."},
+    {"name": "gke-cluster-name-invalid-shape", "module": "gcp-gke-cluster", "outcome": "fail", "description": "A derived cluster name violating RFC 1035 shape is rejected."},
+    {"name": "eks-cluster-name-at-limit", "module": "aws-eks-cluster", "outcome": "pass", "description": "A cluster name at the EKS 100-character limit is accepted."},
+    {"name": "eks-cluster-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name over the EKS 100-character limit is rejected."},
+    {"name": "eks-cluster-name-invalid-shape", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name outside the EKS character set is rejected."},
+    {"name": "eks-role-name-at-limit", "module": "aws-eks-cluster", "outcome": "pass", "description": "A derived IAM role name at the 64-character limit is accepted."},
+    {"name": "eks-role-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A derived IAM role name over the 64-character limit is rejected."}
   ]
 }

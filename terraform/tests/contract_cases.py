@@ -19,6 +19,8 @@ MODULES = {
     "postgres-binding",
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
+    "gcp-gke-cluster",
+    "aws-eks-cluster",
 }
 
 CASE_CONFIGS = {
@@ -542,6 +544,161 @@ module "ci" {
   ]
 }
 """,
+    "gke-cluster-name-at-limit": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id       = "org"
+  google_region                = "us-east4"
+  google_region_zone           = "us-east4-a"
+  google_project_id            = "contract-test-project"
+  project_name_prefix          = "ATLIMITPREFIX"
+  google_compute_network_id    = "contract-network"
+  google_compute_subnetwork_id = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name    = "pods-range"
+  master_ipv4_cidr_block       = "172.16.0.0/28"
+}
+""".replace("ATLIMITPREFIX", "a" * 23),
+    "gke-cluster-name-too-long": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id       = "org"
+  google_region                = "us-east4"
+  google_region_zone           = "us-east4-a"
+  google_project_id            = "contract-test-project"
+  project_name_prefix          = "TOOLONGPREFIX"
+  google_compute_network_id    = "contract-network"
+  google_compute_subnetwork_id = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name    = "pods-range"
+  master_ipv4_cidr_block       = "172.16.0.0/28"
+}
+""".replace("TOOLONGPREFIX", "a" * 24),
+    "gke-cluster-name-invalid-shape": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id       = "org"
+  google_region                = "us-east4"
+  google_region_zone           = "us-east4-a"
+  google_project_id            = "contract-test-project"
+  project_name_prefix          = "Bad-Name"
+  google_compute_network_id    = "contract-network"
+  google_compute_subnetwork_id = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name    = "pods-range"
+  master_ipv4_cidr_block       = "172.16.0.0/28"
+}
+""",
+    "eks-cluster-name-at-limit": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "contract"
+  cluster_name        = "CLUSTERNAME"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+}
+""".replace("CLUSTERNAME", "a" * 100),
+    "eks-cluster-name-too-long": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "contract"
+  cluster_name        = "CLUSTERNAME"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+}
+""".replace("CLUSTERNAME", "a" * 101),
+    "eks-cluster-name-invalid-shape": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "contract"
+  cluster_name        = "cluster.name.with.dots"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+}
+""",
+    "eks-role-name-at-limit": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "ATLIMITPREFIX"
+  cluster_name        = "contract-cluster"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+}
+""".replace("ATLIMITPREFIX", "a" * 47),
+    "eks-role-name-too-long": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "TOOLONGPREFIX"
+  cluster_name        = "contract-cluster"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+}
+""".replace("TOOLONGPREFIX", "a" * 48),
 }
 
 
@@ -629,6 +786,11 @@ EXPECTED_DIAGNOSTICS = {
     "gcp-ci-oidc-reserved-prefix": "reserved prefix 'gcp-'",
     "gcp-ci-oidc-unsupported-match": 'match must be "exact" or "wildcard"',
     "gcp-ci-oidc-claim-not-identifier": "must be a CEL-safe identifier",
+    "gke-cluster-name-too-long": "GKE cluster name",
+    "gke-cluster-name-invalid-shape": "GKE cluster name",
+    "eks-cluster-name-too-long": "at most 100 characters",
+    "eks-cluster-name-invalid-shape": "at most 100 characters",
+    "eks-role-name-too-long": "EKS cluster role name",
 }
 
 
