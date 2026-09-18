@@ -21,6 +21,7 @@ MODULES = {
     "gcp-ci-oidc-role",
     "gcp-gke-cluster",
     "aws-eks-cluster",
+    "gcp-cloudsql-postgres",
 }
 
 CASE_CONFIGS = {
@@ -699,6 +700,85 @@ module "eks" {
   public_access_cidrs = ["10.0.0.0/8"]
 }
 """.replace("TOOLONGPREFIX", "a" * 48),
+    # The gcp-cloudsql-postgres cases also source through ./modules because the
+    # module's ../postgres-workload-contract submodule must stay inside the
+    # package boundary, same as gcp-ci-oidc-role above.
+    "cloudsql-edition-plus-custom-tier": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE_PLUS"
+  tier                           = "db-custom-2-7680"
+}
+""",
+    "cloudsql-edition-plus-perf-tier": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE_PLUS"
+  tier                           = "db-perf-optimized-N-2"
+}
+""",
+    "cloudsql-edition-enterprise-custom-tier": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+}
+""",
+    "cloudsql-edition-enterprise-perf-tier": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-perf-optimized-N-2"
+}
+""",
 }
 
 
@@ -791,6 +871,8 @@ EXPECTED_DIAGNOSTICS = {
     "eks-cluster-name-too-long": "at most 100 characters",
     "eks-cluster-name-invalid-shape": "at most 100 characters",
     "eks-role-name-too-long": "EKS cluster role name",
+    "cloudsql-edition-plus-custom-tier": "edition 'ENTERPRISE_PLUS' does not accept tier",
+    "cloudsql-edition-enterprise-perf-tier": "edition 'ENTERPRISE' does not accept tier",
 }
 
 

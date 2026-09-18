@@ -92,6 +92,17 @@ variable "tier" {
   description = "Machine tier for primary and read replicas."
 }
 
+variable "edition" {
+  type        = string
+  default     = null
+  description = "Cloud SQL edition for the primary instance — ENTERPRISE or ENTERPRISE_PLUS. Left null on purpose: an unset edition lets the API choose, which is the long-standing behavior, so an existing consumer whose instance was created under the API default re-plans to zero changes — pinning a default here would try to change the edition of a live instance. Recent PostgreSQL versions resolve an unset edition to ENTERPRISE_PLUS, which rejects db-custom tiers at apply time; set this explicitly to pair the edition with the tier family it accepts."
+
+  validation {
+    condition     = var.edition == null || contains(["ENTERPRISE", "ENTERPRISE_PLUS"], var.edition)
+    error_message = "edition must be ENTERPRISE or ENTERPRISE_PLUS when set."
+  }
+}
+
 variable "availability_type" {
   type        = string
   default     = "ZONAL"
