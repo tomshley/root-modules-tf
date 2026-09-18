@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.4.0] — 2026-09-18
+
+Cloud SQL instances can now state their edition, and the edition is checked against the machine tier at plan time. Previously the module left the edition to the API, which for recent PostgreSQL versions selects Enterprise Plus — an edition that refuses the module's own default `db-custom` tier, so the refusal arrived mid-apply after other resources had been created. Existing consumers re-plan to no changes.
+
+### Added
+
+- **terraform/modules/gcp-cloudsql-postgres**: An `edition` input accepting `ENTERPRISE` or `ENTERPRISE_PLUS`, applied to the primary and to any read replicas so a replica cannot be refused for a pairing the primary accepted. A plan-time precondition checks both directions — Enterprise Plus requires a `db-perf-optimized-N-*` tier, Enterprise rejects that family — and an advisory check warns when the edition is left unset alongside a `db-custom` tier, which is the combination the API refuses. The input defaults to unset so an instance created under the API's own choice continues to plan clean.
+
 ## [2.3.0] — 2026-09-18
 
 Both cluster modules now validate the names they create against the provider's own limits, so an over-long name prefix is caught at plan time with a message naming the limit instead of surfacing as an opaque provider error partway through an apply. A configuration whose names are already valid plans identically.
