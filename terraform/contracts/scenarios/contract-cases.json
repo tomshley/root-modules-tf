@@ -25,6 +25,16 @@
     {"name": "preview-tunnel-no-hostname", "module": "cloudflare-preview-website", "outcome": "fail", "description": "At least one published hostname is required."},
     {"name": "preview-tunnel-entry-origin-invalid", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname entry whose origin is not an HTTP URL is rejected."},
     {"name": "preview-tunnel-empty-origin", "module": "cloudflare-preview-website", "outcome": "fail", "description": "A hostname entry with a blank origin and no default origin is rejected."},
-    {"name": "preview-tunnel-dns-unmanaged", "module": "cloudflare-preview-website", "outcome": "pass", "description": "DNS ownership can be delegated while the tunnel still serves every hostname."}
+    {"name": "preview-tunnel-dns-unmanaged", "module": "cloudflare-preview-website", "outcome": "pass", "description": "DNS ownership can be delegated while the tunnel still serves every hostname."},
+    {"name": "gcp-ci-oidc-exact-only", "module": "gcp-ci-oidc-role", "outcome": "pass", "description": "Exact conditions become CEL equality joined by AND."},
+    {"name": "gcp-ci-oidc-wildcard-only", "module": "gcp-ci-oidc-role", "outcome": "pass", "description": "A wildcard condition becomes an anchored RE2 matches call."},
+    {"name": "gcp-ci-oidc-combined", "module": "gcp-ci-oidc-role", "outcome": "pass", "description": "Exact and wildcard conditions combine under AND in input order."},
+    {"name": "gcp-ci-oidc-multi-value-or", "module": "gcp-ci-oidc-role", "outcome": "pass", "description": "Values within one condition are parenthesized alternatives under AND."},
+    {"name": "gcp-ci-oidc-re2-escaping", "module": "gcp-ci-oidc-role", "outcome": "pass", "description": "RE2 metacharacters in literal glob segments are escaped; only * and ? widen."},
+    {"name": "gcp-ci-oidc-name-too-long", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A derived service account ID exceeding the GCP length limit is rejected."},
+    {"name": "gcp-ci-oidc-pool-id-too-long", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A derived workload identity pool ID violating GCP naming rules is rejected."},
+    {"name": "gcp-ci-oidc-reserved-prefix", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A pool ID starting with the reserved gcp- prefix is rejected."},
+    {"name": "gcp-ci-oidc-unsupported-match", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "An unknown match kind is rejected by the contract before translation."},
+    {"name": "gcp-ci-oidc-claim-not-identifier", "module": "gcp-ci-oidc-role", "outcome": "fail", "description": "A claim that is not a CEL-safe identifier is rejected at plan time."}
   ]
 }
