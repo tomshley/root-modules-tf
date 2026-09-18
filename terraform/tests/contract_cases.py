@@ -439,7 +439,9 @@ def main() -> int:
     # Plans run with -refresh=false against empty state and never reach the
     # Cloudflare API, but the provider must still configure itself. The plugin
     # cache created inside the temporary directory lets provider-backed cases
-    # share one provider download per run.
+    # share one provider download per run; because each case directory has no
+    # dependency lock file, the cache is only consulted when the lock-file
+    # override is set, and these throwaway directories never keep a lock file.
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="root-modules-contract-") as temp:
@@ -447,6 +449,7 @@ def main() -> int:
         cache = temp_root / ".plugin-cache"
         cache.mkdir()
         os.environ.setdefault("TF_PLUGIN_CACHE_DIR", str(cache))
+        os.environ.setdefault("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", "1")
         for case in cases:
             name = case["name"]
             work = temp_root / name
