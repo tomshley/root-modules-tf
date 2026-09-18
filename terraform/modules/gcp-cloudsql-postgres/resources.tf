@@ -48,10 +48,20 @@ resource "google_sql_database_instance" "primary" {
       condition     = module.workload_contract.contract.retention_days <= 7
       error_message = "Cloud SQL can provide at most a seven-day point-in-time recovery window through this adapter; a longer PostgreSQL retention contract is refused."
     }
+
+    precondition {
+      condition = (
+        var.edition == null ||
+        (var.edition == "ENTERPRISE_PLUS" && can(regex("^db-perf-optimized-N-[0-9]+$", var.tier))) ||
+        (var.edition == "ENTERPRISE" && !can(regex("^db-perf-optimized-", var.tier)))
+      )
+      error_message = "Cloud SQL edition '${var.edition}' does not accept tier '${var.tier}': ENTERPRISE_PLUS requires a db-perf-optimized-N-* tier, and ENTERPRISE rejects the db-perf-optimized tier family."
+    }
   }
 
   settings {
     tier              = var.tier
+    edition           = var.edition
     availability_type = var.availability_type
     user_labels       = var.labels
 
@@ -97,6 +107,7 @@ resource "google_sql_database_instance" "reader" {
 
   settings {
     tier        = var.tier
+    edition     = var.edition
     user_labels = var.labels
 
     ip_configuration {
@@ -104,5 +115,18 @@ resource "google_sql_database_instance" "reader" {
       private_network = var.private_network_id
       ssl_mode        = module.workload_contract.contract.tls_required ? "ENCRYPTED_ONLY" : "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
     }
+  }
+}
+
+# Advisory, not a gate: an unset edition lets the API choose, and recent
+# PostgreSQL versions resolve that to ENTERPRISE_PLUS — which refuses
+# db-custom tiers at apply time, after other resources have already been
+# created. An older engine version with an unset edition may still
+# legitimately resolve to ENTERPRISE, so this warns rather than fails;
+# setting `edition` explicitly pairs it with the tier family it accepts.
+check "edition_tier_pairing" {
+  assert {
+    condition     = var.edition != null || !can(regex("^db-custom-", var.tier))
+    error_message = "edition is unset while tier '${var.tier}' is a db-custom tier. Recent PostgreSQL versions default an unset edition to ENTERPRISE_PLUS, which rejects db-custom tiers at apply time — set edition explicitly (ENTERPRISE accepts db-custom tiers; ENTERPRISE_PLUS requires db-perf-optimized-N-*) to resolve this."
   }
 }

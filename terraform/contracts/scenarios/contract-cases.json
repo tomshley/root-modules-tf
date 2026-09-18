@@ -43,6 +43,10 @@
     {"name": "eks-cluster-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name over the EKS 100-character limit is rejected."},
     {"name": "eks-cluster-name-invalid-shape", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name outside the EKS character set is rejected."},
     {"name": "eks-role-name-at-limit", "module": "aws-eks-cluster", "outcome": "pass", "description": "A derived IAM role name at the 64-character limit is accepted."},
-    {"name": "eks-role-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A derived IAM role name over the 64-character limit is rejected."}
+    {"name": "eks-role-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A derived IAM role name over the 64-character limit is rejected."},
+    {"name": "cloudsql-edition-plus-custom-tier", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The Enterprise Plus edition rejects a db-custom tier."},
+    {"name": "cloudsql-edition-plus-perf-tier", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "The Enterprise Plus edition accepts a db-perf-optimized-N tier."},
+    {"name": "cloudsql-edition-enterprise-custom-tier", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "The Enterprise edition accepts a db-custom tier."},
+    {"name": "cloudsql-edition-enterprise-perf-tier", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The Enterprise edition rejects the db-perf-optimized tier family."}
   ]
 }
