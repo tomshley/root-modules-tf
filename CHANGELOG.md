@@ -6,6 +6,15 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.3.0] — 2026-09-18
+
+Both cluster modules now validate the names they create against the provider's own limits, so an over-long name prefix is caught at plan time with a message naming the limit instead of surfacing as an opaque provider error partway through an apply. A configuration whose names are already valid plans identically.
+
+### Added
+
+- **terraform/modules/gcp-gke-cluster**: The derived cluster name is checked at plan time against GKE's 40-character cap and RFC 1035 shape — a leading lowercase letter, no trailing hyphen. Previously only the derived service-account ID was validated, so a prefix that fit the 30-character account limit could still build a cluster name the API refused.
+- **terraform/modules/aws-eks-cluster**: `cluster_name` is validated against the EKS limit of 100 characters and its permitted character set, and the derived cluster role name against IAM's 64-character cap. Each name is checked where it originates, so a caller-supplied name reports against its input and a derived name reports against the prefix it came from.
+
 ## [2.2.0] — 2026-09-17
 
 The CI OIDC trust contract gains its GCP implementation: a cluster-independent federated identity for pipelines that must exist before — or independent of — any cluster. Existing consumers re-plan to no changes.
