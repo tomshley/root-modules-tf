@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.2.0] — 2026-09-17
+
+The CI OIDC trust contract gains its GCP implementation: a cluster-independent federated identity for pipelines that must exist before — or independent of — any cluster. Existing consumers re-plan to no changes.
+
+### Added
+
+- **terraform/modules/gcp-ci-oidc-role**: The GCP adapter over `ci-oidc-trust`, mirroring `aws-ci-oidc-role`. It creates a Workload Identity Pool, an OIDC provider, and a service account, binds the pool's principal set to the account through `roles/iam.workloadIdentityUser`, and grants caller-supplied `project_roles`. The shared trust grammar is translated into the provider's CEL `attribute_condition` — `exact` becomes equality, `wildcard` becomes an anchored `matches()` with every RE2 metacharacter escaped — preserving the contract's AND-across-conditions, OR-within-condition semantics, and any untranslatable match kind is rejected at plan time rather than weakened. Derived pool, provider and service account names are validated against GCP's length, character and reserved-prefix limits at plan time.
+
 ## [2.1.0] — 2026-09-17
 
 A single Cloudflare Tunnel can now publish many hostnames across more than one zone, and DNS record ownership can be delegated away from the module so a tunnel is provably serving before any record points at it. Existing single-hostname deployments re-plan to no changes at their current inputs.
