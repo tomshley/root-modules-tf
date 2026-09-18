@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.5.1] — 2026-09-18
+
+### Fixed
+
+- **toolbox/operator-tools**: `cloudsql-master` could not read the secret its own anchor module publishes. The module's `master_secret_id` output is the full `projects/*/secrets/*` resource id, and that form is rejected with a 404 by the credential read, so the bundle always skipped with an empty payload. The resource id is now normalised to the short name the API expects; a short name passes through unchanged. The renderer test stub was accepting any argument, which is why the defect shipped — it now reproduces the real contract and rejects the resource-id form.
+
 ## [2.5.0] — 2026-09-18
 
 Google Cloud consumers can render database bundles for the first time, and the stack-output reader no longer mistakes a warning for a value. Existing consumers see an unchanged happy path.
