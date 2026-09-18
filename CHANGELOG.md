@@ -6,6 +6,18 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.5.0] — 2026-09-18
+
+Google Cloud consumers can render database bundles for the first time, and the stack-output reader no longer mistakes a warning for a value. Existing consumers see an unchanged happy path.
+
+### Added
+
+- **toolbox/operator-tools**: `cloudsql-config` and `cloudsql-master` bundles, anchored to `gcp-cloudsql-postgres`, mirroring `aurora-config` and `aurora-master` flag for flag and emitting the same variable names — `host`, `port`, `database`, `ssl` and `username`, `password` — so a service moving between clouds changes the bundle name and nothing else. Credentials resolve through new GCP Secret Manager helpers in `lib/render-helpers.sh` that follow the contract of their AWS counterparts, returning empty on any failure so a bundle skips rather than writes a partial file.
+
+### Fixed
+
+- **toolbox/operator-tools**: Reading a stack output no longer captures a warning as data. Asked for an output in a directory whose state holds none, `tofu output -raw` prints "No outputs found" on standard output and exits zero; that text was taken as the value, so the required-output guard stayed silent and the warning was written into the rendered `.env`. Because those files are loaded into cluster secrets, the failure appeared as a workload that could not authenticate rather than as a refusal to render. The single-output read now uses the JSON form, which reports absence honestly, and the guard raises its "has the stack been applied?" error as intended.
+
 ## [2.4.0] — 2026-09-18
 
 Cloud SQL instances can now state their edition, and the edition is checked against the machine tier at plan time. Previously the module left the edition to the API, which for recent PostgreSQL versions selects Enterprise Plus — an edition that refuses the module's own default `db-custom` tier, so the refusal arrived mid-apply after other resources had been created. Existing consumers re-plan to no changes.
