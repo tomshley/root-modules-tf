@@ -1,21 +1,27 @@
 variable "zone_id" {
   type        = string
-  description = "Existing Cloudflare zone ID where the preview hostname will be published."
+  default     = null
+  description = "Existing Cloudflare zone ID where preview_hostname is published. Required when preview_hostname is set; hostnames entries carry their own zone_id."
 
   validation {
-    condition     = trimspace(var.zone_id) != ""
-    error_message = "zone_id must be non-empty."
+    condition     = var.zone_id == null || trimspace(var.zone_id) != ""
+    error_message = "zone_id must be non-empty when supplied."
   }
 
   validation {
-    condition     = can(regex("^[0-9a-f]{32}$", trimspace(var.zone_id)))
+    condition     = var.zone_id == null || can(regex("^[0-9a-f]{32}$", trimspace(var.zone_id)))
     error_message = "zone_id must be a 32-character lowercase hex string."
+  }
+
+  validation {
+    condition     = var.preview_hostname == null || var.zone_id != null
+    error_message = "zone_id is required when preview_hostname is set."
   }
 }
 
 variable "account_id" {
   type        = string
-  description = "Cloudflare account ID that owns the preview tunnel."
+  description = "Cloudflare account ID that owns the tunnel."
 
   validation {
     condition     = trimspace(var.account_id) != ""
@@ -56,30 +62,113 @@ variable "tunnel_secret" {
 
 variable "preview_hostname" {
   type        = string
-  description = "Preview hostname to publish through the tunnel."
+  default     = null
+  description = "Hostname to publish through the tunnel. At least one of preview_hostname or hostnames must be supplied."
 
   validation {
-    condition     = trimspace(var.preview_hostname) != ""
-    error_message = "preview_hostname must be non-empty."
+    condition     = var.preview_hostname == null || trimspace(var.preview_hostname) != ""
+    error_message = "preview_hostname must be non-empty when supplied."
   }
 
   validation {
-    condition     = can(regex("^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", trimspace(var.preview_hostname)))
+    condition     = var.preview_hostname == null || can(regex("^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", trimspace(var.preview_hostname)))
     error_message = "preview_hostname must be a valid fully qualified domain name."
   }
 }
 
 variable "origin_url" {
   type        = string
-  description = "Origin URL that cloudflared should proxy to for the preview hostname."
+  default     = null
+  description = "Origin URL that cloudflared proxies to. Required when preview_hostname is set; the default origin for hostnames entries that omit their own."
 
   validation {
-    condition     = trimspace(var.origin_url) != ""
-    error_message = "origin_url must be non-empty."
+    condition     = var.origin_url == null || trimspace(var.origin_url) != ""
+    error_message = "origin_url must be non-empty when supplied."
   }
 
   validation {
-    condition     = can(regex("^https?://", trimspace(var.origin_url)))
+    condition     = var.origin_url == null || can(regex("^https?://", trimspace(var.origin_url)))
     error_message = "origin_url must start with http:// or https://."
   }
+
+  validation {
+    condition     = var.preview_hostname == null || var.origin_url != null
+    error_message = "origin_url is required when preview_hostname is set."
+  }
+}
+
+variable "hostnames" {
+  type = list(object({
+    hostname   = string
+    zone_id    = string
+    origin_url = optional(string)
+  }))
+  default     = []
+  nullable    = false
+  description = "Additional hostnames to publish through the same tunnel. Entries may live in different zones and may override the default origin_url per hostname. Records are always proxied: a cfargotunnel.com target only resolves through Cloudflare's proxy."
+
+  validation {
+    condition     = length(var.hostnames) > 0 || var.preview_hostname != null
+    error_message = "At least one of preview_hostname or hostnames must be supplied."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : can(regex("^[0-9a-f]{32}$", trimspace(h.zone_id)))
+    ])
+    error_message = "Every hostnames entry zone_id must be a 32-character lowercase hex string."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : can(regex("^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", trimspace(h.hostname)))
+    ])
+    error_message = "Every hostnames entry hostname must be a valid fully qualified domain name."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : h.origin_url == null || trimspace(h.origin_url) != ""
+    ])
+    error_message = "Every hostnames entry origin_url must be non-empty when supplied."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : h.origin_url == null || can(regex("^https?://", trimspace(h.origin_url)))
+    ])
+    error_message = "Every hostnames entry origin_url must start with http:// or https://."
+  }
+
+  validation {
+    condition = alltrue([
+      for h in var.hostnames : (h.origin_url != null && trimspace(h.origin_url) != "") || var.origin_url != null
+    ])
+    error_message = "A hostnames entry without its own origin_url requires origin_url to be set."
+  }
+
+  validation {
+    condition = length(distinct(concat(
+      var.preview_hostname == null ? [] : [lower(trimspace(var.preview_hostname))],
+      [for h in var.hostnames : lower(trimspace(h.hostname))]
+      ))) == length(concat(
+      var.preview_hostname == null ? [] : [lower(trimspace(var.preview_hostname))],
+      [for h in var.hostnames : lower(trimspace(h.hostname))]
+    ))
+    error_message = "Hostnames must be unique across preview_hostname and hostnames."
+  }
+}
+
+variable "manage_dns_records" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether this module owns the DNS records for its published hostnames. Set false when another module owns them — ingress rules are still configured, so the tunnel can serve every hostname before any DNS points at it."
+}
+
+variable "expose_tunnel_token" {
+  type        = bool
+  default     = false
+  nullable    = false
+  description = "Read the tunnel connector token through the cloudflare_zero_trust_tunnel_cloudflared_token data source and expose it as the tunnel_token output. Requires Cloudflare Tunnel Write permission on the API token."
 }

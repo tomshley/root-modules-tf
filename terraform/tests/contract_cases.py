@@ -17,6 +17,7 @@ MODULES = {
     "redis-service-contract",
     "node-provisioning-contract",
     "postgres-binding",
+    "cloudflare-preview-website",
 }
 
 CASE_CONFIGS = {
@@ -213,11 +214,155 @@ module "contract" {
   }
 }
 """,
+    "preview-tunnel-single": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "preview.example.com"
+  origin_url       = "http://localhost:8080"
+}
+""",
+    "preview-tunnel-multi-zone": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  origin_url    = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = "zeta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname   = "alpha.example.org"
+      zone_id    = "00000000000000000000000000000002"
+      origin_url = "https://alpha.internal.example.com:8443"
+    },
+    {
+      hostname = "mid.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-combined": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "preview.example.com"
+  origin_url       = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = "zzz.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname = "aaa.example.com"
+      zone_id  = "00000000000000000000000000000003"
+    },
+  ]
+}
+""",
+    "preview-tunnel-duplicate-hostname": """module "preview" {
+  source           = "../../../modules/cloudflare-preview-website"
+  zone_id          = "00000000000000000000000000000001"
+  account_id       = "00000000000000000000000000000002"
+  tunnel_name      = "preview-tunnel"
+  tunnel_secret    = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  preview_hostname = "Same.Example.com"
+  origin_url       = "http://localhost:8080"
+  hostnames = [
+    {
+      hostname = " same.example.com "
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-missing-origin": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname = "beta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-no-hostname": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+}
+""",
+    "preview-tunnel-entry-origin-invalid": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname   = "beta.example.com"
+      zone_id    = "00000000000000000000000000000001"
+      origin_url = "not-a-url"
+    },
+  ]
+}
+""",
+    "preview-tunnel-dns-unmanaged": """module "preview" {
+  source             = "../../../modules/cloudflare-preview-website"
+  account_id         = "00000000000000000000000000000002"
+  tunnel_name        = "preview-tunnel"
+  tunnel_secret      = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  origin_url         = "http://localhost:8080"
+  manage_dns_records = false
+  hostnames = [
+    {
+      hostname = "beta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname = "alpha.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
+    "preview-tunnel-empty-origin": """module "preview" {
+  source        = "../../../modules/cloudflare-preview-website"
+  account_id    = "00000000000000000000000000000002"
+  tunnel_name   = "preview-tunnel"
+  tunnel_secret = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  hostnames = [
+    {
+      hostname   = "beta.example.com"
+      zone_id    = "00000000000000000000000000000001"
+      origin_url = "   "
+    },
+  ]
+}
+""",
 }
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
+
+
+def planned_resources(root: dict) -> list[dict]:
+    return [
+        resource
+        for module in [root, *root.get("child_modules", [])]
+        for resource in module.get("resources", [])
+    ]
 
 
 EXPECTED_BINDINGS = {
@@ -226,6 +371,38 @@ EXPECTED_BINDINGS = {
     },
     "tenancy-derived-role-valid": {
         "alpha-beta": {"tenant_key": "alpha-beta", "database_name": "alpha_db", "db_role_name": "alpha_beta"},
+    },
+}
+
+EXPECTED_INGRESS = {
+    "preview-tunnel-single": [
+        {"hostname": "preview.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+    "preview-tunnel-multi-zone": [
+        {"hostname": "alpha.example.org", "service": "https://alpha.internal.example.com:8443"},
+        {"hostname": "mid.example.com", "service": "http://localhost:8080"},
+        {"hostname": "zeta.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+    "preview-tunnel-combined": [
+        {"hostname": "aaa.example.com", "service": "http://localhost:8080"},
+        {"hostname": "preview.example.com", "service": "http://localhost:8080"},
+        {"hostname": "zzz.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+    "preview-tunnel-dns-unmanaged": [
+        {"hostname": "alpha.example.com", "service": "http://localhost:8080"},
+        {"hostname": "beta.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+}
+
+EXPECTED_RESOURCE_COUNTS = {
+    "preview-tunnel-dns-unmanaged": {
+        "cloudflare_dns_record": 0,
+        "cloudflare_zero_trust_tunnel_cloudflared": 1,
+        "cloudflare_zero_trust_tunnel_cloudflared_config": 1,
     },
 }
 
@@ -239,6 +416,11 @@ EXPECTED_DIAGNOSTICS = {
     "postgres-binding-reader-mismatch": "reader_capable must match",
     "tenancy-derived-role-too-long": "Tenant role names after default derivation",
     "tenancy-explicit-role-too-long": "Tenant role names must be valid lowercase PostgreSQL identifiers",
+    "preview-tunnel-duplicate-hostname": "must be unique across preview_hostname and hostnames",
+    "preview-tunnel-missing-origin": "requires origin_url to be set",
+    "preview-tunnel-no-hostname": "At least one of preview_hostname or hostnames",
+    "preview-tunnel-entry-origin-invalid": "entry origin_url must start with http:// or https://",
+    "preview-tunnel-empty-origin": "entry origin_url must be non-empty",
 }
 
 
@@ -254,9 +436,20 @@ def main() -> int:
         raise SystemExit("case manifest does not cover every contract module")
 
     tofu = os.environ.get("TOFU", "tofu")
+    # Plans run with -refresh=false against empty state and never reach the
+    # Cloudflare API, but the provider must still configure itself. The plugin
+    # cache created inside the temporary directory lets provider-backed cases
+    # share one provider download per run; because each case directory has no
+    # dependency lock file, the cache is only consulted when the lock-file
+    # override is set, and these throwaway directories never keep a lock file.
+    os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="root-modules-contract-") as temp:
         temp_root = Path(temp)
+        cache = temp_root / ".plugin-cache"
+        cache.mkdir()
+        os.environ.setdefault("TF_PLUGIN_CACHE_DIR", str(cache))
+        os.environ.setdefault("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", "1")
         for case in cases:
             name = case["name"]
             work = temp_root / name
@@ -277,14 +470,37 @@ def main() -> int:
                     failures.append(f"{name}: valid case failed during plan")
                     print(diagnostics[-4000:])
                 else:
-                    if name in EXPECTED_BINDINGS:
+                    planned = None
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
-                            failures.append(f"{name}: could not inspect planned bindings")
+                            failures.append(f"{name}: could not inspect plan")
                             continue
-                        values = json.loads(shown.stdout)["planned_values"]["outputs"]["bindings"]["value"]
+                        planned = json.loads(shown.stdout)["planned_values"]
+                    if name in EXPECTED_BINDINGS:
+                        values = planned["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
                             failures.append(f"{name}: planned bindings changed")
+                            continue
+                    if name in EXPECTED_INGRESS:
+                        configs = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "cloudflare_zero_trust_tunnel_cloudflared_config"
+                        ]
+                        ingress = [
+                            {key: rule[key] for key in ("hostname", "service") if rule.get(key) is not None}
+                            for rule in configs[0]["values"]["config"]["ingress"]
+                        ] if len(configs) == 1 else []
+                        if ingress != EXPECTED_INGRESS[name]:
+                            failures.append(f"{name}: planned ingress changed")
+                            continue
+                    if name in EXPECTED_RESOURCE_COUNTS:
+                        counts: dict[str, int] = {}
+                        for resource in planned_resources(planned["root_module"]):
+                            counts[resource["type"]] = counts.get(resource["type"], 0) + 1
+                        if any(counts.get(t, 0) != n for t, n in EXPECTED_RESOURCE_COUNTS[name].items()):
+                            failures.append(f"{name}: planned resource counts changed")
                             continue
                     print(f"PASS {name} (pass)")
                 continue
