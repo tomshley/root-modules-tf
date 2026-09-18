@@ -317,6 +317,25 @@ module "contract" {
   ]
 }
 """,
+    "preview-tunnel-dns-unmanaged": """module "preview" {
+  source             = "../../../modules/cloudflare-preview-website"
+  account_id         = "00000000000000000000000000000002"
+  tunnel_name        = "preview-tunnel"
+  tunnel_secret      = "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
+  origin_url         = "http://localhost:8080"
+  manage_dns_records = false
+  hostnames = [
+    {
+      hostname = "beta.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+    {
+      hostname = "alpha.example.com"
+      zone_id  = "00000000000000000000000000000001"
+    },
+  ]
+}
+""",
     "preview-tunnel-empty-origin": """module "preview" {
   source        = "../../../modules/cloudflare-preview-website"
   account_id    = "00000000000000000000000000000002"
@@ -364,6 +383,19 @@ EXPECTED_INGRESS = {
         {"hostname": "zzz.example.com", "service": "http://localhost:8080"},
         {"service": "http_status:404"},
     ],
+    "preview-tunnel-dns-unmanaged": [
+        {"hostname": "alpha.example.com", "service": "http://localhost:8080"},
+        {"hostname": "beta.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ],
+}
+
+EXPECTED_RESOURCE_COUNTS = {
+    "preview-tunnel-dns-unmanaged": {
+        "cloudflare_dns_record": 0,
+        "cloudflare_zero_trust_tunnel_cloudflared": 1,
+        "cloudflare_zero_trust_tunnel_cloudflared_config": 1,
+    },
 }
 
 EXPECTED_DIAGNOSTICS = {
@@ -449,6 +481,19 @@ def main() -> int:
                         ] if len(configs) == 1 else []
                         if ingress != EXPECTED_INGRESS[name]:
                             failures.append(f"{name}: planned ingress changed")
+                            continue
+                    if name in EXPECTED_RESOURCE_COUNTS:
+                        shown = run([tofu, "show", "-json", "case.plan"], work)
+                        if shown.returncode != 0:
+                            failures.append(f"{name}: could not inspect planned resources")
+                            continue
+                        root = json.loads(shown.stdout)["planned_values"]["root_module"]
+                        counts: dict[str, int] = {}
+                        for module in [root, *root.get("child_modules", [])]:
+                            for resource in module.get("resources", []):
+                                counts[resource["type"]] = counts.get(resource["type"], 0) + 1
+                        if any(counts.get(t, 0) != n for t, n in EXPECTED_RESOURCE_COUNTS[name].items()):
+                            failures.append(f"{name}: planned resource counts changed")
                             continue
                     print(f"PASS {name} (pass)")
                 continue

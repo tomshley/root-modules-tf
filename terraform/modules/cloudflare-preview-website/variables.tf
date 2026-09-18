@@ -159,6 +159,13 @@ variable "hostnames" {
   }
 }
 
+variable "manage_dns_records" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether this module owns the DNS records for its published hostnames. Set false when another module owns them — ingress rules are still configured, so the tunnel can serve every hostname before any DNS points at it."
+}
+
 variable "expose_tunnel_token" {
   type        = bool
   default     = false

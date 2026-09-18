@@ -32,7 +32,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "preview" {
 }
 
 resource "cloudflare_dns_record" "preview" {
-  count = var.preview_hostname == null ? 0 : 1
+  count = var.manage_dns_records && var.preview_hostname != null ? 1 : 0
 
   zone_id = local.normalized_zone_id
   name    = local.normalized_preview_hostname
@@ -48,7 +48,7 @@ moved {
 }
 
 resource "cloudflare_dns_record" "published" {
-  for_each = { for e in local.list_entries : e.hostname => e }
+  for_each = var.manage_dns_records ? { for e in local.list_entries : e.hostname => e } : {}
 
   zone_id = each.value.zone_id
   name    = each.value.hostname

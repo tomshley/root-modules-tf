@@ -39,6 +39,14 @@ This module does not create a zone, manage Access policies, manage cache rules, 
     required. Entries may live in different zones; hostnames must be unique
     across `preview_hostname` and the list. Every record is proxied — a
     `cfargotunnel.com` target only resolves through Cloudflare's proxy.
+- `manage_dns_records`
+  - Whether this module owns the DNS records for its published hostnames.
+    Default `true`. Set `false` when another module owns the records — the
+    ingress rules are still configured, because ingress membership and DNS
+    ownership are separate concerns: a tunnel must be live and healthy before
+    DNS is repointed to it, so staged cutovers run this module with
+    `manage_dns_records = false` while another module keeps owning every
+    record.
 - `expose_tunnel_token`
   - When `true`, read the connector token through the
     `cloudflare_zero_trust_tunnel_cloudflared_token` data source and expose it
