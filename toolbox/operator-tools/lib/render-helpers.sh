@@ -247,9 +247,11 @@ get_secret_field() {
 #   Echo the raw payload of the secret's latest enabled version, or empty
 #   string on failure (missing gcloud, IAM denied, secret-without-version,
 #   etc). SECRET_ID may be a short name or a full projects/*/secrets/*
-#   resource id — gcloud accepts either.
+#   resource id (the form google_secret_manager_secret.id outputs); the
+#   resource id is normalised to the short name because gcloud rejects the
+#   full form with a 404.
 get_secret_string_gcp() {
-  local secret="$1" project="$2"
+  local secret="${1##*/secrets/}" project="$2"
   gcloud secrets versions access latest \
     --secret="$secret" --project="$project" 2>/dev/null || echo ""
 }
