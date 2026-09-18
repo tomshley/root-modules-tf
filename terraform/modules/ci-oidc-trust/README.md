@@ -10,7 +10,7 @@ plan-time-enforced contract instead of each re-defining it.
 ci-oidc-trust            (this module — the contract, owned once)
    ↓ trust object
 aws-ci-oidc-role         (AWS implementation: OIDC provider + IAM role)
-gcp-ci-oidc-role         (future: workload identity pool + service account)
+gcp-ci-oidc-role         (workload identity pool + service account)
 azure-ci-oidc-role       (future: federated identity credential)
    ↓ composition
 aws-eks-ci-oidc-access   (adds the Kubernetes binding on the AWS path)
