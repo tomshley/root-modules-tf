@@ -50,11 +50,14 @@ Requires OpenTofu or Terraform 1.9 or later: the input validations cross-referen
     DNS is repointed to it, so staged cutovers run this module with
     `manage_dns_records = false` while another module keeps owning every
     record. Flipping an existing deployment from `true` to `false` plans a
-    destroy of every record this module created; to hand live records to
-    another owner without an outage, first add a root-level `removed` block
-    for `module.<name>.cloudflare_dns_record.preview` and
-    `module.<name>.cloudflare_dns_record.published` with
-    `lifecycle { destroy = false }`, apply, and only then flip the flag.
+    destroy of every record this module created. To hand live records to
+    another owner without an outage, first forget them from this state
+    without touching Cloudflare —
+    `tofu state rm 'module.<name>.cloudflare_dns_record.preview' 'module.<name>.cloudflare_dns_record.published'`
+    — then flip the flag (the plan now reports no changes for the records),
+    and have the new owner adopt them with `import` blocks. A `removed` block
+    cannot express this hand-off: the resource blocks stay declared in the
+    module at zero instances, and `removed` is rejected while the block exists.
 - `expose_tunnel_token`
   - When `true`, read the connector token through the
     `cloudflare_zero_trust_tunnel_cloudflared_token` data source and expose it
@@ -98,7 +101,7 @@ Implemented with the Cloudflare v5 provider using:
   earlier releases: the legacy record moves to `cloudflare_dns_record.preview[0]`
   through a `moved` block, so existing state re-plans to zero changes.
 - `manage_dns_records = false` on a fresh deployment never creates records;
-  on an existing one it removes them — see the input description for the
-  ownership-transfer sequence.
+  on an existing one it destroys them unless they were first removed from
+  state — see the input description for the ownership-transfer sequence.
 - Access control is intentionally separate and should be composed with `cloudflare-access-guard` when published hostnames must be restricted.
 - This module does not own cache rules.
