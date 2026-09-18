@@ -6,6 +6,28 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.1.0] — 2026-09-17
+
+A single Cloudflare Tunnel can now publish many hostnames across more than one zone, and DNS record ownership can be delegated away from the module so a tunnel is provably serving before any record points at it. Existing single-hostname deployments re-plan to no changes at their current inputs.
+
+### Added
+
+- **terraform/modules/cloudflare-preview-website**: `hostnames` publishes any number of hostnames through one tunnel. Entries may live in different zones and may override the shared `origin_url` per hostname, so one connector serves several sites instead of requiring a tunnel per name. Ingress rules are generated in sorted order and terminated with a catch-all `http_status:404`, making the rule set the tunnel's routing table.
+- **terraform/modules/cloudflare-preview-website**: `manage_dns_records` separates tunnel ownership from DNS ownership. Set `false`, the module creates the tunnel and its ingress configuration but no records, so a tunnel can be created, connected and proven healthy while DNS still resolves elsewhere; pointing a record at it afterwards becomes a single reversible switch. The input description carries the sequence for handing existing records to another owner without an outage.
+- **terraform/modules/cloudflare-preview-website**: `expose_tunnel_token` exposes the connector token as a sensitive output, for a `cloudflared` deployment that runs beside the workload. It is opt-in because the underlying data source requires tunnel write permission, so read-scoped credentials keep working unchanged.
+- **terraform/examples/cloudflare-preview-website-multi-hostname**: Several hostnames across two zones published through one tunnel.
+
+### Changed
+
+- **terraform/modules/cloudflare-preview-website**: Declares an OpenTofu/Terraform `>= 1.9` floor. The input validations cross-reference other inputs, which older CLIs cannot evaluate; the floor turns that into an actionable version error rather than a confusing validation failure.
+- **terraform/tests**: Each passing case inspects its plan once and provider downloads are shared across cases, cutting the time a full contract run takes.
+
+### Fixed
+
+- **terraform/modules/cloudflare-preview-website**: A per-hostname `origin_url` is now validated for scheme and non-emptiness at plan time. Previously an invalid value surfaced only at apply, and an empty string failed inside the fallback expression with an opaque message.
+- **terraform/modules/cloudflare-preview-website**: The single-hostname entry reuses the normalized inputs, so leaving `origin_url` unset no longer fails on a null value.
+- **terraform/modules/cloudflare-preview-website**: `dns_record_id` and `dns_record_ids` now describe what they return when record management is delegated.
+
 ## [2.0.0] — 2026-09-16
 
 This release states each workload requirement once, in a provider-neutral contract module, and makes every cloud adapter either honour that contract or refuse it at plan time. AWS consumers are unaffected at their current inputs: every existing AWS module re-plans to no changes, and the modules that were split into shared Kubernetes bases carry state-only `moved` blocks. The major version reflects the GCP module surface, which is reshaped rather than extended.
