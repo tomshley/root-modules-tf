@@ -2,7 +2,7 @@ resource "google_project_iam_custom_role" "karpenter" {
   project     = var.project_id
   role_id     = "karpenterController"
   title       = "Karpenter GKE Controller"
-  description = "Permissions used by cloudpilot-ai/karpenter-provider-gcp v0.3.0."
+  description = "Canonical controller permissions for cloudpilot-ai/karpenter-provider-gcp."
 
   # Canonical grant set from the provider's maintained
   # deploy/iam/karpenter-controller-role.yaml, which tracks the IAM roles the
