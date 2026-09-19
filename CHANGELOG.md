@@ -6,6 +6,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.6.2] — 2026-09-19
+
+### Fixed
+
+- **toolbox/operator-tools**: `cloudsql-master` and `aurora-master` wrote an empty credential instead of failing when the secret could not be read. An operator whose cloud session had expired got a rendered file containing `username=` and `password=` with nothing after them, which a deploy then turned into Kubernetes Secret data — surfacing much later as an authentication failure with no connection to its cause. Both bundles now exit non-zero, naming the secret and the likely authentication cause, when the read fails or the payload carries no password. A missing secret id in the stack outputs still skips, because an unapplied stack is a legitimate ordering rather than a failure.
+- **toolbox/operator-tools**: `read_tf_output` returned the redaction marker as though it were a value. `make output` prints `<sensitive>` for a sensitive output, and the reader captured that text, so any bundle projecting a sensitive output rendered the literal string `<sensitive>` into its file. Redaction markers are now treated as absent so the structured fallback reads the real value.
+- **toolbox/operator-tools**: the generic stack-output projector stamped an AWS-specific header into every file it wrote, including files on other providers holding values that are not ARNs. The header no longer names a cloud.
+
 ## [2.6.1] — 2026-09-19
 
 ### Fixed
