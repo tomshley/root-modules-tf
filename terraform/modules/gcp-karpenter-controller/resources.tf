@@ -6,6 +6,7 @@ resource "helm_release" "crds" {
   chart            = "karpenter-crd"
   version          = "0.3.0"
   wait             = true
+  timeout          = var.helm_timeout_seconds
 }
 
 resource "helm_release" "karpenter" {
@@ -42,4 +43,5 @@ resource "helm_release" "karpenter" {
 
   depends_on = [helm_release.crds]
   wait       = true
+  timeout    = var.helm_timeout_seconds
 }

@@ -24,3 +24,7 @@ variable "extra_helm_values" {
   type    = list(string)
   default = []
 }
+variable "helm_timeout_seconds" {
+  type    = number
+  default = 300
+}
