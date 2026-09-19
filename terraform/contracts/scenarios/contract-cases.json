@@ -40,6 +40,7 @@
     {"name": "gke-ci-oidc-rbac-admin-enabled", "module": "gcp-gke-ci-oidc-access", "outcome": "pass", "description": "Enabling the grant creates exactly one custom role bound to the deploy identity."},
     {"name": "gke-ci-oidc-rbac-admin-role-id-invalid", "module": "gcp-gke-ci-oidc-access", "outcome": "fail", "description": "A role ID outside GCP's custom-role character set is rejected."},
     {"name": "gke-ci-oidc-rbac-admin-role-id-too-long", "module": "gcp-gke-ci-oidc-access", "outcome": "fail", "description": "A role ID over GCP's 64-character custom-role limit is rejected."},
+    {"name": "karpenter-prereqs-canonical-role", "module": "gcp-karpenter-prereqs", "outcome": "pass", "description": "The controller role grants only grantable permissions and scopes actAs to the node service account."},
     {"name": "gke-cluster-name-at-limit", "module": "gcp-gke-cluster", "outcome": "pass", "description": "A derived cluster name at GKE's 40-character limit is accepted."},
     {"name": "gke-cluster-name-too-long", "module": "gcp-gke-cluster", "outcome": "fail", "description": "A derived cluster name over GKE's 40-character limit is rejected."},
     {"name": "gke-cluster-name-invalid-shape", "module": "gcp-gke-cluster", "outcome": "fail", "description": "A derived cluster name violating RFC 1035 shape is rejected."},

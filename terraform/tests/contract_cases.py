@@ -20,6 +20,7 @@ MODULES = {
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
     "gcp-gke-ci-oidc-access",
+    "gcp-karpenter-prereqs",
     "gcp-gke-cluster",
     "aws-eks-cluster",
     "gcp-cloudsql-postgres",
@@ -623,6 +624,19 @@ module "ci" {
   kubernetes_rbac_admin_role_id = "TOOLONGROLEID"
 }
 """.replace("TOOLONGROLEID", "a" * 65),
+    "karpenter-prereqs-canonical-role": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "prereqs" {
+  source = "./modules/gcp-karpenter-prereqs"
+
+  project_id                 = "contract-test-project"
+  project_name_prefix        = "my-project"
+  node_service_account_email = "contract-node@contract-test-project.iam.gserviceaccount.com"
+}
+""",
     "gke-cluster-name-at-limit": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -919,6 +933,30 @@ EXPECTED_RESOURCE_COUNTS = {
     "gke-ci-oidc-rbac-admin-enabled": {
         "google_project_iam_custom_role": 1,
     },
+    # The planned_resources walk reaches the prereqs module's own resources;
+    # the single service-account member binding there is the controller's
+    # actAs grant scoped to the node service account (the workload-identity
+    # submodule's binding sits a level deeper).
+    "karpenter-prereqs-canonical-role": {
+        "google_project_iam_custom_role": 1,
+        "google_service_account_iam_member": 1,
+    },
+}
+
+# Permissions GCP refuses to grant in a custom project role, plus
+# iam.serviceAccounts.actAs, which the module deliberately binds on the node
+# service account instead. Any of these in the planned role fails the case.
+EXPECTED_FORBIDDEN_ROLE_PERMISSIONS = {
+    "karpenter-prereqs-canonical-role": {
+        "container.nodePools.create",
+        "container.nodePools.get",
+        "container.nodePools.list",
+        "container.nodePools.update",
+        "container.nodePools.delete",
+        "compute.regionInstanceTemplates.get",
+        "compute.regionInstanceTemplates.list",
+        "iam.serviceAccounts.actAs",
+    },
 }
 
 # The generated CEL attribute_condition is asserted verbatim — escaping and
@@ -1015,7 +1053,7 @@ def main() -> int:
                     print(diagnostics[-4000:])
                 else:
                     planned = None
-                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS:
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
                             failures.append(f"{name}: could not inspect plan")
@@ -1055,6 +1093,21 @@ def main() -> int:
                         condition = wip_providers[0]["values"]["attribute_condition"] if len(wip_providers) == 1 else None
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
+                            continue
+                    if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
+                        roles = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_project_iam_custom_role"
+                        ]
+                        granted = {
+                            permission
+                            for role in roles
+                            for permission in role["values"].get("permissions", [])
+                        }
+                        leaked = granted & EXPECTED_FORBIDDEN_ROLE_PERMISSIONS[name]
+                        if leaked:
+                            failures.append(f"{name}: custom role grants non-grantable or out-of-scope permissions: {sorted(leaked)}")
                             continue
                     print(f"PASS {name} (pass)")
                 continue
