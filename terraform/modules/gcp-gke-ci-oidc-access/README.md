@@ -20,6 +20,8 @@ CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are exp
 | service_account_id | Service account ID to create | `string` | yes | — |
 | service_account_display_name | Display name for the SA | `string` | no | service_account_id |
 | project_roles | GCP roles to grant to the SA | `list(string)` | yes | — |
+| kubernetes_rbac_admin | Custom-role grant of namespaced Role/RoleBinding administration | `bool` | no | `false` |
+| kubernetes_rbac_admin_role_id | Custom IAM role ID for the grant | `string` | no | derived from service_account_id |
 
 ## Outputs
 
@@ -29,6 +31,7 @@ CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are exp
 | workload_identity_provider_name | Full resource name of the provider |
 | service_account_email | Email of the created service account |
 | service_account_id | Account ID of the created service account |
+| kubernetes_rbac_admin_role_name | Custom role name when the grant is enabled, null otherwise |
 
 ## Usage
 
@@ -56,4 +59,5 @@ module "ci_deploy" {
 
 - The `attribute_condition` is a required CEL expression evaluated against OIDC token assertions. It is the primary scoping mechanism — the SA IAM binding grants `roles/iam.workloadIdentityUser` to all identities in the Workload Identity Pool, so the condition on the provider is what restricts access.
 - `project_roles` should include at minimum `roles/container.developer` for GKE deploy access.
+- `kubernetes_rbac_admin` exists because a workload deploy pipeline applies namespaced RBAC objects that `roles/container.developer` cannot create — Roles and RoleBindings specifically. No predefined GCP role grants Kubernetes object administration without also granting cluster lifecycle, so the module mints a custom role scoped to `container.roles.*` and `container.roleBindings.*` and binds it to the same service account. It grants no cluster-lifecycle permission.
 - Workload Identity pools and providers are global resources within a project.

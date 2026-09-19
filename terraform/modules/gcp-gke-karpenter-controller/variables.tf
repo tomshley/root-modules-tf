@@ -67,3 +67,9 @@ variable "extra_helm_values" {
   default     = []
   description = "Additional Helm values appended after module-managed values."
 }
+
+variable "helm_timeout_seconds" {
+  type        = number
+  default     = 300
+  description = "Helm wait timeout for the karpenter-crd and karpenter releases. Raise on cold first installs where node provisioning and image pulls exceed the default five minutes."
+}

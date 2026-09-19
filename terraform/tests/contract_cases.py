@@ -19,6 +19,8 @@ MODULES = {
     "postgres-binding",
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
+    "gcp-gke-ci-oidc-access",
+    "gcp-karpenter-prereqs",
     "gcp-gke-cluster",
     "aws-eks-cluster",
     "gcp-cloudsql-postgres",
@@ -545,6 +547,96 @@ module "ci" {
   ]
 }
 """,
+    "gke-ci-oidc-rbac-admin-off": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id          = "contract-test-project"
+  pool_id             = "contract-ci"
+  provider_id         = "contract-oidc"
+  oidc_issuer_url     = "https://gitlab.com"
+  attribute_mapping   = { "google.subject" = "assertion.sub" }
+  attribute_condition = "assertion.ref_protected == 'true'"
+  service_account_id  = "contract-ci-deploy"
+  project_roles       = ["roles/container.developer"]
+}
+""",
+    "gke-ci-oidc-rbac-admin-enabled": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id            = "contract-test-project"
+  pool_id               = "contract-ci"
+  provider_id           = "contract-oidc"
+  oidc_issuer_url       = "https://gitlab.com"
+  attribute_mapping     = { "google.subject" = "assertion.sub" }
+  attribute_condition   = "assertion.ref_protected == 'true'"
+  service_account_id    = "contract-ci-deploy"
+  project_roles         = ["roles/container.developer"]
+  kubernetes_rbac_admin = true
+}
+""",
+    "gke-ci-oidc-rbac-admin-role-id-invalid": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id                    = "contract-test-project"
+  pool_id                       = "contract-ci"
+  provider_id                   = "contract-oidc"
+  oidc_issuer_url               = "https://gitlab.com"
+  attribute_mapping             = { "google.subject" = "assertion.sub" }
+  attribute_condition           = "assertion.ref_protected == 'true'"
+  service_account_id            = "contract-ci-deploy"
+  project_roles                 = ["roles/container.developer"]
+  kubernetes_rbac_admin         = true
+  kubernetes_rbac_admin_role_id = "bad-role-id"
+}
+""",
+    "gke-ci-oidc-rbac-admin-role-id-too-long": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id                    = "contract-test-project"
+  pool_id                       = "contract-ci"
+  provider_id                   = "contract-oidc"
+  oidc_issuer_url               = "https://gitlab.com"
+  attribute_mapping             = { "google.subject" = "assertion.sub" }
+  attribute_condition           = "assertion.ref_protected == 'true'"
+  service_account_id            = "contract-ci-deploy"
+  project_roles                 = ["roles/container.developer"]
+  kubernetes_rbac_admin         = true
+  kubernetes_rbac_admin_role_id = "TOOLONGROLEID"
+}
+""".replace("TOOLONGROLEID", "a" * 65),
+    "karpenter-prereqs-canonical-role": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "prereqs" {
+  source = "./modules/gcp-karpenter-prereqs"
+
+  project_id                 = "contract-test-project"
+  project_name_prefix        = "my-project"
+  node_service_account_email = "contract-node@contract-test-project.iam.gserviceaccount.com"
+}
+""",
     "gke-cluster-name-at-limit": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -833,6 +925,38 @@ EXPECTED_RESOURCE_COUNTS = {
         "cloudflare_zero_trust_tunnel_cloudflared": 1,
         "cloudflare_zero_trust_tunnel_cloudflared_config": 1,
     },
+    # The opt-in RBAC grant must add exactly one custom role when enabled
+    # and none when left at its default — the back-compat contract.
+    "gke-ci-oidc-rbac-admin-off": {
+        "google_project_iam_custom_role": 0,
+    },
+    "gke-ci-oidc-rbac-admin-enabled": {
+        "google_project_iam_custom_role": 1,
+    },
+    # The planned_resources walk reaches the prereqs module's own resources;
+    # the single service-account member binding there is the controller's
+    # actAs grant scoped to the node service account (the workload-identity
+    # submodule's binding sits a level deeper).
+    "karpenter-prereqs-canonical-role": {
+        "google_project_iam_custom_role": 1,
+        "google_service_account_iam_member": 1,
+    },
+}
+
+# Permissions GCP refuses to grant in a custom project role, plus
+# iam.serviceAccounts.actAs, which the module deliberately binds on the node
+# service account instead. Any of these in the planned role fails the case.
+EXPECTED_FORBIDDEN_ROLE_PERMISSIONS = {
+    "karpenter-prereqs-canonical-role": {
+        "container.nodePools.create",
+        "container.nodePools.get",
+        "container.nodePools.list",
+        "container.nodePools.update",
+        "container.nodePools.delete",
+        "compute.regionInstanceTemplates.get",
+        "compute.regionInstanceTemplates.list",
+        "iam.serviceAccounts.actAs",
+    },
 }
 
 # The generated CEL attribute_condition is asserted verbatim — escaping and
@@ -866,6 +990,8 @@ EXPECTED_DIAGNOSTICS = {
     "gcp-ci-oidc-reserved-prefix": "reserved prefix 'gcp-'",
     "gcp-ci-oidc-unsupported-match": 'match must be "exact" or "wildcard"',
     "gcp-ci-oidc-claim-not-identifier": "must be a CEL-safe identifier",
+    "gke-ci-oidc-rbac-admin-role-id-invalid": "custom role ID format",
+    "gke-ci-oidc-rbac-admin-role-id-too-long": "custom role ID format",
     "gke-cluster-name-too-long": "GKE cluster name",
     "gke-cluster-name-invalid-shape": "GKE cluster name",
     "eks-cluster-name-too-long": "at most 100 characters",
@@ -927,7 +1053,7 @@ def main() -> int:
                     print(diagnostics[-4000:])
                 else:
                     planned = None
-                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS:
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
                             failures.append(f"{name}: could not inspect plan")
@@ -967,6 +1093,21 @@ def main() -> int:
                         condition = wip_providers[0]["values"]["attribute_condition"] if len(wip_providers) == 1 else None
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
+                            continue
+                    if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
+                        roles = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_project_iam_custom_role"
+                        ]
+                        granted = {
+                            permission
+                            for role in roles
+                            for permission in role["values"].get("permissions", [])
+                        }
+                        leaked = granted & EXPECTED_FORBIDDEN_ROLE_PERMISSIONS[name]
+                        if leaked:
+                            failures.append(f"{name}: custom role grants non-grantable or out-of-scope permissions: {sorted(leaked)}")
                             continue
                     print(f"PASS {name} (pass)")
                 continue
