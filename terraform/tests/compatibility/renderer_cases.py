@@ -201,6 +201,7 @@ def write_stub_tofu(directory: Path) -> Path:
         '    present_number) printf \'42\\n\'; exit 0 ;;\n'
         '    present_object) printf \'{"tls":true,"n":1}\\n\'; exit 0 ;;\n'
         '    present_null)   printf \'null\\n\'; exit 0 ;;\n'
+        '    sensitive_token) printf \'"tok3n-real"\\n\'; exit 0 ;;\n'
         '    *) exit 1 ;;\n'
         '  esac\n'
         'elif [[ "$1 $2" == "output -raw" ]]; then\n'
@@ -277,7 +278,18 @@ def check_read_tf_output_fallback(toolbox: Path, work: Path) -> None:
         if actual != expected:
             raise SystemExit(f"read_tf_output {key}: expected {expected!r}, got {actual!r}")
 
+    # A sensitive output: `make output` prints the redaction marker, which is
+    # not a value — the read must fall through to -json for the real value
+    # rather than emit the marker into a rendered file.
+    sensitive_stack = work / "sensitive-stack"
+    sensitive_stack.mkdir()
+    write_stub_stack(sensitive_stack, {"sensitive_token": "<sensitive>"})
+    actual = read_helper(toolbox, sensitive_stack, "sensitive_token", env)
+    if actual != "tok3n-real":
+        raise SystemExit(f"sensitive redaction marker leaked as a value: {actual!r}")
+
     print("PASS renderer-cases read-tf-output-json-fallback")
+    print("PASS renderer-negative read-tf-output-sensitive-marker")
     print("PASS renderer-negative read-tf-output-stateless")
 
 
