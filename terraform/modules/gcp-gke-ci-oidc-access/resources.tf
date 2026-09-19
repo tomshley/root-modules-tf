@@ -57,9 +57,16 @@ resource "google_project_iam_custom_role" "kubernetes_rbac_admin" {
   title       = "CI Kubernetes RBAC Administration"
   description = "Namespaced Role and RoleBinding administration for a CI deploy service account. Grants no cluster-lifecycle permission."
 
+  # Kubernetes RBAC privilege-escalation prevention requires more than the
+  # CRUD verbs: creating a Role that grants permissions the caller does not
+  # hold needs container.roles.escalate, and creating a RoleBinding that
+  # references a Role needs container.roles.bind (GCP attaches the bind verb
+  # to the role resource, not to the binding).
   permissions = [
+    "container.roles.bind",
     "container.roles.create",
     "container.roles.delete",
+    "container.roles.escalate",
     "container.roles.get",
     "container.roles.list",
     "container.roles.update",
