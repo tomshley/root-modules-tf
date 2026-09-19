@@ -97,3 +97,21 @@ variable "project_roles" {
   }
 }
 
+variable "kubernetes_rbac_admin" {
+  type        = bool
+  default     = false
+  nullable    = false
+  description = "Grant the CI service account administration of namespaced Kubernetes RBAC objects (Roles and RoleBindings) through a custom project role, in addition to project_roles. Workload deploy pipelines generally need this: no predefined GCP role grants Kubernetes object administration without also granting cluster lifecycle. Defaults to false, which adds no resources, so existing consumers re-plan with no changes."
+}
+
+variable "kubernetes_rbac_admin_role_id" {
+  type        = string
+  default     = null
+  description = "Custom IAM role ID for the RBAC administration grant. Derived from service_account_id when unset."
+
+  validation {
+    condition     = var.kubernetes_rbac_admin_role_id == null || can(regex("^[a-zA-Z0-9_.]{3,64}$", var.kubernetes_rbac_admin_role_id))
+    error_message = "kubernetes_rbac_admin_role_id must match GCP's custom role ID format: 3-64 characters of letters, digits, underscores, or periods."
+  }
+}
+

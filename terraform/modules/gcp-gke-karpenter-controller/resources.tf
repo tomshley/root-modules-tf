@@ -12,4 +12,5 @@ module "karpenter" {
   node_network_tags                       = var.node_network_tags
   create_namespace                        = var.create_namespace
   extra_helm_values                       = var.extra_helm_values
+  helm_timeout_seconds                    = var.helm_timeout_seconds
 }

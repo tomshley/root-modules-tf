@@ -38,3 +38,43 @@ resource "google_project_iam_member" "ci_deploy" {
   role    = each.value
   member  = "serviceAccount:${google_service_account.ci_deploy.email}"
 }
+
+# Kubernetes RBAC administration is a custom role by necessity: every
+# predefined role that manages namespaced RBAC objects also manages the
+# cluster itself, and a deploy identity must not carry cluster lifecycle.
+locals {
+  kubernetes_rbac_admin_role_id = coalesce(
+    var.kubernetes_rbac_admin_role_id,
+    "${replace(var.service_account_id, "-", "_")}_rbac_admin"
+  )
+}
+
+resource "google_project_iam_custom_role" "kubernetes_rbac_admin" {
+  count = var.kubernetes_rbac_admin ? 1 : 0
+
+  project     = var.project_id
+  role_id     = local.kubernetes_rbac_admin_role_id
+  title       = "CI Kubernetes RBAC Administration"
+  description = "Namespaced Role and RoleBinding administration for a CI deploy service account. Grants no cluster-lifecycle permission."
+
+  permissions = [
+    "container.roles.create",
+    "container.roles.delete",
+    "container.roles.get",
+    "container.roles.list",
+    "container.roles.update",
+    "container.roleBindings.create",
+    "container.roleBindings.delete",
+    "container.roleBindings.get",
+    "container.roleBindings.list",
+    "container.roleBindings.update",
+  ]
+}
+
+resource "google_project_iam_member" "ci_deploy_rbac_admin" {
+  count = var.kubernetes_rbac_admin ? 1 : 0
+
+  project = var.project_id
+  role    = google_project_iam_custom_role.kubernetes_rbac_admin[0].name
+  member  = "serviceAccount:${google_service_account.ci_deploy.email}"
+}
