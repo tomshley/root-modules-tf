@@ -6,6 +6,18 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.6.0] — 2026-09-19
+
+### Added
+
+- **gcp-gke-ci-oidc-access**: `kubernetes_rbac_admin` grants a CI deploy identity administration of namespaced Kubernetes RBAC objects through a custom project role. Workload deploy pipelines generally need this, because applying a workload that carries its own Role and RoleBinding fails under `roles/container.developer`, and no predefined role grants Kubernetes object administration without also granting cluster lifecycle — which a deploy identity must not hold. The AWS counterpart already ships a deploy identity with this reach, so the two module families now offer the same capability. Defaults to off and adds no resources, so existing consumers re-plan with no changes.
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: `helm_timeout_seconds` sets the wait timeout for the CRD and controller releases. The previous behaviour took Helm's five-minute default, which a cold first install can exceed while images pull and the controller becomes ready, leaving a failed release behind. Defaults to `300`, matching the previous timeout exactly.
+
+### Fixed
+
+- **gcp-karpenter-prereqs** (behaviour change): the controller's custom role could not be created at all. `container.nodePools.create` and `container.nodePools.get` are not grantable in a custom role, so every apply failed with a bad-request error naming the permission, and `compute.regionInstanceTemplates.*` does not exist as a grantable permission either. The role now follows the provider's maintained canonical definition: node pool operations resolve through `container.clusters.get` and `container.clusters.update`, regional templates through `compute.instanceTemplates.*`, and a dozen permissions the controller genuinely calls — startup project discovery, release-channel image resolution, instance metadata, service-account and tag writes, and external-address use — are now granted rather than missing.
+- **gcp-karpenter-prereqs** (behaviour change): `iam.serviceAccounts.actAs` is no longer granted at project level, where it let the controller impersonate every service account in the project. It is now bound as `roles/iam.serviceAccountUser` on the node service account alone, which is the only identity the controller needs to launch nodes as.
+
 ## [2.5.1] — 2026-09-18
 
 ### Fixed
