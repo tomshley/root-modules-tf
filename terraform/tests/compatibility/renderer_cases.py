@@ -94,9 +94,45 @@ def check_cloudsql_bundles(toolbox: Path, work: Path) -> None:
     stub.write_text("#!/usr/bin/env bash\nexit 1\n")
     stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     fail_env = {**os.environ, "PATH": f"{failing_gcloud}:{os.environ['PATH']}"}
-    expect_skip(run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
-                           "--secret-id", "db-master", env=fail_env),
-                out, "cloudsql-master unreadable secret")
+    # A failed credential read is fatal, not a skip: the master credential is
+    # a required payload and a silent skip lets a stale or empty file become
+    # Kubernetes Secret data, surfacing as an auth failure far from its cause.
+    unreadable = run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
+                            "--secret-id", "db-master", env=fail_env)
+    expect_failure(unreadable, "could not read Secret Manager",
+                   "cloudsql-master unreadable secret is fatal")
+    if out.exists():
+        raise SystemExit("cloudsql-master wrote a file on unreadable secret")
+
+    # A readable but passwordless payload is equally fatal — `username=` /
+    # `password=` empty lines must never be written.
+    empty_pass_bin = work / "bin-empty-pass"
+    empty_pass_bin.mkdir()
+    stub = empty_pass_bin / "gcloud"
+    stub.write_text("#!/usr/bin/env bash\nprintf '%s\\n' '{\"username\":\"appuser\"}'\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    empty_pass_env = {**os.environ, "PATH": f"{empty_pass_bin}:{os.environ['PATH']}"}
+    passwordless = run_bundle(toolbox, "cloudsql-master", "--out", str(out), "--project", "p",
+                              "--secret-id", "db-master", env=empty_pass_env)
+    expect_failure(passwordless, "no password field",
+                   "cloudsql-master empty password is fatal")
+    if out.exists():
+        raise SystemExit("cloudsql-master wrote a file on empty password")
+
+    # aurora-master carries the same required-credential contract on AWS.
+    failing_aws = work / "bin-aws-fail"
+    failing_aws.mkdir()
+    stub = failing_aws / "aws"
+    stub.write_text("#!/usr/bin/env bash\nexit 1\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    aws_fail_env = {**os.environ, "PATH": f"{failing_aws}:{os.environ['PATH']}"}
+    aurora_out = work / "aurora-master.env"
+    aurora = run_bundle(toolbox, "aurora-master", "--out", str(aurora_out), "--region", "r",
+                        "--secret-arn", "arn:aws:secretsmanager:r:0:secret:x", env=aws_fail_env)
+    expect_failure(aurora, "could not read Secrets Manager",
+                   "aurora-master unreadable secret is fatal")
+    if aurora_out.exists():
+        raise SystemExit("aurora-master wrote a file on unreadable secret")
 
     # Happy paths: stub TF outputs and a stub gcloud serving the payload.
     stack = work / "data-stack"
@@ -145,6 +181,9 @@ def check_cloudsql_bundles(toolbox: Path, work: Path) -> None:
     print("PASS renderer-cases cloudsql-master")
     print("PASS renderer-negative cloudsql-flag-validation")
     print("PASS renderer-negative cloudsql-missing-secret")
+    print("PASS renderer-negative cloudsql-unreadable-credential-fatal")
+    print("PASS renderer-negative cloudsql-empty-password-fatal")
+    print("PASS renderer-negative aurora-unreadable-credential-fatal")
 
 
 def write_stub_tofu(directory: Path) -> Path:
@@ -162,6 +201,7 @@ def write_stub_tofu(directory: Path) -> Path:
         '    present_number) printf \'42\\n\'; exit 0 ;;\n'
         '    present_object) printf \'{"tls":true,"n":1}\\n\'; exit 0 ;;\n'
         '    present_null)   printf \'null\\n\'; exit 0 ;;\n'
+        '    sensitive_token) printf \'"tok3n-real"\\n\'; exit 0 ;;\n'
         '    *) exit 1 ;;\n'
         '  esac\n'
         'elif [[ "$1 $2" == "output -raw" ]]; then\n'
@@ -238,7 +278,18 @@ def check_read_tf_output_fallback(toolbox: Path, work: Path) -> None:
         if actual != expected:
             raise SystemExit(f"read_tf_output {key}: expected {expected!r}, got {actual!r}")
 
+    # A sensitive output: `make output` prints the redaction marker, which is
+    # not a value — the read must fall through to -json for the real value
+    # rather than emit the marker into a rendered file.
+    sensitive_stack = work / "sensitive-stack"
+    sensitive_stack.mkdir()
+    write_stub_stack(sensitive_stack, {"sensitive_token": "<sensitive>"})
+    actual = read_helper(toolbox, sensitive_stack, "sensitive_token", env)
+    if actual != "tok3n-real":
+        raise SystemExit(f"sensitive redaction marker leaked as a value: {actual!r}")
+
     print("PASS renderer-cases read-tf-output-json-fallback")
+    print("PASS renderer-negative read-tf-output-sensitive-marker")
     print("PASS renderer-negative read-tf-output-stateless")
 
 

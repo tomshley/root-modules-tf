@@ -147,6 +147,12 @@ read_tf_output() {
   val=$(cd "$dir" && make output 2>/dev/null \
     | grep -E "^${key}\\s" \
     | awk -F'= ' '{print $2}' | tr -d '"' | tr -d ' ')
+  # `make output` redacts sensitive outputs ("<sensitive>" or "(sensitive
+  # value)" — spaces stripped above). A redaction marker is not a value:
+  # treat it as empty so the -json fallback reads the real value.
+  case "$val" in
+    "<sensitive>"|"(sensitivevalue)") val="" ;;
+  esac
   if [[ -z "$val" ]]; then
     local raw
     if raw=$(cd "$dir" && $TOFU output -json "$key" 2>/dev/null); then

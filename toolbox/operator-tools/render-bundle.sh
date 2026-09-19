@@ -292,8 +292,10 @@ Optional flags:
 Output file format:
   username=..., password=...
 
-Skip behaviour: if the secret cannot be read or the password is empty, emits
-a skip and writes nothing.
+Skip behaviour: if the secret ARN is absent from the stack outputs, emits a
+skip and writes nothing. A failed or empty credential read is FATAL — the
+master credential is a required payload, and a silent skip lets a stale or
+empty file reach the cluster as Secret data.
 EOF
 }
 
@@ -329,14 +331,14 @@ _run_aurora_master() {
   local secret_json db_user db_pass
   secret_json=$(get_secret_string "$secret_arn" "$region")
   if [[ -z "$secret_json" ]]; then
-    emit_skip "$(basename "$out") (could not read Secrets Manager: $secret_arn)"
-    return
+    echo "aurora-master: could not read Secrets Manager: $secret_arn — the master credential is required; check auth/IAM rather than shipping an empty value" >&2
+    exit 1
   fi
   db_user=$(echo "$secret_json" | jq -r --arg d "$default_user" '.username // $d')
   db_pass=$(echo "$secret_json" | jq -r '.password // empty')
   if [[ -z "$db_pass" ]]; then
-    emit_skip "$(basename "$out") (password empty in Secrets Manager)"
-    return
+    echo "aurora-master: secret $secret_arn has no password field — refusing to render an empty credential" >&2
+    exit 1
   fi
 
   write_file_secure "$out" 600 <<EOF
@@ -670,8 +672,10 @@ Optional flags:
 Output file format:
   username=..., password=...
 
-Skip behaviour: if the secret cannot be read or the password is empty, emits
-a skip and writes nothing.
+Skip behaviour: if the secret id is absent from the stack outputs, emits a
+skip and writes nothing. A failed or empty credential read is FATAL — the
+master credential is a required payload, and a silent skip lets a stale or
+empty file reach the cluster as Secret data.
 EOF
 }
 
@@ -707,14 +711,14 @@ _run_cloudsql_master() {
   local secret_json db_user db_pass
   secret_json=$(get_secret_string_gcp "$secret_id" "$project")
   if [[ -z "$secret_json" ]]; then
-    emit_skip "$(basename "$out") (could not read Secret Manager: $secret_id)"
-    return
+    echo "cloudsql-master: could not read Secret Manager: $secret_id — the master credential is required; check auth/IAM rather than shipping an empty value" >&2
+    exit 1
   fi
   db_user=$(echo "$secret_json" | jq -r --arg d "$default_user" '.username // $d')
   db_pass=$(echo "$secret_json" | jq -r '.password // empty')
   if [[ -z "$db_pass" ]]; then
-    emit_skip "$(basename "$out") (password empty in Secret Manager)"
-    return
+    echo "cloudsql-master: secret $secret_id has no password field — refusing to render an empty credential" >&2
+    exit 1
   fi
 
   write_file_secure "$out" 600 <<EOF
@@ -1374,7 +1378,11 @@ _run_aws_arns() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp'" EXIT
 
-  echo "# AWS resource ARNs — rendered from one or more TF stack outputs" > "$tmp"
+  # The header must not name a cloud. This bundle is a generic stack-output
+  # projector — the name is historical — and consumers on any provider emit
+  # arbitrary keys through it, so an AWS-specific header is simply untrue in
+  # the file it lands in.
+  echo "# Stack output values — rendered from one or more TF stack outputs" > "$tmp"
   local spec key rhs stack output map_key val fallback_spec
   for spec in "${EMITS[@]}"; do
     key="${spec%%=*}"
