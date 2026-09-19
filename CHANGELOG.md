@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.6.1] — 2026-09-19
+
+### Fixed
+
+- **gcp-gke-ci-oidc-access**: `kubernetes_rbac_admin` could never create the RBAC objects it exists for. Kubernetes refuses to let a principal create a Role granting permissions the principal does not itself hold, and refuses to create a RoleBinding referencing a Role the principal cannot bind — so the CRUD verbs alone left a deploy identity able to update an existing Role but never to create one. The role now carries `container.roles.escalate` and `container.roles.bind`; the bind permission attaches to the role resource rather than the binding, matching where Kubernetes checks the verb. Holding the granted permissions directly is not an alternative route, because `watch` has no GCP IAM equivalent. The grant stays namespaced: cluster-scoped RBAC permissions remain excluded, so a deploy identity cannot grant permissions across every namespace.
+
 ## [2.6.0] — 2026-09-19
 
 ### Added

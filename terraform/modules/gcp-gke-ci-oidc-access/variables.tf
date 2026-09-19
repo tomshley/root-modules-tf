@@ -101,7 +101,7 @@ variable "kubernetes_rbac_admin" {
   type        = bool
   default     = false
   nullable    = false
-  description = "Grant the CI service account administration of namespaced Kubernetes RBAC objects (Roles and RoleBindings) through a custom project role, in addition to project_roles. Workload deploy pipelines generally need this: no predefined GCP role grants Kubernetes object administration without also granting cluster lifecycle. Defaults to false, which adds no resources, so existing consumers re-plan with no changes."
+  description = "Grant the CI service account administration of namespaced Kubernetes RBAC objects (Roles and RoleBindings) through a custom project role, in addition to project_roles. Workload deploy pipelines generally need this: no predefined GCP role grants Kubernetes object administration without also granting cluster lifecycle. The role carries container.roles.escalate and container.roles.bind because Kubernetes' privilege-escalation prevention otherwise refuses to let the deploy identity create a Role granting permissions it does not itself hold, or bind a Role it cannot escalate. Defaults to false, which adds no resources, so existing consumers re-plan with no changes."
 }
 
 variable "kubernetes_rbac_admin_role_id" {

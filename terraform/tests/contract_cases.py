@@ -943,10 +943,47 @@ EXPECTED_RESOURCE_COUNTS = {
     },
 }
 
+# Permissions a case's custom role must carry — the escalate/bind pair
+# exists because Kubernetes' privilege-escalation prevention refuses
+# Role/RoleBinding creation without them, which is not obvious from the
+# CRUD verbs alone.
+EXPECTED_REQUIRED_ROLE_PERMISSIONS = {
+    "gke-ci-oidc-rbac-admin-enabled": {
+        "container.roles.bind",
+        "container.roles.create",
+        "container.roles.delete",
+        "container.roles.escalate",
+        "container.roles.get",
+        "container.roles.list",
+        "container.roles.update",
+        "container.roleBindings.create",
+        "container.roleBindings.delete",
+        "container.roleBindings.get",
+        "container.roleBindings.list",
+        "container.roleBindings.update",
+    },
+}
+
 # Permissions GCP refuses to grant in a custom project role, plus
 # iam.serviceAccounts.actAs, which the module deliberately binds on the node
 # service account instead. Any of these in the planned role fails the case.
 EXPECTED_FORBIDDEN_ROLE_PERMISSIONS = {
+    # The RBAC grant is deliberately namespaced — cluster-scoped RBAC writes
+    # would let a deploy identity grant permissions across every namespace.
+    "gke-ci-oidc-rbac-admin-enabled": {
+        "container.clusterRoles.create",
+        "container.clusterRoles.delete",
+        "container.clusterRoles.escalate",
+        "container.clusterRoles.bind",
+        "container.clusterRoles.get",
+        "container.clusterRoles.list",
+        "container.clusterRoles.update",
+        "container.clusterRoleBindings.create",
+        "container.clusterRoleBindings.delete",
+        "container.clusterRoleBindings.get",
+        "container.clusterRoleBindings.list",
+        "container.clusterRoleBindings.update",
+    },
     "karpenter-prereqs-canonical-role": {
         "container.nodePools.create",
         "container.nodePools.get",
@@ -1053,7 +1090,7 @@ def main() -> int:
                     print(diagnostics[-4000:])
                 else:
                     planned = None
-                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
+                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
                             failures.append(f"{name}: could not inspect plan")
@@ -1094,7 +1131,7 @@ def main() -> int:
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
                             continue
-                    if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
+                    if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
                         roles = [
                             resource
                             for resource in planned_resources(planned["root_module"])
@@ -1105,10 +1142,16 @@ def main() -> int:
                             for role in roles
                             for permission in role["values"].get("permissions", [])
                         }
-                        leaked = granted & EXPECTED_FORBIDDEN_ROLE_PERMISSIONS[name]
-                        if leaked:
-                            failures.append(f"{name}: custom role grants non-grantable or out-of-scope permissions: {sorted(leaked)}")
-                            continue
+                        if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS:
+                            leaked = granted & EXPECTED_FORBIDDEN_ROLE_PERMISSIONS[name]
+                            if leaked:
+                                failures.append(f"{name}: custom role grants non-grantable or out-of-scope permissions: {sorted(leaked)}")
+                                continue
+                        if name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
+                            missing = EXPECTED_REQUIRED_ROLE_PERMISSIONS[name] - granted
+                            if missing:
+                                failures.append(f"{name}: custom role is missing required permissions: {sorted(missing)}")
+                                continue
                     print(f"PASS {name} (pass)")
                 continue
             expected_diagnostic = EXPECTED_DIAGNOSTICS.get(name)
