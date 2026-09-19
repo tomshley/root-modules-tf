@@ -1378,7 +1378,11 @@ _run_aws_arns() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp'" EXIT
 
-  echo "# AWS resource ARNs — rendered from one or more TF stack outputs" > "$tmp"
+  # The header must not name a cloud. This bundle is a generic stack-output
+  # projector — the name is historical — and consumers on any provider emit
+  # arbitrary keys through it, so an AWS-specific header is simply untrue in
+  # the file it lands in.
+  echo "# Stack output values — rendered from one or more TF stack outputs" > "$tmp"
   local spec key rhs stack output map_key val fallback_spec
   for spec in "${EMITS[@]}"; do
     key="${spec%%=*}"
