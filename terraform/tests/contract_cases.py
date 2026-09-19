@@ -19,6 +19,7 @@ MODULES = {
     "postgres-binding",
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
+    "gcp-gke-ci-oidc-access",
     "gcp-gke-cluster",
     "aws-eks-cluster",
     "gcp-cloudsql-postgres",
@@ -545,6 +546,83 @@ module "ci" {
   ]
 }
 """,
+    "gke-ci-oidc-rbac-admin-off": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id          = "contract-test-project"
+  pool_id             = "contract-ci"
+  provider_id         = "contract-oidc"
+  oidc_issuer_url     = "https://gitlab.com"
+  attribute_mapping   = { "google.subject" = "assertion.sub" }
+  attribute_condition = "assertion.ref_protected == 'true'"
+  service_account_id  = "contract-ci-deploy"
+  project_roles       = ["roles/container.developer"]
+}
+""",
+    "gke-ci-oidc-rbac-admin-enabled": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id            = "contract-test-project"
+  pool_id               = "contract-ci"
+  provider_id           = "contract-oidc"
+  oidc_issuer_url       = "https://gitlab.com"
+  attribute_mapping     = { "google.subject" = "assertion.sub" }
+  attribute_condition   = "assertion.ref_protected == 'true'"
+  service_account_id    = "contract-ci-deploy"
+  project_roles         = ["roles/container.developer"]
+  kubernetes_rbac_admin = true
+}
+""",
+    "gke-ci-oidc-rbac-admin-role-id-invalid": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id                    = "contract-test-project"
+  pool_id                       = "contract-ci"
+  provider_id                   = "contract-oidc"
+  oidc_issuer_url               = "https://gitlab.com"
+  attribute_mapping             = { "google.subject" = "assertion.sub" }
+  attribute_condition           = "assertion.ref_protected == 'true'"
+  service_account_id            = "contract-ci-deploy"
+  project_roles                 = ["roles/container.developer"]
+  kubernetes_rbac_admin         = true
+  kubernetes_rbac_admin_role_id = "bad-role-id"
+}
+""",
+    "gke-ci-oidc-rbac-admin-role-id-too-long": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "ci" {
+  source = "../../../modules/gcp-gke-ci-oidc-access"
+
+  project_id                    = "contract-test-project"
+  pool_id                       = "contract-ci"
+  provider_id                   = "contract-oidc"
+  oidc_issuer_url               = "https://gitlab.com"
+  attribute_mapping             = { "google.subject" = "assertion.sub" }
+  attribute_condition           = "assertion.ref_protected == 'true'"
+  service_account_id            = "contract-ci-deploy"
+  project_roles                 = ["roles/container.developer"]
+  kubernetes_rbac_admin         = true
+  kubernetes_rbac_admin_role_id = "TOOLONGROLEID"
+}
+""".replace("TOOLONGROLEID", "a" * 65),
     "gke-cluster-name-at-limit": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -833,6 +911,14 @@ EXPECTED_RESOURCE_COUNTS = {
         "cloudflare_zero_trust_tunnel_cloudflared": 1,
         "cloudflare_zero_trust_tunnel_cloudflared_config": 1,
     },
+    # The opt-in RBAC grant must add exactly one custom role when enabled
+    # and none when left at its default — the back-compat contract.
+    "gke-ci-oidc-rbac-admin-off": {
+        "google_project_iam_custom_role": 0,
+    },
+    "gke-ci-oidc-rbac-admin-enabled": {
+        "google_project_iam_custom_role": 1,
+    },
 }
 
 # The generated CEL attribute_condition is asserted verbatim — escaping and
@@ -866,6 +952,8 @@ EXPECTED_DIAGNOSTICS = {
     "gcp-ci-oidc-reserved-prefix": "reserved prefix 'gcp-'",
     "gcp-ci-oidc-unsupported-match": 'match must be "exact" or "wildcard"',
     "gcp-ci-oidc-claim-not-identifier": "must be a CEL-safe identifier",
+    "gke-ci-oidc-rbac-admin-role-id-invalid": "custom role ID format",
+    "gke-ci-oidc-rbac-admin-role-id-too-long": "custom role ID format",
     "gke-cluster-name-too-long": "GKE cluster name",
     "gke-cluster-name-invalid-shape": "GKE cluster name",
     "eks-cluster-name-too-long": "at most 100 characters",
