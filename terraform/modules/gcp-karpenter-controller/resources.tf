@@ -32,12 +32,13 @@ resource "helm_release" "karpenter" {
         tag        = "v0.3.0"
       }
       env = [{ name = "DEFAULT_NODEPOOL_SERVICE_ACCOUNT", value = var.node_service_account_email }]
-      settings = {
+      settings = merge({
         projectID       = var.project_id
         clusterName     = var.cluster_name
         clusterLocation = var.cluster_location
-        nodeLocation    = var.node_location
-      }
+        }, var.node_location == null ? {} : {
+        nodeLocation = var.node_location
+      })
     }
   })], var.extra_helm_values)
 

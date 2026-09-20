@@ -1,3 +1,30 @@
+locals {
+  effective_node_location = coalesce(var.node_location, var.cluster_location)
+  cluster_location_region = regex("^([a-z]+-[a-z]+[0-9]+)(?:-[a-z])?$", var.cluster_location)[0]
+}
+
+# The data source reads the cluster at the EFFECTIVE node location on purpose:
+# by the provider's contract that value must be exactly where the cluster lives,
+# so the read succeeds if and only if the value is right. A zone supplied for a
+# regional cluster fails the read at plan time instead of surfacing later as an
+# endless controller retry loop on node-pool API paths that never resolve. The
+# assertion then cross-checks that cluster_location resolves to the same region
+# the cluster actually lives in, so instance-type discovery and pricing are not
+# read from the wrong region. It is a check block so this stays advisory — a
+# principal lacking container.clusters.get gets a warning, never a broken plan.
+check "karpenter_addresses_the_cluster_where_it_lives" {
+  data "google_container_cluster" "karpenter_target" {
+    project  = var.project_id
+    name     = var.cluster_name
+    location = local.effective_node_location
+  }
+
+  assert {
+    condition     = local.cluster_location_region == regex("^([a-z]+-[a-z]+[0-9]+)(?:-[a-z])?$", data.google_container_cluster.karpenter_target.location)[0]
+    error_message = "cluster_location resolves to a different region than the cluster found at the effective node location; instance-type discovery and pricing would be read from the wrong region."
+  }
+}
+
 module "karpenter" {
   source = "../gcp-karpenter-controller"
 

@@ -6,6 +6,16 @@ This project follows Semantic Versioning.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: `node_location` was required, but there is no correct value a consumer can invent for it — for a regional cluster the only correct behaviour is to omit it so the controller defaults it to `cluster_location`, and supplying a zone instead makes every node-pool existence check and creation miss while the controller retries indefinitely. `node_location` now defaults to `null` and is omitted from the chart's `settings` map when unset; a consumer that still passes it explicitly renders identical Helm values. Both location variables are validated as GCP region-or-zone shapes.
+
+### Added
+
+- **gcp-gke-karpenter-controller**: an advisory `check` block reads the cluster at the effective node location and asserts `cluster_location` resolves to the region the cluster actually lives in, so a wrong location surfaces at plan time rather than as an endless controller retry loop. A principal without `container.clusters.get` gets a warning, never a failed plan.
+
 ## [2.6.2] — 2026-09-19
 
 ### Fixed
