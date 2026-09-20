@@ -39,7 +39,6 @@ module "karpenter" {
   project_id                              = var.project_id
   cluster_name                            = var.cluster_name
   cluster_location                        = var.region
-  node_location                           = var.region
   controller_google_service_account_email = module.karpenter_prereqs.controller_google_service_account_email
   node_service_account_email              = module.karpenter_prereqs.node_service_account_email
   node_network_tags                       = module.network.node_network_tags
