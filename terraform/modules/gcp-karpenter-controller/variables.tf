@@ -20,6 +20,11 @@ variable "node_location" {
     error_message = "node_location must be null or a GCP region (for example us-central1) or zone (for example us-central1-a)."
   }
 }
+variable "bootstrap_node_pool_name" {
+  type        = string
+  default     = null
+  description = "Name of an existing GKE node pool the controller bootstraps new nodes from. From provider v0.4.0 the controller no longer creates its own template node pools — it reads bootstrap metadata (the instance template) from an existing pool, discovered as \"default-pool\", else the first RUNNING pool in alphabetical order, else a \"karpenter-fallback\" pool it creates. Alphabetical discovery is incidental, not a contract: a cluster whose pools sort such that an ARM64 or otherwise unrepresentative pool comes first silently bootstraps from it. Set this to make the choice deterministic. Leave null to keep upstream discovery; an unset value emits no Helm key at all, so existing consumers are unaffected."
+}
 variable "controller_google_service_account_email" { type = string }
 variable "node_service_account_email" { type = string }
 variable "namespace" {
