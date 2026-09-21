@@ -84,3 +84,9 @@ variable "helm_timeout_seconds" {
   default     = 300
   description = "Helm wait timeout for the karpenter-crd and karpenter releases. Raise on cold first installs where node provisioning and image pulls exceed the default five minutes."
 }
+
+variable "bootstrap_node_pool_name" {
+  type        = string
+  default     = null
+  description = "Existing GKE node pool the controller bootstraps new nodes from. From provider v0.4.0 the controller no longer creates its own template node pools — it discovers an existing RUNNING pool (\"default-pool\", else first alphabetically, else a created \"karpenter-fallback\"). Alphabetical ordering is incidental, not a contract; set this to a pool whose shape you intend nodes to inherit. Leave null to keep upstream discovery."
+}
