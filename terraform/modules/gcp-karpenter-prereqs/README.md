@@ -11,4 +11,4 @@ The custom role's permission set follows the provider's maintained canonical rol
 
 `iam.serviceAccounts.actAs` is deliberately absent from the project-level role. The controller needs it only to launch nodes that run as the cluster's node service account, so the module binds `roles/iam.serviceAccountUser` on that service account alone. A project-level `actAs` would let the controller impersonate every service account in the project.
 
-The permission set is upstream's current canonical definition while the sibling `gcp-karpenter-controller` module pins chart `0.3.0`. A superset of what the pinned chart calls is safe; the chart pin is the value to revisit when tracking newer upstream releases, not this role.
+The permission set is upstream's current canonical definition while the sibling `gcp-karpenter-controller` module pins chart `0.6.0`. A superset of what the pinned chart calls is safe; the chart pin is the value to revisit when tracking newer upstream releases, not this role.

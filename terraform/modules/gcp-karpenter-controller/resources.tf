@@ -4,7 +4,7 @@ resource "helm_release" "crds" {
   create_namespace = var.create_namespace
   repository       = "https://cloudpilot-ai.github.io/karpenter-provider-gcp"
   chart            = "karpenter-crd"
-  version          = "0.3.0"
+  version          = "0.6.0"
   wait             = true
   timeout          = var.helm_timeout_seconds
 }
@@ -15,7 +15,7 @@ resource "helm_release" "karpenter" {
   create_namespace = var.create_namespace
   repository       = "https://cloudpilot-ai.github.io/karpenter-provider-gcp"
   chart            = "karpenter"
-  version          = "0.3.0"
+  version          = "0.6.0"
 
   values = concat([yamlencode({
     credentials = { enabled = false }
@@ -29,7 +29,7 @@ resource "helm_release" "karpenter" {
     controller = {
       image = {
         repository = "public.ecr.aws/cloudpilotai/gcp/karpenter"
-        tag        = "v0.3.0"
+        tag        = "v0.6.0"
       }
       env = [{ name = "DEFAULT_NODEPOOL_SERVICE_ACCOUNT", value = var.node_service_account_email }]
       settings = merge({
@@ -38,6 +38,8 @@ resource "helm_release" "karpenter" {
         clusterLocation = var.cluster_location
         }, var.node_location == null ? {} : {
         nodeLocation = var.node_location
+        }, var.bootstrap_node_pool_name == null ? {} : {
+        defaultNodePoolTemplateName = var.bootstrap_node_pool_name
       })
     }
   })], var.extra_helm_values)

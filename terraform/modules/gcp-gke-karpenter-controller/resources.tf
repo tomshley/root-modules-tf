@@ -40,4 +40,5 @@ module "karpenter" {
   create_namespace                        = var.create_namespace
   extra_helm_values                       = var.extra_helm_values
   helm_timeout_seconds                    = var.helm_timeout_seconds
+  bootstrap_node_pool_name                = var.bootstrap_node_pool_name
 }
