@@ -6,6 +6,20 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.7.0] — 2026-09-21
+
+### Changed
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: karpenter-provider-gcp charts and controller image `0.3.0` → `0.6.0`. Behaviour changes consumers inherit: the controller no longer creates `karpenter-default`/`karpenter-ubuntu`/ARM64 template pools at startup — it bootstraps new nodes from the instance template of an existing RUNNING pool; every node now carries the cluster-id-bearing `gke-<cluster>-<id[:8]>-node` tag that GKE's auto-created firewall rules target (older providers emitted only the generic `gke-<cluster>-node` tag, which no auto-created rule matches, leaving nodes unreachable by the control plane); a one-time GCENodeClass hash bump replaces existing Karpenter-managed nodes on the first reconcile after upgrade; and `GCENodeClass` gains structured `family`/`channel`/`version` image selectors alongside the now-deprecated `alias`.
+
+### Added
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: `bootstrap_node_pool_name` pins the node pool the controller reads its bootstrap instance template from (`controller.settings.defaultNodePoolTemplateName`). Without it the provider discovers `default-pool`, else the first RUNNING pool in alphabetical order, else a `karpenter-fallback` pool it creates — incidental ordering that can silently bootstrap from an unrepresentative pool. Defaults to null and emits no Helm value when unset, so existing consumers re-plan unchanged.
+
+### Fixed
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**, **gcp-karpenter-prereqs** documentation: corrected the claims that the provider creates its own template node pools and that the generic node tag alone matches GKE's auto-created firewall rules — both held only before provider v0.4.0.
+
 ## [2.6.3] — 2026-09-20
 
 ### Fixed
