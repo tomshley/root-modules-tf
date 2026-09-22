@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.8.0] — 2026-09-21
+
+### Added
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: `use_patched_dual_stack_image` selects the vendored controller build that sets the node NIC `stackType` from the cluster's IP allocation policy — the module resolves the vendored registry and the `v<chart>-dualstack` tag itself, so consumers write one flag instead of registry coordinates. Required for Karpenter nodes to reach Ready on dual-stack (`IPV4_IPV6`) clusters: provider `0.6.x` provisions IPv4-only node NICs, so GKE's control-plane IPAM never publishes podCIDRs and provisioned nodes sit `NotReady` until reaped — and `gcp-gke-cluster` builds every cluster dual-stack, so the defect is not optional for this module family. `controller_image` (`{repository, tag}`) remains the explicit escape hatch and is mutually exclusive with the flag; `image_pull_secrets` renders chart `imagePullSecrets` for private registries. All three default to current behaviour — rendered Helm values are byte-identical when unset. New `gcp-gke-karpenter-controller-image` example shows the wiring.
+
 ## [2.7.0] — 2026-09-21
 
 ### Changed
