@@ -61,7 +61,7 @@ resource "helm_release" "karpenter" {
         defaultNodePoolTemplateName = var.bootstrap_node_pool_name
       })
     }
-  }, length(var.image_pull_secrets) > 0 ? { imagePullSecrets = var.image_pull_secrets } : {}))], var.extra_helm_values)
+  }, length(var.image_pull_secrets) > 0 ? { imagePullSecrets = [for s in var.image_pull_secrets : { name = s }] } : {}))], var.extra_helm_values)
 
   depends_on = [helm_release.crds]
   wait       = true

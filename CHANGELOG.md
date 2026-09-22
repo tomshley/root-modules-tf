@@ -6,6 +6,12 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.8.1] — 2026-09-22
+
+### Fixed
+
+- **gcp-karpenter-controller**, **gcp-gke-karpenter-controller**: `image_pull_secrets` rendered a list of strings, which the chart's values schema rejects (`Expected: object`). Each name now renders as `{ name = … }` — the pod-spec `localObjectReference` shape — so a private-registry pull secret actually applies.
+
 ## [2.8.0] — 2026-09-21
 
 ### Added
