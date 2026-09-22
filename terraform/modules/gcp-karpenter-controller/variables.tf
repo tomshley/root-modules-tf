@@ -47,6 +47,34 @@ variable "extra_helm_values" {
   type    = list(string)
   default = []
 }
+variable "use_patched_dual_stack_image" {
+  type        = bool
+  default     = false
+  description = "Use the patched controller image that sets node NIC stackType from the cluster's IP allocation policy. Required for Karpenter nodes to reach Ready on dual-stack (IPV4_IPV6) clusters — the upstream controller provisions IPv4-only NICs, so GKE's IPAM never publishes podCIDRs. Resolves the vendored build for the pinned chart version; mutually exclusive with controller_image."
+
+  validation {
+    condition     = !(var.use_patched_dual_stack_image && var.controller_image != null)
+    error_message = "use_patched_dual_stack_image and controller_image are mutually exclusive — set controller_image to choose an arbitrary build, or the flag to use the vendored dual-stack build."
+  }
+}
+variable "controller_image" {
+  type = object({
+    repository = string
+    tag        = string
+  })
+  default     = null
+  description = "Explicit controller image override for the chart's controller.image.repository and .tag. Null keeps the upstream release image (or the vendored dual-stack build when use_patched_dual_stack_image is set)."
+
+  validation {
+    condition     = var.controller_image == null || (length(var.controller_image.repository) > 0 && length(var.controller_image.tag) > 0)
+    error_message = "controller_image.repository and controller_image.tag must both be non-empty when controller_image is set."
+  }
+}
+variable "image_pull_secrets" {
+  type        = list(string)
+  default     = []
+  description = "Names of existing Kubernetes Secrets in the controller namespace rendered as the chart's top-level imagePullSecrets. Required when controller_image lives in a registry the node service account cannot pull — for example a private GitLab container registry behind a read_registry deploy token."
+}
 variable "helm_timeout_seconds" {
   type    = number
   default = 300

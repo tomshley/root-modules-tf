@@ -39,6 +39,9 @@ module "karpenter" {
   node_network_tags                       = var.node_network_tags
   create_namespace                        = var.create_namespace
   extra_helm_values                       = var.extra_helm_values
+  use_patched_dual_stack_image            = var.use_patched_dual_stack_image
+  controller_image                        = var.controller_image
+  image_pull_secrets                      = var.image_pull_secrets
   helm_timeout_seconds                    = var.helm_timeout_seconds
   bootstrap_node_pool_name                = var.bootstrap_node_pool_name
 }
