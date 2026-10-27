@@ -6,6 +6,16 @@ This project follows Semantic Versioning.
 
 ---
 
+## [2.9.0] — 2026-10-27
+
+### Added
+
+- **gcp-gke-cluster**: `location_mode` selects the control-plane topology. `"regional"` (the default) keeps the previous shape — the cluster at `google_region` with nodes pinned to `google_region_zone` via `node_locations`. `"zonal"` places the cluster and its nodes at `google_region_zone` with a single-zone control plane, which is unavailable during control-plane upgrades and zone outages; changing the mode on an existing cluster forces its replacement.
+- **gcp-gke-nodepool**: `google_container_cluster_location` names the location of the cluster the pool joins — pass the `gcp-gke-cluster` output `google_container_cluster_gke_cluster_location`. Left null the pool takes `google_region`, which is correct for regional clusters only. A lifecycle precondition fails the plan when the pool location contradicts the location embedded in `google_container_cluster_self_link` — at plan time for an existing cluster whose self-link is known, and at apply time for a cluster created in the same run — instead of surfacing as a provider refusal.
+- **gcp-gke-full-stack** example: both node pools now wire `google_container_cluster_location` from the cluster output, so a zonal `location_mode` plans pools in the zone rather than tripping the mismatch guard. The README names the corresponding requirement on `gcp-gke-karpenter-controller`'s `cluster_location`.
+
+---
+
 ## [2.8.1] — 2026-09-22
 
 ### Fixed
