@@ -84,6 +84,7 @@ module "system_pool" {
   project_name_prefix                = var.project_name_prefix
   google_region                      = var.google_region
   pool_name_suffix                   = "system"
+  google_container_cluster_location  = module.cluster.google_container_cluster_gke_cluster_location
   google_container_cluster_self_link = module.cluster.google_container_cluster_gke_cluster_self_link
   google_service_account_email       = module.cluster.google_service_account_gke_service_account_email
 
@@ -114,6 +115,7 @@ module "workload_pool" {
   project_name_prefix                = var.project_name_prefix
   google_region                      = var.google_region
   pool_name_suffix                   = "workload"
+  google_container_cluster_location  = module.cluster.google_container_cluster_gke_cluster_location
   google_container_cluster_self_link = module.cluster.google_container_cluster_gke_cluster_self_link
   google_service_account_email       = module.cluster.google_service_account_gke_service_account_email
 

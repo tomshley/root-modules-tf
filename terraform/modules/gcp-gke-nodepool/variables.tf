@@ -6,6 +6,12 @@ variable "google_region" {
   type = string
 }
 
+variable "google_container_cluster_location" {
+  type        = string
+  default     = null
+  description = "Location of the cluster this pool joins; pass the gcp-gke-cluster output google_container_cluster_gke_cluster_location. Null uses google_region, which is correct for regional clusters only. A location that contradicts google_container_cluster_self_link fails at plan time when the self link is known (an existing cluster) and at apply time when it is not yet known (a cluster created in the same run)."
+}
+
 variable "pool_name_suffix" {
   type = string
   validation {
