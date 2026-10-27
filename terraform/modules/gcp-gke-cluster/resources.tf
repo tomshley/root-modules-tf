@@ -19,8 +19,8 @@ resource "google_container_cluster" "gke_cluster" {
   depends_on     = [google_service_account.gke_service_account]
   name           = local.gke_cluster_name
   project        = var.google_project_id
-  location       = var.google_region
-  node_locations = [var.google_region_zone]
+  location       = var.location_mode == "zonal" ? var.google_region_zone : var.google_region
+  node_locations = var.location_mode == "zonal" ? null : [var.google_region_zone]
 
   network                  = var.google_compute_network_id
   subnetwork               = var.google_compute_subnetwork_id

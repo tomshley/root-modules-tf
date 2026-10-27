@@ -1,6 +1,10 @@
+locals {
+  pool_location = coalesce(var.google_container_cluster_location, var.google_region)
+}
+
 resource "google_container_node_pool" "pool" {
   name     = "${var.project_name_prefix}-pool-${var.pool_name_suffix}"
-  location = var.google_region
+  location = local.pool_location
   cluster  = var.google_container_cluster_self_link
 
   initial_node_count = var.initial_node_count
@@ -22,6 +26,14 @@ resource "google_container_node_pool" "pool" {
       node_config[0].resource_labels["goog-gke-node-pool-provisioning-model"],
       initial_node_count,
     ]
+
+    precondition {
+      condition = try(
+        regex("/locations/([^/]+)/clusters/", var.google_container_cluster_self_link)[0] == local.pool_location,
+        true,
+      )
+      error_message = "The node pool location differs from the cluster location in google_container_cluster_self_link; set google_container_cluster_location from the gcp-gke-cluster output google_container_cluster_gke_cluster_location."
+    }
   }
 
   node_config {

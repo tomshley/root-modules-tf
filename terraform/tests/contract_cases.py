@@ -22,6 +22,7 @@ MODULES = {
     "gcp-gke-ci-oidc-access",
     "gcp-karpenter-prereqs",
     "gcp-gke-cluster",
+    "gcp-gke-nodepool",
     "aws-eks-cluster",
     "gcp-cloudsql-postgres",
 }
@@ -697,6 +698,127 @@ module "gke" {
   master_ipv4_cidr_block       = "172.16.0.0/28"
 }
 """,
+    "gke-cluster-location-regional-default": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+}
+""",
+    "gke-cluster-location-zonal": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  location_mode                 = "zonal"
+}
+""",
+    "gke-cluster-location-mode-invalid": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  location_mode                 = "multi-zonal"
+}
+""",
+    "gke-nodepool-location-regional-default": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4/clusters/contract-standard-cluster"
+}
+""",
+    "gke-nodepool-location-zonal": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+}
+""",
+    "gke-nodepool-location-mismatch": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+}
+""",
+    "gke-nodepool-location-unknown-self-link": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+resource "terraform_data" "cluster" {
+  input = "contract-zonal-cluster"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/${terraform_data.cluster.output}"
+}
+""",
     "eks-cluster-name-at-limit": """provider "aws" {
   region                      = "us-east-1"
   access_key                  = "invalid-key-for-plan-only"
@@ -943,6 +1065,23 @@ EXPECTED_RESOURCE_COUNTS = {
     },
 }
 
+EXPECTED_GKE_CLUSTER_LOCATIONS = {
+    "gke-cluster-location-regional-default": {
+        "location": "us-east4",
+        "node_locations": ["us-east4-a"],
+    },
+    "gke-cluster-location-zonal": {
+        "location": "us-east4-a",
+        "node_locations": None,
+    },
+}
+
+EXPECTED_GKE_NODEPOOL_LOCATIONS = {
+    "gke-nodepool-location-regional-default": "us-east4",
+    "gke-nodepool-location-zonal": "us-east4-a",
+    "gke-nodepool-location-unknown-self-link": "us-east4-a",
+}
+
 # Permissions a case's custom role must carry — the escalate/bind pair
 # exists because Kubernetes' privilege-escalation prevention refuses
 # Role/RoleBinding creation without them, which is not obvious from the
@@ -1031,6 +1170,8 @@ EXPECTED_DIAGNOSTICS = {
     "gke-ci-oidc-rbac-admin-role-id-too-long": "custom role ID format",
     "gke-cluster-name-too-long": "GKE cluster name",
     "gke-cluster-name-invalid-shape": "GKE cluster name",
+    "gke-cluster-location-mode-invalid": 'location_mode must be either "regional" or "zonal".',
+    "gke-nodepool-location-mismatch": "The node pool location differs from the cluster location in google_container_cluster_self_link; set google_container_cluster_location from the gcp-gke-cluster output google_container_cluster_gke_cluster_location.",
     "eks-cluster-name-too-long": "at most 100 characters",
     "eks-cluster-name-invalid-shape": "at most 100 characters",
     "eks-role-name-too-long": "EKS cluster role name",
@@ -1090,12 +1231,22 @@ def main() -> int:
                     print(diagnostics[-4000:])
                 else:
                     planned = None
-                    if name in EXPECTED_BINDINGS or name in EXPECTED_INGRESS or name in EXPECTED_RESOURCE_COUNTS or name in EXPECTED_ATTRIBUTE_CONDITIONS or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
+                    if (
+                        name in EXPECTED_BINDINGS
+                        or name in EXPECTED_INGRESS
+                        or name in EXPECTED_RESOURCE_COUNTS
+                        or name in EXPECTED_ATTRIBUTE_CONDITIONS
+                        or name in EXPECTED_GKE_CLUSTER_LOCATIONS
+                        or name in EXPECTED_GKE_NODEPOOL_LOCATIONS
+                        or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS
+                        or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS
+                    ):
                         shown = run([tofu, "show", "-json", "case.plan"], work)
                         if shown.returncode != 0:
                             failures.append(f"{name}: could not inspect plan")
                             continue
-                        planned = json.loads(shown.stdout)["planned_values"]
+                        plan_json = json.loads(shown.stdout)
+                        planned = plan_json["planned_values"]
                     if name in EXPECTED_BINDINGS:
                         values = planned["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
@@ -1131,6 +1282,43 @@ def main() -> int:
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
                             continue
+                    if name in EXPECTED_GKE_CLUSTER_LOCATIONS:
+                        clusters = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_container_cluster"
+                        ]
+                        locations = {
+                            "location": clusters[0]["values"].get("location"),
+                            "node_locations": clusters[0]["values"].get("node_locations"),
+                        } if len(clusters) == 1 else None
+                        if locations != EXPECTED_GKE_CLUSTER_LOCATIONS[name]:
+                            failures.append(f"{name}: planned cluster locations changed: {locations}")
+                            continue
+                    if name in EXPECTED_GKE_NODEPOOL_LOCATIONS:
+                        nodepools = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_container_node_pool"
+                        ]
+                        location = nodepools[0]["values"].get("location") if len(nodepools) == 1 else None
+                        if location != EXPECTED_GKE_NODEPOOL_LOCATIONS[name]:
+                            failures.append(f"{name}: planned nodepool location changed: {location}")
+                            continue
+                        if name == "gke-nodepool-location-unknown-self-link":
+                            nodepool_changes = [
+                                change
+                                for change in plan_json.get("resource_changes", [])
+                                if change.get("type") == "google_container_node_pool"
+                            ]
+                            after_unknown = (
+                                nodepool_changes[0]["change"].get("after_unknown", {})
+                                if len(nodepool_changes) == 1
+                                else {}
+                            )
+                            if after_unknown.get("cluster") is not True:
+                                failures.append(f"{name}: planned nodepool cluster link is not unknown")
+                                continue
                     if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
                         roles = [
                             resource
@@ -1158,6 +1346,8 @@ def main() -> int:
             if plan.returncode == 0:
                 failures.append(f"{name}: invalid case unexpectedly passed")
                 continue
+            expected_diagnostic = " ".join(expected_diagnostic.split())
+            diagnostics = " ".join(diagnostics.split())
             if expected_diagnostic not in diagnostics:
                 failures.append(f"{name}: plan failed without intended diagnostic: {expected_diagnostic}")
                 print(diagnostics[-4000:])
