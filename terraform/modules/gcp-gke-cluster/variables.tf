@@ -10,6 +10,17 @@ variable "google_region_zone" {
   type = string
 }
 
+variable "location_mode" {
+  type        = string
+  default     = "regional"
+  description = "Control-plane topology. \"regional\" (default) places the cluster at google_region with nodes in google_region_zone. \"zonal\" places the cluster and its nodes at google_region_zone with a single-zone control plane, which is unavailable during control-plane upgrades and zone outages. Changing this on an existing cluster forces its replacement."
+
+  validation {
+    condition     = contains(["regional", "zonal"], var.location_mode)
+    error_message = "location_mode must be either \"regional\" or \"zonal\"."
+  }
+}
+
 variable "google_project_id" {
   type = string
 }

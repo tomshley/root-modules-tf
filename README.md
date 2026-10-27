@@ -127,6 +127,14 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 - `aws-eks-cluster` requires explicit `public_access_cidrs`
 - `gcp-gke-cluster` requires explicit `master_authorized_networks_cidr_blocks`
+- `gcp-gke-cluster` supports `location_mode = "zonal"` to place the control
+  plane at `google_region_zone`; the matching `gcp-gke-nodepool`
+  `google_container_cluster_location` and `gcp-gke-karpenter-controller`
+  `cluster_location` must also use that zone. A zonal control plane is
+  unavailable during control-plane upgrades and zone outages. A pool/cluster
+  location mismatch fails at plan time for an existing cluster and at apply
+  time for a cluster created in the same run; wiring the cluster's location
+  output avoids it.
 - **EKS API access** is restricted via required `public_access_cidrs`
 - **GKE control plane access** is restricted via required `master_authorized_networks_cidr_blocks`
 - **Outbound security group egress is open by default** for the EKS control plane; consumer root modules must further restrict it if required
