@@ -172,7 +172,7 @@ See SECURITY.md.
 
 ## License
 
-Apache License 2.0. See LICENSE and NOTICE.md.
+Apache License 2.0. See LICENSE and NOTICE.
 
 ---
 
