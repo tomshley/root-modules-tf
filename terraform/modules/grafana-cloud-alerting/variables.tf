@@ -1,3 +1,16 @@
+# Copyright (c) 2017–present Tomshley LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 variable "enabled" {
   description = "Master switch / provider-readiness gate. When require_webhook is true (the default), the module ALSO stays inert (count = 0) until a webhook destination exists (webhook_url set, or webhook_configured = true); when require_webhook is false, the alert rules deploy as soon as this is true, regardless of the webhook. IMPORTANT: the caller must pass false whenever the grafana provider is not yet pointed at a real instance (url + token), otherwise the datasource lookups fail at plan — fold your provider-readiness check into this input."
   type        = bool
