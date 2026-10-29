@@ -16,6 +16,23 @@ This project follows Semantic Versioning.
 
 ---
 
+## [3.0.0] — 2026-10-29
+
+### Added
+
+- **gcp-gke-nodepool**: `node_count` pins the pool to a fixed size with the autoscaler off — `0` removes every node while the pool resource and its cluster remain, so a paused environment keeps its node-pool identity; returning to `null` restores the same autoscaling bounds.
+- **gcp-cloudsql-postgres**: `activation_policy` — `NEVER` stops the primary instance, suspending instance charges while storage and IP charges continue and the instance and its data stay in place for a return to `ALWAYS`. `NEVER` is refused while `reader_instance_count` is above zero (Cloud SQL does not support `NEVER` on a read replica), and a null leaves the policy unset — the provider plans `ALWAYS`, so an existing consumer re-plans to zero changes.
+- **gcp-karpenter-crds**, **gcp-karpenter-controller-release**: the CRDs and the controller are now separate modules — the CRD chart installs on its own so the controller release can be removed while the CRDs stay installed for a later return, and the release sets `skip_crds` so Helm never claims the chart's own CRD copies.
+- **gcp-gke-environment-pause** example: a two-root pause of a GKE environment — baseline pool held at zero nodes, Cloud SQL stopped, Karpenter controller removed with its CRDs kept — with a guard that refuses the pause while Karpenter still has nodes.
+- Contract-test coverage for the pause inputs and the karpenter split, raising the suite to 73 cases.
+
+### Changed
+
+- **gcp-karpenter-controller** now composes `gcp-karpenter-crds` and `gcp-karpenter-controller-release` instead of installing both charts itself. Rendered Helm values are unchanged, and `moved` blocks carry releases installed before the split across without recreation — they plan a single in-place `skip_crds` update.
+- **terraform-contract-tests** job timeout raised to two hours; the suite's contract run plus the coverage re-run no longer fit the default one-hour limit.
+
+---
+
 ## [2.9.0] — 2026-10-27
 
 ### Added

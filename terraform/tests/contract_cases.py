@@ -38,6 +38,9 @@ MODULES = {
     "gcp-gke-nodepool",
     "aws-eks-cluster",
     "gcp-cloudsql-postgres",
+    "gcp-karpenter-crds",
+    "gcp-karpenter-controller-release",
+    "gcp-karpenter-controller",
 }
 
 CASE_CONFIGS = {
@@ -832,6 +835,157 @@ module "nodepool" {
   google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/${terraform_data.cluster.output}"
 }
 """,
+    "gke-nodepool-size-autoscaled-default": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+}
+""",
+    "karpenter-crds-alone": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "crds" {
+  source = "../../../modules/gcp-karpenter-crds"
+}
+""",
+    "karpenter-controller-release-alone": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "../../../modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+}
+""",
+    "karpenter-controller-composes-both": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+# gcp-karpenter-controller composes its sibling modules, so it sources
+# through the work dir's modules symlink like gcp-ci-oidc-role.
+module "karpenter" {
+  source = "./modules/gcp-karpenter-controller"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  bootstrap_node_pool_name                = "contract-baseline"
+  use_patched_dual_stack_image            = true
+  image_pull_secrets                      = ["contract-registry"]
+}
+""",
+    "karpenter-controller-release-image-conflict": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "../../../modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  use_patched_dual_stack_image            = true
+  controller_image = {
+    repository = "registry.example.com/karpenter"
+    tag        = "v0.6.0"
+  }
+}
+""",
+    "gke-nodepool-size-fixed-zero": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+  node_count                         = 0
+}
+""",
+    "gke-nodepool-size-negative": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+  node_count                         = -1
+}
+""",
+    "gke-nodepool-size-fractional": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+  node_count                         = 1.5
+}
+""",
+    "gke-nodepool-size-fixed-three": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "nodepool" {
+  source = "../../../modules/gcp-gke-nodepool"
+
+  project_name_prefix                = "contract"
+  google_region                      = "us-east4"
+  google_container_cluster_location  = "us-east4-a"
+  pool_name_suffix                   = "standard"
+  google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
+  node_count                         = 3
+}
+""",
     "eks-cluster-name-at-limit": """provider "aws" {
   region                      = "us-east-1"
   access_key                  = "invalid-key-for-plan-only"
@@ -1006,6 +1160,104 @@ module "db" {
   tier                           = "db-perf-optimized-N-2"
 }
 """,
+    "cloudsql-edition-unset": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  tier                           = "db-custom-2-7680"
+}
+""",
+    "cloudsql-activation-policy-default": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+}
+""",
+    "cloudsql-activation-policy-never": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+  activation_policy              = "NEVER"
+}
+""",
+    "cloudsql-activation-policy-on-demand": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+  activation_policy              = "ON_DEMAND"
+}
+""",
+    "cloudsql-activation-policy-never-with-readers": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+  activation_policy              = "NEVER"
+  reader_instance_count          = 1
+}
+""",
 }
 
 
@@ -1095,6 +1347,25 @@ EXPECTED_GKE_NODEPOOL_LOCATIONS = {
     "gke-nodepool-location-unknown-self-link": "us-east4-a",
 }
 
+# The pool's size has one owner: the autoscaler by default, or a fixed
+# node_count with no autoscaling block. Each case states which.
+EXPECTED_GKE_NODEPOOL_SIZING = {
+    "gke-nodepool-size-autoscaled-default": {
+        "autoscaling": [{"min_node_count": 1, "max_node_count": 5, "location_policy": "ANY"}],
+        "node_count": None,
+    },
+    "gke-nodepool-size-fixed-zero": {"autoscaling": [], "node_count": 0},
+    "gke-nodepool-size-fixed-three": {"autoscaling": [], "node_count": 3},
+}
+
+# An unset activation policy plans as ALWAYS, the provider's own value for an
+# instance created without one — the back-compat contract — and NEVER reaches
+# the primary instance's settings.
+EXPECTED_CLOUDSQL_ACTIVATION_POLICIES = {
+    "cloudsql-activation-policy-default": "ALWAYS",
+    "cloudsql-activation-policy-never": "NEVER",
+}
+
 # Permissions a case's custom role must carry — the escalate/bind pair
 # exists because Kubernetes' privilege-escalation prevention refuses
 # Role/RoleBinding creation without them, which is not obvious from the
@@ -1159,6 +1430,142 @@ EXPECTED_ATTRIBUTE_CONDITIONS = {
     "gcp-ci-oidc-re2-escaping": "(assertion.sub.matches('^refs/\\\\(heads\\\\|tags\\\\)/v1\\\\.2\\\\+build-.*$') || assertion.sub.matches('^env.\\\\[a-b\\\\]\\\\{2\\\\}\\\\^\\\\$\\\\\\\\x-.*$'))",
 }
 
+# Every Helm release the case plans, at any module depth, with its chart,
+# chart version, and skip_crds. The split modules must each plan only their
+# own release at the same chart version, and the composing module must keep
+# planning both, so the CRDs survive a consumer that leaves the controller
+# out. The controller release skips its chart's crds/ copies so the CRD
+# release stays their only owner.
+EXPECTED_HELM_RELEASES = {
+    "karpenter-crds-alone": [
+        ("module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
+    ],
+    "karpenter-controller-release-alone": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-composes-both": [
+        ("module.karpenter.module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+        ("module.karpenter.module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
+    ],
+}
+
+# Rendered Helm values, verbatim. The composed case's controller values were
+# captured from gcp-karpenter-controller before the split, with the same
+# inputs, so a change in what the split release renders fails here rather
+# than reaching an existing install as an in-place upgrade.
+EXPECTED_HELM_VALUES = {
+    "karpenter-controller-composes-both": {
+        "module.karpenter.module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"registry.gitlab.com/tomshley/brands/global/tware/tech/products/provisioning/vendored/karpenter-provider-gcp/karpenter\"\n    \"tag\": \"v0.6.0-dualstack\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"defaultNodePoolTemplateName\": \"contract-baseline\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"imagePullSecrets\":\n- \"name\": \"contract-registry\"\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+}
+
+
+def helm_release_resources(module: dict) -> list[dict]:
+    found = [resource for resource in module.get("resources", []) if resource["type"] == "helm_release"]
+    for child in module.get("child_modules", []):
+        found.extend(helm_release_resources(child))
+    return found
+
+
+def helm_releases(module: dict) -> list[tuple[str, str, str, bool]]:
+    return sorted(
+        (
+            resource["address"],
+            resource["values"].get("chart"),
+            resource["values"].get("version"),
+            resource["values"].get("skip_crds"),
+        )
+        for resource in helm_release_resources(module)
+    )
+
+
+# Releases a consumer installed before gcp-karpenter-controller composed the
+# split modules, keyed by the address each now plans at, with its old address
+# and the attributes it held then that differ from what it plans now. The case
+# re-plans against state holding them there: every one must be a move that
+# neither creates nor destroys, or an existing install would reinstall, and
+# an in-place update may change exactly those attributes and no others.
+EXPECTED_PRIOR_STATE_MOVES = {
+    "karpenter-controller-composes-both": {
+        "module.karpenter.module.crds.helm_release.crds": ("module.karpenter.helm_release.crds", {}),
+        "module.karpenter.module.controller.helm_release.karpenter": (
+            "module.karpenter.helm_release.karpenter",
+            {"skip_crds": False},
+        ),
+    },
+}
+
+
+def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, tuple[str, dict]]) -> list[str]:
+    """Write the planned releases into state at their old addresses and re-plan."""
+    schemas = run([tofu, "providers", "schema", "-json"], work)
+    if schemas.returncode != 0:
+        return ["could not read provider schemas"]
+    providers = json.loads(schemas.stdout)["provider_schemas"]
+    resources = []
+    for change in plan_json["resource_changes"]:
+        if change["address"] not in moves:
+            continue
+        old_address, prior_attributes = moves[change["address"]]
+        schema = providers[change["provider_name"]]["resource_schemas"][change["type"]]
+        attributes = {name: None for name in schema["block"]["attributes"]}
+        attributes.update({
+            name: [] if block["nesting_mode"] in ("list", "set") else None
+            for name, block in schema["block"].get("block_types", {}).items()
+        })
+        attributes.update({key: value for key, value in change["change"]["after"].items() if value is not None})
+        attributes.update(prior_attributes)
+        attributes["id"] = attributes["name"]
+        module_address, _, resource_name = old_address.rpartition(".helm_release.")
+        resources.append({
+            "module": module_address,
+            "mode": "managed",
+            "type": change["type"],
+            "name": resource_name,
+            "provider": f'provider["{change["provider_name"]}"]',
+            "instances": [{"schema_version": schema["version"], "attributes": attributes, "sensitive_attributes": []}],
+        })
+    (work / "terraform.tfstate").write_text(json.dumps({
+        "version": 4, "terraform_version": "1.9.0", "serial": 1, "lineage": "contract-prior-state",
+        "outputs": {}, "resources": resources,
+    }))
+    replan = run([tofu, "plan", "-refresh=false", "-input=false", "-lock=false", "-no-color", "-out=prior.plan"], work)
+    if replan.returncode != 0:
+        return ["re-plan against prior state failed: " + (replan.stdout + replan.stderr)[-2000:]]
+    shown = json.loads(run([tofu, "show", "-json", "prior.plan"], work).stdout)
+    problems = []
+    for change in shown["resource_changes"]:
+        actions = set(change["change"]["actions"])
+        if actions & {"create", "delete"}:
+            problems.append(f"{change['address']} plans {sorted(actions)}")
+            continue
+        if change["address"] not in moves:
+            continue
+        old_address, prior_attributes = moves[change["address"]]
+        if change.get("previous_address") != old_address:
+            problems.append(f"{change['address']} was not moved from {old_address}")
+        before, after = change["change"]["before"] or {}, change["change"]["after"] or {}
+        unknown = change["change"].get("after_unknown") or {}
+        updated = {key for key, value in after.items() if unknown.get(key) is not True and before.get(key) != value}
+        if updated != set(prior_attributes):
+            problems.append(f"{change['address']} updates {sorted(updated)}, expected {sorted(prior_attributes)}")
+    return problems
+
+
+# Module files that must stay identical: gcp-karpenter-controller passes
+# every input through to gcp-karpenter-controller-release, and HCL cannot
+# share variable declarations between modules.
+IDENTICAL_MODULE_FILES = [
+    ("gcp-karpenter-controller/variables.tf", "gcp-karpenter-controller-release/variables.tf"),
+]
+
+# Advisory check warnings a passing case's plan must carry.
+EXPECTED_WARNINGS = {
+    "cloudsql-edition-unset": "edition is unset while tier 'db-custom-2-7680' is a db-custom tier.",
+}
+
 EXPECTED_DIAGNOSTICS = {
     "postgres-purpose-invalid": "contract.purpose must be generic",
     "postgres-authority-mismatch": "An authoritative store is not",
@@ -1184,12 +1591,17 @@ EXPECTED_DIAGNOSTICS = {
     "gke-cluster-name-too-long": "GKE cluster name",
     "gke-cluster-name-invalid-shape": "GKE cluster name",
     "gke-cluster-location-mode-invalid": 'location_mode must be either "regional" or "zonal".',
+    "gke-nodepool-size-negative": "node_count must be null or a whole number of nodes, 0 or more.",
+    "gke-nodepool-size-fractional": "node_count must be null or a whole number of nodes, 0 or more.",
     "gke-nodepool-location-mismatch": "The node pool location differs from the cluster location in google_container_cluster_self_link; set google_container_cluster_location from the gcp-gke-cluster output google_container_cluster_gke_cluster_location.",
     "eks-cluster-name-too-long": "at most 100 characters",
     "eks-cluster-name-invalid-shape": "at most 100 characters",
     "eks-role-name-too-long": "EKS cluster role name",
     "cloudsql-edition-plus-custom-tier": "edition 'ENTERPRISE_PLUS' does not accept tier",
     "cloudsql-edition-enterprise-perf-tier": "edition 'ENTERPRISE' does not accept tier",
+    "cloudsql-activation-policy-on-demand": "activation_policy must be ALWAYS or NEVER (ON_DEMAND is deprecated by Cloud SQL).",
+    "cloudsql-activation-policy-never-with-readers": "activation_policy NEVER requires reader_instance_count = 0",
+    "karpenter-controller-release-image-conflict": "use_patched_dual_stack_image and controller_image are mutually exclusive",
 }
 
 
@@ -1213,6 +1625,12 @@ def main() -> int:
     # override is set, and these throwaway directories never keep a lock file.
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
+    modules_root = ROOT / "terraform" / "modules"
+    for first, second in IDENTICAL_MODULE_FILES:
+        if (modules_root / first).read_text() != (modules_root / second).read_text():
+            failures.append(f"{first} and {second} differ")
+        else:
+            print(f"PASS identical-module-files {first} {second}")
     with tempfile.TemporaryDirectory(prefix="root-modules-contract-") as temp:
         temp_root = Path(temp)
         cache = temp_root / ".plugin-cache"
@@ -1243,6 +1661,10 @@ def main() -> int:
                     failures.append(f"{name}: valid case failed during plan")
                     print(diagnostics[-4000:])
                 else:
+                    expected_warning = EXPECTED_WARNINGS.get(name)
+                    if expected_warning and " ".join(expected_warning.split()) not in " ".join(diagnostics.split()):
+                        failures.append(f"{name}: plan passed without intended warning: {expected_warning}")
+                        continue
                     planned = None
                     if (
                         name in EXPECTED_BINDINGS
@@ -1251,6 +1673,11 @@ def main() -> int:
                         or name in EXPECTED_ATTRIBUTE_CONDITIONS
                         or name in EXPECTED_GKE_CLUSTER_LOCATIONS
                         or name in EXPECTED_GKE_NODEPOOL_LOCATIONS
+                        or name in EXPECTED_GKE_NODEPOOL_SIZING
+                        or name in EXPECTED_CLOUDSQL_ACTIVATION_POLICIES
+                        or name in EXPECTED_HELM_RELEASES
+                        or name in EXPECTED_HELM_VALUES
+                        or name in EXPECTED_PRIOR_STATE_MOVES
                         or name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS
                         or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS
                     ):
@@ -1332,6 +1759,53 @@ def main() -> int:
                             if after_unknown.get("cluster") is not True:
                                 failures.append(f"{name}: planned nodepool cluster link is not unknown")
                                 continue
+                    if name in EXPECTED_GKE_NODEPOOL_SIZING:
+                        nodepools = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_container_node_pool"
+                        ]
+                        sizing = {
+                            "autoscaling": [
+                                {key: block.get(key) for key in ("min_node_count", "max_node_count", "location_policy")}
+                                for block in nodepools[0]["values"].get("autoscaling") or []
+                            ],
+                            "node_count": nodepools[0]["values"].get("node_count"),
+                        } if len(nodepools) == 1 else None
+                        if sizing != EXPECTED_GKE_NODEPOOL_SIZING[name]:
+                            failures.append(f"{name}: planned nodepool sizing changed: {sizing}")
+                            continue
+                    if name in EXPECTED_CLOUDSQL_ACTIVATION_POLICIES:
+                        primaries = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_sql_database_instance" and resource["name"] == "primary"
+                        ]
+                        policy = primaries[0]["values"]["settings"][0].get("activation_policy") if len(primaries) == 1 else None
+                        if policy != EXPECTED_CLOUDSQL_ACTIVATION_POLICIES[name]:
+                            failures.append(f"{name}: planned activation policy changed: {policy}")
+                            continue
+                    if name in EXPECTED_HELM_RELEASES:
+                        releases = helm_releases(planned["root_module"])
+                        if releases != EXPECTED_HELM_RELEASES[name]:
+                            failures.append(f"{name}: planned Helm releases changed: {releases}")
+                            continue
+                    if name in EXPECTED_HELM_VALUES:
+                        rendered = {
+                            resource["address"]: resource["values"].get("values")
+                            for resource in helm_release_resources(planned["root_module"])
+                        }
+                        changed = sorted(
+                            address for address, values in EXPECTED_HELM_VALUES[name].items() if rendered.get(address) != values
+                        )
+                        if changed:
+                            failures.append(f"{name}: rendered Helm values changed: {changed}")
+                            continue
+                    if name in EXPECTED_PRIOR_STATE_MOVES:
+                        problems = prior_state_moves(tofu, work, plan_json, EXPECTED_PRIOR_STATE_MOVES[name])
+                        if problems:
+                            failures.append(f"{name}: existing installs would not carry over: {problems}")
+                            continue
                     if name in EXPECTED_FORBIDDEN_ROLE_PERMISSIONS or name in EXPECTED_REQUIRED_ROLE_PERMISSIONS:
                         roles = [
                             resource

@@ -51,6 +51,11 @@
     {"name": "gke-nodepool-location-zonal", "module": "gcp-gke-nodepool", "outcome": "pass", "description": "A zonal cluster self-link and explicit location plan a nodepool in that zone."},
     {"name": "gke-nodepool-location-mismatch", "module": "gcp-gke-nodepool", "outcome": "fail", "description": "A zonal cluster self-link with the regional default location fails its lifecycle precondition."},
     {"name": "gke-nodepool-location-unknown-self-link", "module": "gcp-gke-nodepool", "outcome": "pass", "description": "A nodepool with an explicit location plans when the cluster self-link is unknown until apply."},
+    {"name": "gke-nodepool-size-autoscaled-default", "module": "gcp-gke-nodepool", "outcome": "pass", "description": "Without node_count the cluster autoscaler owns the pool's size between its minimum and maximum."},
+    {"name": "gke-nodepool-size-fixed-zero", "module": "gcp-gke-nodepool", "outcome": "pass", "description": "A node_count of 0 holds the pool at zero nodes with no autoscaling block."},
+    {"name": "gke-nodepool-size-negative", "module": "gcp-gke-nodepool", "outcome": "fail", "description": "A negative node_count is rejected."},
+    {"name": "gke-nodepool-size-fractional", "module": "gcp-gke-nodepool", "outcome": "fail", "description": "A fractional node_count is rejected."},
+    {"name": "gke-nodepool-size-fixed-three", "module": "gcp-gke-nodepool", "outcome": "pass", "description": "A nonzero node_count holds the pool at that size with no autoscaling block."},
     {"name": "eks-cluster-name-at-limit", "module": "aws-eks-cluster", "outcome": "pass", "description": "A cluster name at the EKS 100-character limit is accepted."},
     {"name": "eks-cluster-name-too-long", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name over the EKS 100-character limit is rejected."},
     {"name": "eks-cluster-name-invalid-shape", "module": "aws-eks-cluster", "outcome": "fail", "description": "A cluster name outside the EKS character set is rejected."},
@@ -59,6 +64,15 @@
     {"name": "cloudsql-edition-plus-custom-tier", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The Enterprise Plus edition rejects a db-custom tier."},
     {"name": "cloudsql-edition-plus-perf-tier", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "The Enterprise Plus edition accepts a db-perf-optimized-N tier."},
     {"name": "cloudsql-edition-enterprise-custom-tier", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "The Enterprise edition accepts a db-custom tier."},
-    {"name": "cloudsql-edition-enterprise-perf-tier", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The Enterprise edition rejects the db-perf-optimized tier family."}
+    {"name": "cloudsql-edition-enterprise-perf-tier", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The Enterprise edition rejects the db-perf-optimized tier family."},
+    {"name": "cloudsql-edition-unset", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "An unset edition plans, leaving the edition to the API, with the advisory warning for a db-custom tier."},
+    {"name": "cloudsql-activation-policy-default", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "An unset activation policy plans the primary as ALWAYS, unchanged from before the input existed."},
+    {"name": "cloudsql-activation-policy-never", "module": "gcp-cloudsql-postgres", "outcome": "pass", "description": "NEVER stops the primary instance while keeping it."},
+    {"name": "cloudsql-activation-policy-on-demand", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "The deprecated ON_DEMAND policy is rejected."},
+    {"name": "cloudsql-activation-policy-never-with-readers", "module": "gcp-cloudsql-postgres", "outcome": "fail", "description": "NEVER is refused while read replicas exist, since they cannot be stopped with it."},
+    {"name": "karpenter-crds-alone", "module": "gcp-karpenter-crds", "outcome": "pass", "description": "The CRD module plans the karpenter-crd release and nothing else."},
+    {"name": "karpenter-controller-release-alone", "module": "gcp-karpenter-controller-release", "outcome": "pass", "description": "The controller release module plans the karpenter release, skipping its chart's CRD copies, and not the CRD release."},
+    {"name": "karpenter-controller-composes-both", "module": "gcp-karpenter-controller", "outcome": "pass", "description": "The composed module plans both releases, renders the controller values it rendered before the split, and carries releases installed before the split as moves that neither create nor destroy, updating only skip_crds in place."},
+    {"name": "karpenter-controller-release-image-conflict", "module": "gcp-karpenter-controller-release", "outcome": "fail", "description": "The controller release module keeps the image inputs' mutual exclusion."}
   ]
 }
