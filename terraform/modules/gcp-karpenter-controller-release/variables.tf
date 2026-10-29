@@ -1,0 +1,94 @@
+# Copyright (c) 2017–present Tomshley LLC
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+variable "project_id" { type = string }
+variable "cluster_name" { type = string }
+variable "cluster_location" {
+  type        = string
+  description = "GKE cluster location used for instance-type discovery. Accepts a region or a zone — the controller derives the compute region from it."
+
+  validation {
+    condition     = can(regex("^[a-z]+-[a-z]+[0-9]+(-[a-z])?$", var.cluster_location))
+    error_message = "cluster_location must be a GCP region (for example us-central1) or zone (for example us-central1-a)."
+  }
+}
+
+variable "node_location" {
+  type        = string
+  default     = null
+  description = "Exact GKE cluster location used to address the cluster in the provider's GKE node-pool API paths — not a node-placement choice. Normally omit it: the controller defaults it to cluster_location, which is correct both for a regional cluster (whose location is its region) and for a zonal cluster whose cluster_location is its zone. Set it only when cluster_location is a region but the cluster itself is zonal."
+
+  validation {
+    condition     = var.node_location == null || can(regex("^[a-z]+-[a-z]+[0-9]+(-[a-z])?$", var.node_location))
+    error_message = "node_location must be null or a GCP region (for example us-central1) or zone (for example us-central1-a)."
+  }
+}
+variable "bootstrap_node_pool_name" {
+  type        = string
+  default     = null
+  description = "Name of an existing GKE node pool the controller bootstraps new nodes from. From provider v0.4.0 the controller no longer creates its own template node pools — it reads bootstrap metadata (the instance template) from an existing pool, discovered as \"default-pool\", else the first RUNNING pool in alphabetical order, else a \"karpenter-fallback\" pool it creates. Alphabetical discovery is incidental, not a contract: a cluster whose pools sort such that an ARM64 or otherwise unrepresentative pool comes first silently bootstraps from it. Set this to make the choice deterministic. Leave null to keep upstream discovery; an unset value emits no Helm key at all, so existing consumers are unaffected."
+}
+variable "controller_google_service_account_email" { type = string }
+variable "node_service_account_email" { type = string }
+variable "namespace" {
+  type    = string
+  default = "karpenter-system"
+}
+variable "kubernetes_service_account_name" {
+  type    = string
+  default = "karpenter"
+}
+variable "node_network_tags" {
+  type    = set(string)
+  default = []
+}
+variable "create_namespace" {
+  type    = bool
+  default = true
+}
+variable "extra_helm_values" {
+  type    = list(string)
+  default = []
+}
+variable "use_patched_dual_stack_image" {
+  type        = bool
+  default     = false
+  description = "Use the patched controller image that sets node NIC stackType from the cluster's IP allocation policy. Required for Karpenter nodes to reach Ready on dual-stack (IPV4_IPV6) clusters — the upstream controller provisions IPv4-only NICs, so GKE's IPAM never publishes podCIDRs. Resolves the vendored build for the pinned chart version; mutually exclusive with controller_image."
+
+  validation {
+    condition     = !(var.use_patched_dual_stack_image && var.controller_image != null)
+    error_message = "use_patched_dual_stack_image and controller_image are mutually exclusive — set controller_image to choose an arbitrary build, or the flag to use the vendored dual-stack build."
+  }
+}
+variable "controller_image" {
+  type = object({
+    repository = string
+    tag        = string
+  })
+  default     = null
+  description = "Explicit controller image override for the chart's controller.image.repository and .tag. Null keeps the upstream release image (or the vendored dual-stack build when use_patched_dual_stack_image is set)."
+
+  validation {
+    condition     = var.controller_image == null || (length(var.controller_image.repository) > 0 && length(var.controller_image.tag) > 0)
+    error_message = "controller_image.repository and controller_image.tag must both be non-empty when controller_image is set."
+  }
+}
+variable "image_pull_secrets" {
+  type        = list(string)
+  default     = []
+  description = "Names of existing Kubernetes Secrets in the controller namespace rendered as the chart's top-level imagePullSecrets. Required when controller_image lives in a registry the node service account cannot pull — for example a private GitLab container registry behind a read_registry deploy token."
+}
+variable "helm_timeout_seconds" {
+  type    = number
+  default = 300
+}

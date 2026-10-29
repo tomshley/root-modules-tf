@@ -40,7 +40,9 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `gcp-cloudsql-postgres` | GCP | Private Cloud SQL PostgreSQL primary and optional readers | **New** |
 | `gcp-memorystore-redis` | GCP | Private authenticated Memorystore for Redis | **New** |
 | `gcp-karpenter-prereqs` | GCP | Pre-1.0 Karpenter GCP identity and least-privilege IAM | **New** |
-| `gcp-karpenter-controller` | GCP | Pre-1.0 Karpenter GCP controller Helm releases | **New** |
+| `gcp-karpenter-controller` | GCP | Pre-1.0 Karpenter GCP CRD and controller Helm releases, composing the two modules below | **New** |
+| `gcp-karpenter-crds` | GCP | Pre-1.0 Karpenter GCP CRD Helm release | **New** |
+| `gcp-karpenter-controller-release` | GCP | Pre-1.0 Karpenter GCP controller Helm release without its CRDs | **New** |
 | `k8s-grafana-alloy` | Kubernetes | Portable Grafana Alloy base module | **New** |
 | `k8s-metrics-server` | Kubernetes | Portable Metrics Server base module | **New** |
 | `k8s-keycloak` | Kubernetes | Portable Keycloak deployment from resolved credentials | **New** |
@@ -83,6 +85,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 - `terraform/examples/gcp-gke-full-stack/` — GKE network + cluster + system/workload pools + NAT
 - `terraform/examples/gcp-cloudsql-connection-contract/` — Private Cloud SQL connection and writer-only reader endpoint contract
 - `terraform/examples/gcp-gke-karpenter-network-tag-contract/` — Karpenter GCENodeClass network-tag contract
+- `terraform/examples/gcp-gke-environment-pause/` — Two-root pause of a GKE environment: baseline pool at zero nodes, Cloud SQL stopped, Karpenter controller removed with its CRDs kept, and a guard that refuses the pause while Karpenter has nodes
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
 - `terraform/examples/aws-eks-grafana-alloy/` — EKS Grafana Alloy/k8s-monitoring collectors with inline-token credential path and annotation autodiscovery
 - `terraform/examples/aws-eks-aurora-event-store/` — Write-optimized Aurora cluster (event-store preset)

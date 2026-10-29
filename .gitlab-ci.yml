@@ -22,6 +22,9 @@ terraform-contract-tests:
   tags:
     - saas-linux-medium-amd64
   stage: test
+  # contract-check plus coverage-check's full re-run exceed the default
+  # one-hour job timeout now that the suite covers the pause modules.
+  timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'

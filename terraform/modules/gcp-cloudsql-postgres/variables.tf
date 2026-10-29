@@ -127,6 +127,22 @@ variable "availability_type" {
   }
 }
 
+variable "activation_policy" {
+  type        = string
+  default     = null
+  description = "Activation policy for the primary instance — ALWAYS keeps it running; NEVER stops it, which suspends instance charges while storage and IP address charges continue and leaves the instance and its data in place for a return to ALWAYS. Null leaves the policy unset, which the provider plans as ALWAYS — the long-standing behavior — so an existing consumer re-plans to zero changes. While NEVER, changes to this module's database and users cannot be applied; plans still succeed. NEVER is refused while reader_instance_count is above zero: Cloud SQL does not support NEVER for a read replica, so its readers would keep running and billing."
+
+  validation {
+    condition     = var.activation_policy == null || contains(["ALWAYS", "NEVER"], var.activation_policy)
+    error_message = "activation_policy must be ALWAYS or NEVER (ON_DEMAND is deprecated by Cloud SQL)."
+  }
+
+  validation {
+    condition     = var.activation_policy != "NEVER" || var.reader_instance_count == 0
+    error_message = "activation_policy NEVER requires reader_instance_count = 0; Cloud SQL does not support NEVER for a read replica."
+  }
+}
+
 variable "reader_instance_count" {
   type        = number
   default     = 0
