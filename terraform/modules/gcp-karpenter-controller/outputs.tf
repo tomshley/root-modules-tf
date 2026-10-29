@@ -11,8 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-output "release_name" { value = helm_release.karpenter.name }
-output "release_namespace" { value = helm_release.karpenter.namespace }
-output "release_version" { value = helm_release.karpenter.version }
-output "node_class_network_tags" { value = var.node_network_tags }
-output "node_service_account_email" { value = var.node_service_account_email }
+output "release_name" { value = module.controller.release_name }
+output "release_namespace" { value = module.controller.release_namespace }
+output "release_version" { value = module.controller.release_version }
+output "node_class_network_tags" { value = module.controller.node_class_network_tags }
+output "node_service_account_email" { value = module.controller.node_service_account_email }

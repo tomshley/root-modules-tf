@@ -48,6 +48,17 @@ variable "initial_node_count" {
   default = 1
 }
 
+variable "node_count" {
+  type        = number
+  default     = null
+  description = "Fixed number of nodes per zone. Null leaves the pool's size to the cluster autoscaler between min_node_count and max_node_count. A number holds the pool at exactly that size with the autoscaler off; 0 removes every node while the pool resource and its cluster remain. min_node_count, max_node_count, and location_policy are ignored while node_count is set, so returning to null restores the same autoscaling bounds."
+
+  validation {
+    condition     = var.node_count == null || try(var.node_count >= 0 && floor(var.node_count) == var.node_count, false)
+    error_message = "node_count must be null or a whole number of nodes, 0 or more."
+  }
+}
+
 variable "min_node_count" {
   type    = number
   default = 1

@@ -11,72 +11,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-locals {
-  chart_version = "0.6.0"
+# The CRDs and the controller are separate modules so a consumer can keep the
+# CRDs — and every NodePool, NodeClaim, and GCENodeClass they hold — while it
+# composes the controller or not. This module composes both for existing
+# consumers: the moved blocks carry their releases across without a
+# reinstall, and the controller release plans one in-place update for
+# skip_crds, which changes nothing in the cluster.
+module "crds" {
+  source = "../gcp-karpenter-crds"
 
-  upstream_controller_image = {
-    repository = "public.ecr.aws/cloudpilotai/gcp/karpenter"
-    tag        = "v0.6.0"
-  }
-  # Vendored build of the same provider carrying the dual-stack NIC patch;
-  # tags track the chart version so a chart bump implies the matching patch
-  # build rather than a stale controller.
-  vendored_dual_stack_image = {
-    repository = "registry.gitlab.com/tomshley/brands/global/tware/tech/products/provisioning/vendored/karpenter-provider-gcp/karpenter"
-    tag        = "v${local.chart_version}-dualstack"
-  }
-
-  controller_image = coalesce(
-    var.controller_image,
-    var.use_patched_dual_stack_image ? local.vendored_dual_stack_image : null,
-    local.upstream_controller_image,
-  )
+  namespace            = var.namespace
+  create_namespace     = var.create_namespace
+  helm_timeout_seconds = var.helm_timeout_seconds
 }
 
-resource "helm_release" "crds" {
-  name             = "karpenter-crd"
-  namespace        = var.namespace
-  create_namespace = var.create_namespace
-  repository       = "https://cloudpilot-ai.github.io/karpenter-provider-gcp"
-  chart            = "karpenter-crd"
-  version          = local.chart_version
-  wait             = true
-  timeout          = var.helm_timeout_seconds
+module "controller" {
+  source = "../gcp-karpenter-controller-release"
+
+  project_id                              = var.project_id
+  cluster_name                            = var.cluster_name
+  cluster_location                        = var.cluster_location
+  node_location                           = var.node_location
+  bootstrap_node_pool_name                = var.bootstrap_node_pool_name
+  controller_google_service_account_email = var.controller_google_service_account_email
+  node_service_account_email              = var.node_service_account_email
+  namespace                               = var.namespace
+  kubernetes_service_account_name         = var.kubernetes_service_account_name
+  node_network_tags                       = var.node_network_tags
+  create_namespace                        = var.create_namespace
+  extra_helm_values                       = var.extra_helm_values
+  use_patched_dual_stack_image            = var.use_patched_dual_stack_image
+  controller_image                        = var.controller_image
+  image_pull_secrets                      = var.image_pull_secrets
+  helm_timeout_seconds                    = var.helm_timeout_seconds
+
+  depends_on = [module.crds]
 }
 
-resource "helm_release" "karpenter" {
-  name             = "karpenter"
-  namespace        = var.namespace
-  create_namespace = var.create_namespace
-  repository       = "https://cloudpilot-ai.github.io/karpenter-provider-gcp"
-  chart            = "karpenter"
-  version          = local.chart_version
+moved {
+  from = helm_release.crds
+  to   = module.crds.helm_release.crds
+}
 
-  values = concat([yamlencode(merge({
-    credentials = { enabled = false }
-    serviceAccount = {
-      create = true
-      name   = var.kubernetes_service_account_name
-      annotations = {
-        "iam.gke.io/gcp-service-account" = var.controller_google_service_account_email
-      }
-    }
-    controller = {
-      image = local.controller_image
-      env   = [{ name = "DEFAULT_NODEPOOL_SERVICE_ACCOUNT", value = var.node_service_account_email }]
-      settings = merge({
-        projectID       = var.project_id
-        clusterName     = var.cluster_name
-        clusterLocation = var.cluster_location
-        }, var.node_location == null ? {} : {
-        nodeLocation = var.node_location
-        }, var.bootstrap_node_pool_name == null ? {} : {
-        defaultNodePoolTemplateName = var.bootstrap_node_pool_name
-      })
-    }
-  }, length(var.image_pull_secrets) > 0 ? { imagePullSecrets = [for s in var.image_pull_secrets : { name = s }] } : {}))], var.extra_helm_values)
-
-  depends_on = [helm_release.crds]
-  wait       = true
-  timeout    = var.helm_timeout_seconds
+moved {
+  from = helm_release.karpenter
+  to   = module.controller.helm_release.karpenter
 }

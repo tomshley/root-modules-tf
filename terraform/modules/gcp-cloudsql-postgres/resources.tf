@@ -68,7 +68,10 @@ resource "google_sql_database_instance" "primary" {
         (var.edition == "ENTERPRISE_PLUS" && can(regex("^db-perf-optimized-N-[0-9]+$", var.tier))) ||
         (var.edition == "ENTERPRISE" && !can(regex("^db-perf-optimized-", var.tier)))
       )
-      error_message = "Cloud SQL edition '${var.edition}' does not accept tier '${var.tier}': ENTERPRISE_PLUS requires a db-perf-optimized-N-* tier, and ENTERPRISE rejects the db-perf-optimized tier family."
+      # OpenTofu evaluates the message even when the condition holds, and a
+      # null in a string template is an error — so an unset edition, which
+      # passes, must not reach the template as null.
+      error_message = "Cloud SQL edition '${coalesce(var.edition, "unset")}' does not accept tier '${var.tier}': ENTERPRISE_PLUS requires a db-perf-optimized-N-* tier, and ENTERPRISE rejects the db-perf-optimized tier family."
     }
   }
 
@@ -76,6 +79,7 @@ resource "google_sql_database_instance" "primary" {
     tier              = var.tier
     edition           = var.edition
     availability_type = var.availability_type
+    activation_policy = var.activation_policy
     user_labels       = var.labels
 
     backup_configuration {

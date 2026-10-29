@@ -21,11 +21,20 @@ resource "google_container_node_pool" "pool" {
   cluster  = var.google_container_cluster_self_link
 
   initial_node_count = var.initial_node_count
+  node_count         = var.node_count
 
-  autoscaling {
-    min_node_count  = var.min_node_count
-    max_node_count  = var.max_node_count
-    location_policy = var.location_policy
+  # A fixed node_count and the cluster autoscaler both claim the pool's size,
+  # so the autoscaler is configured only while node_count is unset. The
+  # provider updates either direction in place: removing this block disables
+  # autoscaling and node_count resizes the pool; restoring it re-enables
+  # autoscaling between min_node_count and max_node_count.
+  dynamic "autoscaling" {
+    for_each = var.node_count == null ? [1] : []
+    content {
+      min_node_count  = var.min_node_count
+      max_node_count  = var.max_node_count
+      location_policy = var.location_policy
+    }
   }
 
   management {
