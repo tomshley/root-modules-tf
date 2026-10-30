@@ -43,6 +43,10 @@ module "controller" {
   use_patched_dual_stack_image            = var.use_patched_dual_stack_image
   controller_image                        = var.controller_image
   image_pull_secrets                      = var.image_pull_secrets
+  controller_replicas                     = var.controller_replicas
+  keep_controller_off_karpenter_nodes     = var.keep_controller_off_karpenter_nodes
+  preference_policy                       = var.preference_policy
+  controller_priority_class_name          = var.controller_priority_class_name
   helm_timeout_seconds                    = var.helm_timeout_seconds
 
   depends_on = [module.crds]

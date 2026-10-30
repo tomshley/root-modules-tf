@@ -18,9 +18,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from adapter_contract_check import live_hcl
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES_PATH = ROOT / "terraform" / "contracts" / "scenarios" / "contract-cases.json"
@@ -37,10 +41,15 @@ MODULES = {
     "gcp-gke-cluster",
     "gcp-gke-nodepool",
     "aws-eks-cluster",
+    "aws-eks-nodegroup",
+    "aws-eks-aurora-cluster",
     "gcp-cloudsql-postgres",
     "gcp-karpenter-crds",
     "gcp-karpenter-controller-release",
     "gcp-karpenter-controller",
+    "gcp-gke-karpenter-controller",
+    "aws-eks-karpenter-controller",
+    "karpenter-controller-contract",
 }
 
 CASE_CONFIGS = {
@@ -733,6 +742,65 @@ module "gke" {
   pods_secondary_range_name     = "pods-range"
 }
 """,
+    "gke-cluster-managed-prometheus-default": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+}
+""",
+    "gke-cluster-managed-prometheus-off": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  managed_prometheus            = false
+}
+""",
+    "gke-cluster-managed-prometheus-on": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  managed_prometheus            = true
+}
+""",
     "gke-cluster-location-zonal": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -869,7 +937,7 @@ module "crds" {
 }
 
 module "controller" {
-  source = "../../../modules/gcp-karpenter-controller-release"
+  source = "./modules/gcp-karpenter-controller-release"
 
   project_id                              = "contract-test-project"
   cluster_name                            = "contract-zonal-cluster"
@@ -908,7 +976,7 @@ module "karpenter" {
 }
 
 module "controller" {
-  source = "../../../modules/gcp-karpenter-controller-release"
+  source = "./modules/gcp-karpenter-controller-release"
 
   project_id                              = "contract-test-project"
   cluster_name                            = "contract-zonal-cluster"
@@ -920,6 +988,565 @@ module "controller" {
     repository = "registry.example.com/karpenter"
     tag        = "v0.6.0"
   }
+}
+""",
+    "karpenter-controller-contract-valid": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = 1
+    keep_off_karpenter_nodes = true
+    preference_policy        = "Ignore"
+    priority_class_name      = null
+  }
+}
+""",
+    "karpenter-controller-contract-replicas-invalid": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = 0
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = null
+  }
+}
+""",
+    "karpenter-controller-contract-replicas-fractional": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = 1.5
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = null
+  }
+}
+""",
+    "karpenter-controller-contract-policy-empty": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = ""
+    priority_class_name      = null
+  }
+}
+""",
+    "karpenter-controller-contract-policy-unsupported": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = "ignore"
+    priority_class_name      = null
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-blank": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = " "
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-invalid": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "gmp critical"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-uppercase": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "GMP-Critical"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-edge-hyphen": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "-gmp-critical"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-empty-label": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "gmp..critical"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-edge-trailing-hyphen": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "gmp-critical-"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-edge-dot": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "gmp."
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-label-hyphen": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "a.-b"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-too-long": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  }
+}
+""",
+    "karpenter-controller-contract-priority-class-longest": """
+module "contract" {
+  source = "../../../modules/karpenter-controller-contract"
+  contract = {
+    replicas                 = null
+    keep_off_karpenter_nodes = null
+    preference_policy        = null
+    priority_class_name      = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  }
+}
+""",
+    "karpenter-controller-release-keep-false": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  keep_controller_off_karpenter_nodes     = false
+}
+""",
+    "karpenter-controller-release-replicas-only": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_replicas                     = 3
+}
+""",
+    "karpenter-controller-release-preference-respect": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  preference_policy                       = "Respect"
+}
+""",
+    "karpenter-controller-release-replicas-invalid": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_replicas                     = 0
+}
+""",
+    "karpenter-controller-release-priority-class": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_priority_class_name          = "karpenter-controller"
+}
+""",
+    "karpenter-controller-release-contract-set": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/gcp-karpenter-controller-release"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_replicas                     = 1
+  keep_controller_off_karpenter_nodes     = true
+  preference_policy                       = "Ignore"
+}
+""",
+    "karpenter-controller-composes-contract-set": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "karpenter" {
+  source = "./modules/gcp-karpenter-controller"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_replicas                     = 1
+  keep_controller_off_karpenter_nodes     = true
+  preference_policy                       = "Ignore"
+  controller_priority_class_name          = "karpenter-controller"
+}
+""",
+    "karpenter-shim-contract-set": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "shim" {
+  source = "./modules/gcp-gke-karpenter-controller"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+  controller_replicas                     = 1
+  keep_controller_off_karpenter_nodes     = true
+  preference_policy                       = "Ignore"
+  controller_priority_class_name          = "karpenter-controller"
+}
+""",
+    "karpenter-shim-defaults": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "shim" {
+  source = "./modules/gcp-gke-karpenter-controller"
+
+  project_id                              = "contract-test-project"
+  cluster_name                            = "contract-zonal-cluster"
+  cluster_location                        = "us-east4-a"
+  controller_google_service_account_email = "karpenter@contract-test-project.iam.gserviceaccount.com"
+  node_service_account_email              = "nodes@contract-test-project.iam.gserviceaccount.com"
+}
+""",
+    "aws-karpenter-controller-defaults": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+}
+""",
+    "aws-karpenter-controller-replicas-invalid": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  controller_replicas               = 0
+}
+""",
+    "aws-karpenter-controller-version-null": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = null
+}
+""",
+    "aws-karpenter-controller-keep-true": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                        = "contract-eks-cluster"
+  cluster_endpoint                    = "https://contract-eks.example.com"
+  karpenter_controller_role_arn       = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name   = "contract-karpenter-interruption"
+  keep_controller_off_karpenter_nodes = true
+}
+""",
+    "aws-karpenter-controller-priority-class": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  controller_priority_class_name    = "system-node-critical"
+}
+""",
+    "aws-karpenter-controller-contract-set": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                        = "contract-eks-cluster"
+  cluster_endpoint                    = "https://contract-eks.example.com"
+  karpenter_controller_role_arn       = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name   = "contract-karpenter-interruption"
+  karpenter_version                   = "1.4.0"
+  controller_replicas                 = 3
+  keep_controller_off_karpenter_nodes = false
+  preference_policy                   = "Ignore"
+}
+""",
+    "aws-karpenter-controller-version-forms": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "double_digit_minor" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "1.10.0"
+  preference_policy                 = "Ignore"
+}
+
+module "v_prefixed" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "v1.4.0"
+  preference_policy                 = "Ignore"
+}
+
+module "next_major" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "2.0.0"
+  preference_policy                 = "Ignore"
+}
+""",
+    "aws-karpenter-controller-preference-old-chart": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  preference_policy                 = "Ignore"
+}
+""",
+    "aws-karpenter-controller-preference-before-1-4": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "1.3.3"
+  preference_policy                 = "Ignore"
+}
+""",
+    "aws-karpenter-controller-preference-major-zero": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "0.37.0"
+  preference_policy                 = "Ignore"
+}
+""",
+    "aws-karpenter-controller-preference-unreadable-version": """provider "helm" {
+  kubernetes {
+    host  = "https://127.0.0.1:1"
+    token = "invalid-token-for-plan-only"
+  }
+}
+
+module "controller" {
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-eks-cluster"
+  cluster_endpoint                  = "https://contract-eks.example.com"
+  karpenter_controller_role_arn     = "arn:aws:iam::123456789012:role/contract-karpenter"
+  karpenter_interruption_queue_name = "contract-karpenter-interruption"
+  karpenter_version                 = "latest"
+  preference_policy                 = "Ignore"
 }
 """,
     "gke-nodepool-size-fixed-zero": """provider "google" {
@@ -984,6 +1611,187 @@ module "nodepool" {
   pool_name_suffix                   = "standard"
   google_container_cluster_self_link = "projects/contract-test-project/locations/us-east4-a/clusters/contract-zonal-cluster"
   node_count                         = 3
+}
+""",
+    "eks-nodegroup-size-default": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "nodegroup" {
+  source = "../../../modules/aws-eks-nodegroup"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-eks-cluster"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  node_group_name     = "baseline"
+}
+""",
+    "eks-nodegroup-size-fixed-zero": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "nodegroup" {
+  source = "../../../modules/aws-eks-nodegroup"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-eks-cluster"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  node_group_name     = "baseline"
+  node_count          = 0
+}
+""",
+    "eks-nodegroup-size-fixed-three": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "nodegroup" {
+  source = "../../../modules/aws-eks-nodegroup"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-eks-cluster"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  node_group_name     = "baseline"
+  node_count          = 3
+}
+""",
+    "eks-nodegroup-size-fractional": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "nodegroup" {
+  source = "../../../modules/aws-eks-nodegroup"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-eks-cluster"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  node_group_name     = "baseline"
+  node_count          = 1.5
+}
+""",
+    "eks-nodegroup-size-negative": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "nodegroup" {
+  source = "../../../modules/aws-eks-nodegroup"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-eks-cluster"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  node_group_name     = "baseline"
+  node_count          = -1
+}
+""",
+    "aurora-activation-policy-default": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "db" {
+  source = "./modules/aws-eks-aurora-cluster"
+
+  project_name_prefix        = "contract"
+  workload_name              = "application"
+  vpc_id                     = "vpc-00000000000000000"
+  subnet_ids                 = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  allowed_security_group_ids = ["sg-00000000000000000"]
+  database_name              = "application"
+  reader_instance_count      = 1
+}
+""",
+    "aurora-activation-policy-never": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "db" {
+  source = "./modules/aws-eks-aurora-cluster"
+
+  project_name_prefix        = "contract"
+  workload_name              = "application"
+  vpc_id                     = "vpc-00000000000000000"
+  subnet_ids                 = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  allowed_security_group_ids = ["sg-00000000000000000"]
+  database_name              = "application"
+  reader_instance_count      = 1
+  activation_policy          = "NEVER"
+}
+""",
+    "aurora-activation-policy-always": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "db" {
+  source = "./modules/aws-eks-aurora-cluster"
+
+  project_name_prefix        = "contract"
+  workload_name              = "application"
+  vpc_id                     = "vpc-00000000000000000"
+  subnet_ids                 = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  allowed_security_group_ids = ["sg-00000000000000000"]
+  database_name              = "application"
+  reader_instance_count      = 1
+  activation_policy          = "ALWAYS"
+}
+""",
+    "aurora-activation-policy-invalid": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "db" {
+  source = "./modules/aws-eks-aurora-cluster"
+
+  project_name_prefix        = "contract"
+  workload_name              = "application"
+  vpc_id                     = "vpc-00000000000000000"
+  subnet_ids                 = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  allowed_security_group_ids = ["sg-00000000000000000"]
+  database_name              = "application"
+  reader_instance_count      = 1
+  activation_policy          = "ON_DEMAND"
 }
 """,
     "eks-cluster-name-at-limit": """provider "aws" {
@@ -1217,6 +2025,26 @@ module "db" {
   activation_policy              = "NEVER"
 }
 """,
+    "cloudsql-activation-policy-always": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "db" {
+  source = "./modules/gcp-cloudsql-postgres"
+
+  project_id                     = "contract-test-project"
+  project_name_prefix            = "contract"
+  workload_name                  = "contract-db"
+  region                         = "us-east4"
+  private_network_id             = "projects/contract-test-project/global/networks/contract-network"
+  private_services_connection_id = "contract-connection"
+  database_name                  = "contract"
+  edition                        = "ENTERPRISE"
+  tier                           = "db-custom-2-7680"
+  activation_policy              = "ALWAYS"
+}
+""",
     "cloudsql-activation-policy-on-demand": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -1330,6 +2158,15 @@ EXPECTED_RESOURCE_COUNTS = {
     },
 }
 
+# Managed Prometheus as planned: unset renders no monitoring_config, so the
+# cluster's current setting stands; true and false set it, and nothing else in
+# monitoring_config is set either way.
+EXPECTED_GKE_MANAGED_PROMETHEUS = {
+    "gke-cluster-managed-prometheus-default": None,
+    "gke-cluster-managed-prometheus-off": False,
+    "gke-cluster-managed-prometheus-on": True,
+}
+
 EXPECTED_GKE_CLUSTER_LOCATIONS = {
     "gke-cluster-location-regional-default": {
         "location": "us-east4",
@@ -1358,12 +2195,37 @@ EXPECTED_GKE_NODEPOOL_SIZING = {
     "gke-nodepool-size-fixed-three": {"autoscaling": [], "node_count": 3},
 }
 
+# The EKS node group's scaling for each node_count, the counterpart of
+# EXPECTED_GKE_NODEPOOL_SIZING: unset keeps min_size, max_size, and
+# desired_size; a fixed count pins all three, with a maximum of at least 1.
+EXPECTED_EKS_NODEGROUP_SIZING = {
+    "eks-nodegroup-size-default": {"desired_size": 2, "max_size": 5, "min_size": 1},
+    "eks-nodegroup-size-fixed-zero": {"desired_size": 0, "max_size": 1, "min_size": 0},
+    "eks-nodegroup-size-fixed-three": {"desired_size": 3, "max_size": 3, "min_size": 3},
+}
+
+# The Aurora instances each activation policy plans, the counterpart of
+# EXPECTED_CLOUDSQL_ACTIVATION_POLICIES: NEVER keeps the cluster and plans no
+# instance at all.
+EXPECTED_AURORA_INSTANCES = {
+    "aurora-activation-policy-default": [
+        "module.db.aws_rds_cluster_instance.reader[0]",
+        "module.db.aws_rds_cluster_instance.writer[0]",
+    ],
+    "aurora-activation-policy-never": [],
+    "aurora-activation-policy-always": [
+        "module.db.aws_rds_cluster_instance.reader[0]",
+        "module.db.aws_rds_cluster_instance.writer[0]",
+    ],
+}
+
 # An unset activation policy plans as ALWAYS, the provider's own value for an
 # instance created without one — the back-compat contract — and NEVER reaches
 # the primary instance's settings.
 EXPECTED_CLOUDSQL_ACTIVATION_POLICIES = {
     "cloudsql-activation-policy-default": "ALWAYS",
     "cloudsql-activation-policy-never": "NEVER",
+    "cloudsql-activation-policy-always": "ALWAYS",
 }
 
 # Permissions a case's custom role must carry — the escalate/bind pair
@@ -1447,16 +2309,140 @@ EXPECTED_HELM_RELEASES = {
         ("module.karpenter.module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
         ("module.karpenter.module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
     ],
+    "karpenter-controller-release-keep-false": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-release-replicas-only": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-release-preference-respect": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-release-priority-class": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-release-contract-set": [
+        ("module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+    ],
+    "karpenter-controller-composes-contract-set": [
+        ("module.karpenter.module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+        ("module.karpenter.module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
+    ],
+    "karpenter-shim-contract-set": [
+        ("module.shim.module.karpenter.module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+        ("module.shim.module.karpenter.module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
+    ],
+    "karpenter-shim-defaults": [
+        ("module.shim.module.karpenter.module.controller.helm_release.karpenter", "karpenter", "0.6.0", True),
+        ("module.shim.module.karpenter.module.crds.helm_release.crds", "karpenter-crd", "0.6.0", False),
+    ],
+    "aws-karpenter-controller-defaults": [
+        ("module.controller.helm_release.karpenter", "karpenter", "1.1.0", False),
+    ],
+    "aws-karpenter-controller-keep-true": [
+        ("module.controller.helm_release.karpenter", "karpenter", "1.1.0", False),
+    ],
+    "aws-karpenter-controller-priority-class": [
+        ("module.controller.helm_release.karpenter", "karpenter", "1.1.0", False),
+    ],
+    "aws-karpenter-controller-contract-set": [
+        ("module.controller.helm_release.karpenter", "karpenter", "1.4.0", False),
+    ],
+    "aws-karpenter-controller-version-forms": [
+        ("module.double_digit_minor.helm_release.karpenter", "karpenter", "1.10.0", False),
+        ("module.next_major.helm_release.karpenter", "karpenter", "2.0.0", False),
+        ("module.v_prefixed.helm_release.karpenter", "karpenter", "v1.4.0", False),
+    ],
 }
 
 # Rendered Helm values, verbatim. The composed case's controller values were
 # captured from gcp-karpenter-controller before the split, with the same
 # inputs, so a change in what the split release renders fails here rather
 # than reaching an existing install as an in-place upgrade.
+# The remaining Karpenter controller cases pin what each cloud renders for
+# karpenter-controller-contract inputs, one input or combination per case,
+# and the AWS defaults case pins the values the EKS release rendered before
+# the contract existed.
 EXPECTED_HELM_VALUES = {
     "karpenter-controller-composes-both": {
         "module.karpenter.module.controller.helm_release.karpenter": [
             "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"registry.gitlab.com/tomshley/brands/global/tware/tech/products/provisioning/vendored/karpenter-provider-gcp/karpenter\"\n    \"tag\": \"v0.6.0-dualstack\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"defaultNodePoolTemplateName\": \"contract-baseline\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"imagePullSecrets\":\n- \"name\": \"contract-registry\"\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-release-keep-false": {
+        "module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-release-replicas-only": {
+        "module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"replicaCount\": 3\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"podDisruptionBudget\":\n  \"maxUnavailable\": 1\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-release-preference-respect": {
+        "module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  - \"name\": \"PREFERENCE_POLICY\"\n    \"value\": \"Respect\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-release-priority-class": {
+        "module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"priorityClassName\": \"karpenter-controller\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-release-contract-set": {
+        "module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"affinity\":\n    \"nodeAffinity\":\n      \"requiredDuringSchedulingIgnoredDuringExecution\":\n        \"nodeSelectorTerms\":\n        - \"matchExpressions\":\n          - \"key\": \"karpenter.sh/nodepool\"\n            \"operator\": \"DoesNotExist\"\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  - \"name\": \"PREFERENCE_POLICY\"\n    \"value\": \"Ignore\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"replicaCount\": 1\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"podDisruptionBudget\":\n  \"maxUnavailable\": 1\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-controller-composes-contract-set": {
+        "module.karpenter.module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"affinity\":\n    \"nodeAffinity\":\n      \"requiredDuringSchedulingIgnoredDuringExecution\":\n        \"nodeSelectorTerms\":\n        - \"matchExpressions\":\n          - \"key\": \"karpenter.sh/nodepool\"\n            \"operator\": \"DoesNotExist\"\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  - \"name\": \"PREFERENCE_POLICY\"\n    \"value\": \"Ignore\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"priorityClassName\": \"karpenter-controller\"\n  \"replicaCount\": 1\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"podDisruptionBudget\":\n  \"maxUnavailable\": 1\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-shim-contract-set": {
+        "module.shim.module.karpenter.module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"affinity\":\n    \"nodeAffinity\":\n      \"requiredDuringSchedulingIgnoredDuringExecution\":\n        \"nodeSelectorTerms\":\n        - \"matchExpressions\":\n          - \"key\": \"karpenter.sh/nodepool\"\n            \"operator\": \"DoesNotExist\"\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  - \"name\": \"PREFERENCE_POLICY\"\n    \"value\": \"Ignore\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"priorityClassName\": \"karpenter-controller\"\n  \"replicaCount\": 1\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"podDisruptionBudget\":\n  \"maxUnavailable\": 1\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "karpenter-shim-defaults": {
+        "module.shim.module.karpenter.module.controller.helm_release.karpenter": [
+            "\"controller\":\n  \"env\":\n  - \"name\": \"DEFAULT_NODEPOOL_SERVICE_ACCOUNT\"\n    \"value\": \"nodes@contract-test-project.iam.gserviceaccount.com\"\n  \"image\":\n    \"repository\": \"public.ecr.aws/cloudpilotai/gcp/karpenter\"\n    \"tag\": \"v0.6.0\"\n  \"settings\":\n    \"clusterLocation\": \"us-east4-a\"\n    \"clusterName\": \"contract-zonal-cluster\"\n    \"projectID\": \"contract-test-project\"\n\"credentials\":\n  \"enabled\": false\n\"serviceAccount\":\n  \"annotations\":\n    \"iam.gke.io/gcp-service-account\": \"karpenter@contract-test-project.iam.gserviceaccount.com\"\n  \"create\": true\n  \"name\": \"karpenter\"\n",
+        ],
+    },
+    "aws-karpenter-controller-defaults": {
+        "module.controller.helm_release.karpenter": [
+            "\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n",
+        ],
+    },
+    "aws-karpenter-controller-version-null": {
+        "module.controller.helm_release.karpenter": [
+            "\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n",
+        ],
+    },
+    "aws-karpenter-controller-keep-true": {
+        "module.controller.helm_release.karpenter": [
+            "\"affinity\":\n  \"nodeAffinity\":\n    \"requiredDuringSchedulingIgnoredDuringExecution\":\n      \"nodeSelectorTerms\":\n      - \"matchExpressions\":\n        - \"key\": \"karpenter.sh/nodepool\"\n          \"operator\": \"DoesNotExist\"\n\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n",
+        ],
+    },
+    "aws-karpenter-controller-priority-class": {
+        "module.controller.helm_release.karpenter": [
+            "\"priorityClassName\": \"system-node-critical\"\n\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n",
+        ],
+    },
+    "aws-karpenter-controller-contract-set": {
+        "module.controller.helm_release.karpenter": [
+            "\"affinity\":\n  \"nodeAffinity\": null\n\"replicas\": 3\n\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n  \"preferencePolicy\": \"Ignore\"\n",
+        ],
+    },
+    "aws-karpenter-controller-version-forms": {
+        "module.double_digit_minor.helm_release.karpenter": [
+            "\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n  \"preferencePolicy\": \"Ignore\"\n",
+        ],
+        "module.next_major.helm_release.karpenter": [
+            "\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n  \"preferencePolicy\": \"Ignore\"\n",
+        ],
+        "module.v_prefixed.helm_release.karpenter": [
+            "\"serviceAccount\":\n  \"annotations\":\n    \"eks.amazonaws.com/role-arn\": \"arn:aws:iam::123456789012:role/contract-karpenter\"\n  \"name\": \"karpenter\"\n\"settings\":\n  \"clusterEndpoint\": \"https://contract-eks.example.com\"\n  \"clusterName\": \"contract-eks-cluster\"\n  \"interruptionQueue\": \"contract-karpenter-interruption\"\n  \"preferencePolicy\": \"Ignore\"\n",
         ],
     },
 }
@@ -1554,6 +2540,22 @@ def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, t
     return problems
 
 
+# Example roots that must validate against the modules in this tree.
+EXAMPLE_ROOTS = [
+    "gcp-gke-environment-pause/cluster",
+    "gcp-gke-environment-pause/node-provisioning",
+    "aws-eks-environment-pause/cluster",
+    "aws-eks-environment-pause/node-provisioning",
+]
+
+# moved blocks that keep existing installs from being replaced, by module
+# file. The prior-state check above re-plans a whole case and so cannot hold a
+# move inside a module whose other resources are absent from that state; these
+# are checked as written instead.
+REQUIRED_MOVES = [
+    ("aws-eks-aurora-cluster/moved.tf", "aws_rds_cluster_instance.writer", "aws_rds_cluster_instance.writer[0]"),
+]
+
 # Module files that must stay identical: gcp-karpenter-controller passes
 # every input through to gcp-karpenter-controller-release, and HCL cannot
 # share variable declarations between modules.
@@ -1602,6 +2604,28 @@ EXPECTED_DIAGNOSTICS = {
     "cloudsql-activation-policy-on-demand": "activation_policy must be ALWAYS or NEVER (ON_DEMAND is deprecated by Cloud SQL).",
     "cloudsql-activation-policy-never-with-readers": "activation_policy NEVER requires reader_instance_count = 0",
     "karpenter-controller-release-image-conflict": "use_patched_dual_stack_image and controller_image are mutually exclusive",
+    "karpenter-controller-contract-replicas-invalid": "replicas must be null or a whole number of controller replicas, 1 or more.",
+    "karpenter-controller-release-replicas-invalid": "replicas must be null or a whole number of controller replicas, 1 or more.",
+    "aws-karpenter-controller-replicas-invalid": "replicas must be null or a whole number of controller replicas, 1 or more.",
+    "karpenter-controller-contract-replicas-fractional": "replicas must be null or a whole number of controller replicas, 1 or more.",
+    "karpenter-controller-contract-policy-empty": 'preference_policy must be null, "Respect", or "Ignore".',
+    "karpenter-controller-contract-policy-unsupported": 'preference_policy must be null, "Respect", or "Ignore".',
+    "karpenter-controller-contract-priority-class-blank": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-invalid": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-uppercase": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-edge-hyphen": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-empty-label": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-edge-trailing-hyphen": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-edge-dot": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-label-hyphen": "priority_class_name must be null or a PriorityClass name:",
+    "karpenter-controller-contract-priority-class-too-long": "priority_class_name must be null or a PriorityClass name:",
+    "aws-karpenter-controller-preference-before-1-4": 'preference_policy needs a karpenter_version that reads as 1.4 or later, because earlier Karpenter does not read PREFERENCE_POLICY; got "1.3.3".',
+    "aws-karpenter-controller-preference-major-zero": 'preference_policy needs a karpenter_version that reads as 1.4 or later, because earlier Karpenter does not read PREFERENCE_POLICY; got "0.37.0".',
+    "aws-karpenter-controller-preference-old-chart": 'preference_policy needs a karpenter_version that reads as 1.4 or later, because earlier Karpenter does not read PREFERENCE_POLICY; got "1.1.0".',
+    "aws-karpenter-controller-preference-unreadable-version": 'preference_policy needs a karpenter_version that reads as 1.4 or later, because earlier Karpenter does not read PREFERENCE_POLICY; got "latest".',
+    "eks-nodegroup-size-fractional": "node_count must be null or a whole number of nodes, 0 or more.",
+    "eks-nodegroup-size-negative": "node_count must be null or a whole number of nodes, 0 or more.",
+    "aurora-activation-policy-invalid": "activation_policy must be ALWAYS or NEVER.",
 }
 
 
@@ -1626,6 +2650,12 @@ def main() -> int:
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "0" * 40)
     failures: list[str] = []
     modules_root = ROOT / "terraform" / "modules"
+    for path, source, target in REQUIRED_MOVES:
+        pattern = rf"moved\s*\{{\s*from\s*=\s*{re.escape(source)}\s+to\s*=\s*{re.escape(target)}\s*\}}"
+        if re.search(pattern, live_hcl((modules_root / path).read_text())):
+            print(f"PASS required-move {path} {source} -> {target}")
+        else:
+            failures.append(f"{path} lost the move {source} -> {target}")
     for first, second in IDENTICAL_MODULE_FILES:
         if (modules_root / first).read_text() != (modules_root / second).read_text():
             failures.append(f"{first} and {second} differ")
@@ -1637,6 +2667,18 @@ def main() -> int:
         cache.mkdir()
         os.environ.setdefault("TF_PLUGIN_CACHE_DIR", str(cache))
         os.environ.setdefault("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", "1")
+        for example in EXAMPLE_ROOTS:
+            example_dir = ROOT / "terraform" / "examples" / example
+            with tempfile.TemporaryDirectory(prefix="example-") as scratch:
+                work_example = Path(scratch) / "terraform" / "examples" / example
+                shutil.copytree(ROOT / "terraform" / "modules", Path(scratch) / "terraform" / "modules")
+                shutil.copytree(example_dir, work_example, ignore=shutil.ignore_patterns(".terraform*"))
+                init = run([tofu, "init", "-backend=false", "-input=false", "-no-color"], work_example)
+                validate = run([tofu, "validate", "-no-color"], work_example) if init.returncode == 0 else init
+                if validate.returncode != 0:
+                    failures.append(f"example {example} does not validate: {(validate.stdout + validate.stderr)[-1500:]}")
+                else:
+                    print(f"PASS example-validate {example}")
         for case in cases:
             name = case["name"]
             work = temp_root / name
@@ -1672,9 +2714,12 @@ def main() -> int:
                         or name in EXPECTED_RESOURCE_COUNTS
                         or name in EXPECTED_ATTRIBUTE_CONDITIONS
                         or name in EXPECTED_GKE_CLUSTER_LOCATIONS
+                        or name in EXPECTED_GKE_MANAGED_PROMETHEUS
                         or name in EXPECTED_GKE_NODEPOOL_LOCATIONS
                         or name in EXPECTED_GKE_NODEPOOL_SIZING
+                        or name in EXPECTED_EKS_NODEGROUP_SIZING
                         or name in EXPECTED_CLOUDSQL_ACTIVATION_POLICIES
+                        or name in EXPECTED_AURORA_INSTANCES
                         or name in EXPECTED_HELM_RELEASES
                         or name in EXPECTED_HELM_VALUES
                         or name in EXPECTED_PRIOR_STATE_MOVES
@@ -1722,6 +2767,18 @@ def main() -> int:
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
                             continue
+                    if name in EXPECTED_GKE_MANAGED_PROMETHEUS:
+                        clusters = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "google_container_cluster"
+                        ]
+                        monitoring = (clusters[0]["values"].get("monitoring_config") or []) if len(clusters) == 1 else None
+                        enabled = (monitoring[0].get("managed_prometheus") or [{}])[0].get("enabled") if monitoring else None
+                        others = sorted(key for key, value in (monitoring[0] if monitoring else {}).items() if key != "managed_prometheus" and value not in (None, []))
+                        if len(clusters) != 1 or enabled != EXPECTED_GKE_MANAGED_PROMETHEUS[name] or others:
+                            failures.append(f"{name}: planned Managed Prometheus changed: {monitoring}")
+                            continue
                     if name in EXPECTED_GKE_CLUSTER_LOCATIONS:
                         clusters = [
                             resource
@@ -1759,6 +2816,25 @@ def main() -> int:
                             if after_unknown.get("cluster") is not True:
                                 failures.append(f"{name}: planned nodepool cluster link is not unknown")
                                 continue
+                    if name in EXPECTED_EKS_NODEGROUP_SIZING:
+                        groups = [
+                            resource
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "aws_eks_node_group"
+                        ]
+                        sizing = (groups[0]["values"].get("scaling_config") or [None])[0] if len(groups) == 1 else None
+                        if sizing != EXPECTED_EKS_NODEGROUP_SIZING[name]:
+                            failures.append(f"{name}: planned node group sizing changed: {sizing}")
+                            continue
+                    if name in EXPECTED_AURORA_INSTANCES:
+                        resources = planned_resources(planned["root_module"])
+                        instances = sorted(
+                            resource["address"] for resource in resources if resource["type"] == "aws_rds_cluster_instance"
+                        )
+                        clusters = [resource for resource in resources if resource["type"] == "aws_rds_cluster"]
+                        if instances != EXPECTED_AURORA_INSTANCES[name] or len(clusters) != 1:
+                            failures.append(f"{name}: planned Aurora cluster or instances changed: {len(clusters)} cluster(s), {instances}")
+                            continue
                     if name in EXPECTED_GKE_NODEPOOL_SIZING:
                         nodepools = [
                             resource

@@ -185,6 +185,17 @@ variable "reader_instance_count" {
   }
 }
 
+variable "activation_policy" {
+  type        = string
+  default     = null
+  description = "ALWAYS keeps the writer and readers running; NEVER removes every instance, the writer and reader_instance_count readers alike, while the cluster stays with its storage, data, endpoints, master credential, and tenant secrets, so no compute is charged and nothing a consumer reads changes. Returning to ALWAYS, or null, creates the instances again under the same identifiers; each takes several minutes. Null keeps the long-standing behavior, so an existing consumer re-plans to zero changes. While NEVER, nothing can connect, so changes inside the database cannot be made. The counterpart of gcp-cloudsql-postgres's activation_policy, which stops the instance instead: Aurora can stop a cluster for at most seven days before AWS starts it again, so removing the instances is what keeps compute off for as long as the pause lasts. Aurora readers are removed with the writer, so NEVER needs no reader count of zero here."
+
+  validation {
+    condition     = var.activation_policy == null ? true : contains(["ALWAYS", "NEVER"], var.activation_policy)
+    error_message = "activation_policy must be ALWAYS or NEVER."
+  }
+}
+
 # --- Tunable parameter overrides (nullable, preset value used when null) ---
 
 variable "max_connections" {

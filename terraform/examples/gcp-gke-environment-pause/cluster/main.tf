@@ -19,10 +19,11 @@
 # Karpenter, whose helm and kubernetes providers connect through the cluster
 # built here, so it is a separate root with separate state.
 #
-# paused = true removes the compute and keeps everything else: the cluster and
-# its control plane, the node pool resource, the network, the service
-# accounts, and the Cloud SQL instance with its data. Nothing this root
-# outputs changes, so whatever is rendered from those outputs stays valid.
+# paused = true removes the compute and Managed Prometheus and keeps
+# everything else: the cluster and its control plane, the node pool resource,
+# the network, the service accounts, and the Cloud SQL instance with its data.
+# Nothing this root outputs changes, so whatever is rendered from those
+# outputs stays valid.
 #
 # Pause ../node-provisioning before this root and resume it after.
 # Replace placeholder values before applying.
@@ -87,6 +88,9 @@ module "cluster" {
   google_compute_subnetwork_id           = module.network.subnetwork_id
   services_secondary_range_name          = module.network.services_secondary_range_name
   pods_secondary_range_name              = module.network.pods_secondary_range_name
+  # With no nodes there is nothing to scrape. Resuming must set true: null
+  # would keep the disabled setting.
+  managed_prometheus = !var.paused
 }
 
 # --- Baseline Nodepool ---
@@ -114,8 +118,8 @@ module "baseline_pool" {
 # --- Database ---
 
 # Paused, the primary is stopped (NEVER); storage and IP address charges
-# continue. Cloud SQL does not support NEVER for a read replica, so this
-# composition has none — with readers, a pause would leave them running.
+# continue. Cloud SQL does not support NEVER for a read replica, and the
+# module refuses NEVER while readers exist, so this composition has none.
 module "database" {
   source = "../../../modules/gcp-cloudsql-postgres"
 
