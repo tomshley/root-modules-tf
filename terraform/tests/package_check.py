@@ -36,8 +36,10 @@ SHIM_CLOSURES = {
     "gcp-gke-grafana-alloy": {"k8s-grafana-alloy"},
     "gcp-gke-keycloak": {"gcp-keycloak", "k8s-keycloak"},
     "gcp-gke-secure-gcs": {"gcp-secure-gcs"},
-    "gcp-gke-karpenter-controller": {"gcp-karpenter-controller", "gcp-karpenter-crds", "gcp-karpenter-controller-release"},
-    "gcp-karpenter-controller": {"gcp-karpenter-crds", "gcp-karpenter-controller-release"},
+    "gcp-gke-karpenter-controller": {"gcp-karpenter-controller", "gcp-karpenter-crds", "gcp-karpenter-controller-release", "karpenter-controller-contract"},
+    "gcp-karpenter-controller": {"gcp-karpenter-crds", "gcp-karpenter-controller-release", "karpenter-controller-contract"},
+    "gcp-karpenter-controller-release": {"karpenter-controller-contract"},
+    "aws-eks-karpenter-controller": {"karpenter-controller-contract"},
 }
 
 

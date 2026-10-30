@@ -98,3 +98,9 @@ variable "deletion_protection" {
   type    = bool
   default = true
 }
+
+variable "managed_prometheus" {
+  type        = bool
+  default     = null
+  description = "Google Cloud Managed Service for Prometheus. Null renders nothing and leaves the cluster's current setting as it is: GKE's default, enabled, for a cluster that never set it, so an existing cluster re-plans to zero changes. False disables it, removing its collectors and their ingestion charges, while GKE's other monitoring components stay as they are; true enables it. Returning to null after false keeps it disabled, so a consumer that switches it off, for example while paused, sets true to turn it back on. GKE creates the gmp-critical PriorityClass only while it is enabled, so a consumer removes pods using that class first, as the environment-pause example removes the GKE Karpenter chart's controller, or gives them a class of its own. The AWS modules here provision no managed Prometheus collector; pausing other metrics collectors on either cloud, such as the Grafana Alloy modules, is left to the consumer."
+}

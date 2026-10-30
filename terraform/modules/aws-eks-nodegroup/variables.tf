@@ -58,6 +58,17 @@ variable "desired_size" {
   default = 2
 }
 
+variable "node_count" {
+  type        = number
+  default     = null
+  description = "Fixed number of nodes. Null leaves the group's size to min_size, max_size, and desired_size. A number holds the group at exactly that size: min_size and desired_size take it, and max_size takes it too, or 1 when it is 0, because EKS requires a maximum of at least 1. 0 removes every node while the node group, its launch template, and its role remain. min_size, max_size, and desired_size are ignored while node_count is set, so returning to null restores the same sizes. The counterpart of gcp-gke-nodepool's node_count, which counts nodes per zone where this counts the whole group; both remove every node at 0."
+
+  validation {
+    condition     = var.node_count == null || try(var.node_count >= 0 && floor(var.node_count) == var.node_count, false)
+    error_message = "node_count must be null or a whole number of nodes, 0 or more."
+  }
+}
+
 variable "disk_size" {
   type    = number
   default = 30

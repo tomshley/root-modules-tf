@@ -16,6 +16,23 @@ This project follows Semantic Versioning.
 
 ---
 
+## [3.1.0] — 2026-10-29
+
+### Added
+
+- **aws-eks-nodegroup**: `node_count` pins the managed node group to a fixed size — `0` removes every node while the group and its cluster remain, matching `gcp-gke-nodepool`'s pause input.
+- **aws-eks-aurora-cluster**: `activation_policy` — `NEVER` removes the cluster's instances while the cluster and its data stay in place for a return to `ALWAYS`, matching the Cloud SQL pause. A `moved` block carries an existing single writer across to its counted address without recreation.
+- **karpenter-controller-contract**: a resource-less module carrying the Karpenter controller's replica count, placement, preference policy, and PriorityClass contract, shared by the AWS and GCP controller modules so both expose the same pause-and-reinstall inputs and their rendered values agree.
+- **gcp-gke-cluster**: Managed Prometheus can be switched off for a pause; the pause examples guard its return before the Karpenter controller reinstalls.
+- **aws-eks-environment-pause** example: the same two-root pause on EKS — baseline node group at zero, Aurora instances removed with the cluster kept, the controller removed with its CRDs kept by Helm.
+- Contract-test coverage for the new inputs, example-root validation, and the shared controller contract.
+
+### Changed
+
+- **aws-eks-karpenter-controller**, **gcp-karpenter-controller-release**, **gcp-karpenter-controller**: the controller modules now take replicas, preference policy, PriorityClass, and placement through `karpenter-controller-contract` instead of carrying the logic privately.
+
+---
+
 ## [3.0.0] — 2026-10-29
 
 ### Added

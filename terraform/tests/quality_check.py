@@ -30,6 +30,7 @@ SCAN_ROOTS = [
         "postgres-tenancy-contract",
         "redis-service-contract",
         "node-provisioning-contract",
+        "karpenter-controller-contract",
         "postgres-binding",
     ]),
 ]

@@ -28,11 +28,24 @@ locals {
     tag        = "v${local.chart_version}-dualstack"
   }
 
+  contract = module.controller_contract.contract
+
   controller_image = coalesce(
     var.controller_image,
     var.use_patched_dual_stack_image ? local.vendored_dual_stack_image : null,
     local.upstream_controller_image,
   )
+}
+
+module "controller_contract" {
+  source = "../karpenter-controller-contract"
+
+  contract = {
+    replicas                 = var.controller_replicas
+    keep_off_karpenter_nodes = var.keep_controller_off_karpenter_nodes
+    preference_policy        = var.preference_policy
+    priority_class_name      = var.controller_priority_class_name
+  }
 }
 
 # The CRDs come from gcp-karpenter-crds, installed first by the caller.
@@ -41,6 +54,13 @@ locals {
 # gcp-karpenter-crds install would fail on them. Removing this release leaves
 # every NodePool, NodeClaim, and GCENodeClass in place with no controller
 # acting on them.
+#
+# Every controller_contract field left null renders nothing, so the chart's
+# own setting stands. The chart's disruption budget keeps one pod available,
+# which would block every drain of a single replica, so setting the replica
+# count also allows one pod to be unavailable. Helm merges the node affinity
+# into the chart's default affinity, which keeps its one-replica-per-node pod
+# anti-affinity.
 resource "helm_release" "karpenter" {
   name             = "karpenter"
   namespace        = var.namespace
@@ -50,29 +70,43 @@ resource "helm_release" "karpenter" {
   version          = local.chart_version
   skip_crds        = true
 
-  values = concat([yamlencode(merge({
-    credentials = { enabled = false }
-    serviceAccount = {
-      create = true
-      name   = var.kubernetes_service_account_name
-      annotations = {
-        "iam.gke.io/gcp-service-account" = var.controller_google_service_account_email
+  values = concat([yamlencode(merge(
+    {
+      credentials = { enabled = false }
+      serviceAccount = {
+        create = true
+        name   = var.kubernetes_service_account_name
+        annotations = {
+          "iam.gke.io/gcp-service-account" = var.controller_google_service_account_email
+        }
       }
-    }
-    controller = {
-      image = local.controller_image
-      env   = [{ name = "DEFAULT_NODEPOOL_SERVICE_ACCOUNT", value = var.node_service_account_email }]
-      settings = merge({
-        projectID       = var.project_id
-        clusterName     = var.cluster_name
-        clusterLocation = var.cluster_location
-        }, var.node_location == null ? {} : {
-        nodeLocation = var.node_location
-        }, var.bootstrap_node_pool_name == null ? {} : {
-        defaultNodePoolTemplateName = var.bootstrap_node_pool_name
-      })
-    }
-  }, length(var.image_pull_secrets) > 0 ? { imagePullSecrets = [for s in var.image_pull_secrets : { name = s }] } : {}))], var.extra_helm_values)
+      controller = merge(
+        {
+          image = local.controller_image
+          env = concat(
+            [{ name = "DEFAULT_NODEPOOL_SERVICE_ACCOUNT", value = var.node_service_account_email }],
+            local.contract.preference_policy == null ? [] : [{ name = "PREFERENCE_POLICY", value = local.contract.preference_policy }],
+          )
+          settings = merge({
+            projectID       = var.project_id
+            clusterName     = var.cluster_name
+            clusterLocation = var.cluster_location
+            }, var.node_location == null ? {} : {
+            nodeLocation = var.node_location
+            }, var.bootstrap_node_pool_name == null ? {} : {
+            defaultNodePoolTemplateName = var.bootstrap_node_pool_name
+          })
+        },
+        local.contract.replicas == null ? {} : { replicaCount = local.contract.replicas },
+        local.contract.priority_class_name == null ? {} : { priorityClassName = local.contract.priority_class_name },
+        local.contract.keep_off_karpenter_nodes != true ? {} : {
+          affinity = { nodeAffinity = module.controller_contract.node_affinity_off_karpenter_nodes }
+        },
+      )
+    },
+    length(var.image_pull_secrets) > 0 ? { imagePullSecrets = [for s in var.image_pull_secrets : { name = s }] } : {},
+    local.contract.replicas == null ? {} : { podDisruptionBudget = { maxUnavailable = 1 } },
+  ))], var.extra_helm_values)
 
   wait    = true
   timeout = var.helm_timeout_seconds

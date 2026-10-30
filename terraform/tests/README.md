@@ -2,7 +2,7 @@
 
 This directory contains non-mutating tests for the resource-free architecture contracts. The runner executes OpenTofu validation in disposable temporary directories and includes deliberate invalid cases. A passing positive case is not sufficient: every named negative case must fail for its intended contract reason.
 
-Cases for provider-backed modules (currently `cloudflare-preview-website`) plan with `-refresh=false` against empty state; the runner exports a placeholder `CLOUDFLARE_API_TOKEN` so the provider can configure itself, and no request ever reaches the Cloudflare API. Provider downloads are shared across cases through `TF_PLUGIN_CACHE_DIR`, with `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE` set so the lock-file-less case directories actually read the cache; the environment's own values for either variable win.
+Cases for provider-backed modules plan with `-refresh=false` against empty state; for the Cloudflare cases the runner exports a placeholder `CLOUDFLARE_API_TOKEN` so the provider can configure itself, and no request ever reaches the Cloudflare API. Provider downloads are shared across cases through `TF_PLUGIN_CACHE_DIR`, with `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE` set so the lock-file-less case directories actually read the cache; the environment's own values for either variable win. The same run validates each pause example root listed in `EXAMPLE_ROOTS` against the modules in this tree, sharing that cache, and checks that every move in `REQUIRED_MOVES` is still written in its module outside comments, for moves whose prior-state re-plan would need the module's whole state.
 
 Run through the wrapper:
 

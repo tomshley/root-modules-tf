@@ -88,6 +88,26 @@ variable "image_pull_secrets" {
   default     = []
   description = "Names of existing Kubernetes Secrets in the controller namespace rendered as the chart's top-level imagePullSecrets. Required when controller_image lives in a registry the node service account cannot pull — for example a private GitLab container registry behind a read_registry deploy token."
 }
+variable "controller_replicas" {
+  type        = number
+  default     = null
+  description = "Controller replica count. Null keeps the chart's two. Setting it also sets the controller's disruption budget to one unavailable pod, so a single replica can still be drained. Validated by karpenter-controller-contract."
+}
+variable "keep_controller_off_karpenter_nodes" {
+  type        = bool
+  default     = null
+  description = "True keeps the controller's pods off nodes Karpenter launched (required node affinity on karpenter.sh/nodepool DoesNotExist), so no such node holds the controller; on GKE, while konnectivity-agent runs a pod on every node, consolidation removing them also needs preference_policy = \"Ignore\". The cluster's other pools then need room for every replica on its own node. Null or false keeps the chart's placement, which allows Karpenter's nodes. See the gcp-karpenter-controller README."
+}
+variable "preference_policy" {
+  type        = string
+  default     = null
+  description = "The controller's PREFERENCE_POLICY, \"Respect\" or \"Ignore\". Null leaves it unset, which the controller treats as Respect. On GKE, while konnectivity-agent runs a pod on every node, Respect keeps consolidation from deleting any node; Ignore lets it, and also stops Karpenter weighing workloads' preferred spreads and affinities when it launches nodes. See the gcp-karpenter-controller README. Validated by karpenter-controller-contract."
+}
+variable "controller_priority_class_name" {
+  type        = string
+  default     = null
+  description = "PriorityClass for the controller's pods. Null keeps the chart's gmp-critical, a class GKE creates only while Managed Prometheus is enabled, so a cluster that turns Managed Prometheus off removes the controller first, as a pause does, or sets a PriorityClass of its own here. GKE admits system-cluster-critical and system-node-critical only in the namespaces it manages, through ResourceQuota, so they are refused in the controller's namespace. Validated by karpenter-controller-contract."
+}
 variable "helm_timeout_seconds" {
   type    = number
   default = 300

@@ -12,6 +12,9 @@
 # limitations under the License.
 
 terraform {
+  # lifecycle preconditions need 1.2.
+  required_version = ">= 1.2"
+
   required_providers {
     helm = {
       source  = "hashicorp/helm"

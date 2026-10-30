@@ -21,3 +21,5 @@ Karpenter applies the generic `gke-<cluster>-node` tag and, since provider v0.4.
 An advisory `check` block reads the cluster at the effective node location and asserts `cluster_location` resolves to the same region the cluster lives in. The read itself surfaces a wrong node location at plan time; a principal lacking `container.clusters.get` gets a warning, never a broken plan.
 
 From provider v0.4.0 the controller no longer creates its own template node pools; it bootstraps nodes from the instance template of an existing RUNNING pool. Discovery is `default-pool`, then the first RUNNING pool alphabetically, then a created `karpenter-fallback`. Alphabetical ordering is incidental, not a contract — pass `bootstrap_node_pool_name` to pin the source pool deterministically. Legacy `karpenter-*` pools left over from older provider versions are unused and can be deleted.
+
+`controller_replicas`, `keep_controller_off_karpenter_nodes`, `preference_policy`, and `controller_priority_class_name` pass through unchanged; see *Controller placement and consolidation* in the `gcp-karpenter-controller` README.

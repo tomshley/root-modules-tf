@@ -82,3 +82,12 @@ moved {
 #   + aws_vpc_security_group_ingress_rule.allowed["sg-xxx"]   (created)
 # This is a one-time destroy+create cycle (brief connectivity blip).
 # Deduplicates automatically and eliminates index-shift races.
+
+# v3.0.1 — The writer gained a count, so activation_policy NEVER can remove
+# every instance and keep the cluster. This applies to every consumer and
+# chains after the event_journal_writer move above: a writer at either address
+# lands at [0] without replacement.
+moved {
+  from = aws_rds_cluster_instance.writer
+  to   = aws_rds_cluster_instance.writer[0]
+}
