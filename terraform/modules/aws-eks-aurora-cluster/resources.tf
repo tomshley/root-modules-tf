@@ -230,7 +230,12 @@ resource "aws_rds_cluster" "this" {
   }
 }
 
+# activation_policy NEVER removes every instance and keeps the cluster: its
+# storage, endpoints, and credentials live on the cluster, which Aurora keeps
+# with no instances, deletion protection included, without compute charges.
 resource "aws_rds_cluster_instance" "writer" {
+  count = var.activation_policy == "NEVER" ? 0 : 1
+
   identifier          = "${var.project_name_prefix}-${var.workload_name}-db-1"
   cluster_identifier  = aws_rds_cluster.this.id
   instance_class      = "db.serverless"
@@ -258,7 +263,12 @@ resource "aws_rds_cluster_instance" "writer" {
 }
 
 resource "aws_rds_cluster_instance" "reader" {
-  count = var.reader_instance_count
+  count = var.activation_policy == "NEVER" ? 0 : var.reader_instance_count
+
+  # Readers go after the writer, as AWS recommends: removing every instance
+  # deletes them first, so the last instance deleted causes no failover, and
+  # creating them again brings the writer up first.
+  depends_on = [aws_rds_cluster_instance.writer]
 
   identifier          = "${var.project_name_prefix}-${var.workload_name}-db-reader-${count.index + 1}"
   cluster_identifier  = aws_rds_cluster.this.id

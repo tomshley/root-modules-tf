@@ -95,10 +95,12 @@ resource "aws_eks_node_group" "node_group" {
   capacity_type  = var.capacity_type
   ami_type       = var.ami_type
 
+  # A fixed node_count pins every size; EKS refuses a maximum below 1, so a
+  # group held at 0 nodes keeps a maximum of 1.
   scaling_config {
-    desired_size = var.desired_size
-    max_size     = var.max_size
-    min_size     = var.min_size
+    desired_size = var.node_count == null ? var.desired_size : var.node_count
+    max_size     = var.node_count == null ? var.max_size : max(var.node_count, 1)
+    min_size     = var.node_count == null ? var.min_size : var.node_count
   }
 
   launch_template {

@@ -49,6 +49,30 @@ variable "karpenter_service_account_name" {
   default     = "karpenter"
 }
 
+variable "controller_replicas" {
+  description = "Controller replica count. Null keeps the chart's two; the chart's disruption budget already allows one unavailable pod, so a single replica can still be drained. Validated by karpenter-controller-contract."
+  type        = number
+  default     = null
+}
+
+variable "keep_controller_off_karpenter_nodes" {
+  description = "Null or true keeps the chart's placement, which already keeps the controller off nodes Karpenter launched (required node affinity on karpenter.sh/nodepool DoesNotExist); true also renders that affinity explicitly. False removes it, letting the controller run on Karpenter's nodes. The same input on gcp-karpenter-controller-release adds the affinity the GKE chart lacks."
+  type        = bool
+  default     = null
+}
+
+variable "preference_policy" {
+  description = "The controller's PREFERENCE_POLICY, \"Respect\" or \"Ignore\", rendered as the chart's settings.preferencePolicy. Null keeps the chart's setting, Respect, which the chart renders from 1.4.0. Ignore applies to the whole controller: Karpenter also stops weighing workloads' preferred spreads and affinities when it launches nodes, though the default scheduler still honours them when it places pods. Karpenter reads it from chart 1.4.0; set with a karpenter_version whose major and minor numbers do not read as 1.4 or later, the plan is refused. Validated by karpenter-controller-contract."
+  type        = string
+  default     = null
+}
+
+variable "controller_priority_class_name" {
+  description = "PriorityClass for the controller's pods. Null keeps the chart's system-cluster-critical. The same input on gcp-karpenter-controller-release takes a class of the consumer's own, because GKE refuses that class outside its own namespaces. Validated by karpenter-controller-contract."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

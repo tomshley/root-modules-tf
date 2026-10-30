@@ -27,7 +27,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 |---|---|---|---|
 | `gcp-project-with-api` | GCP | Project factory with API enablement | Stable |
 | `gcp-network` | GCP | Dedicated dual-stack GKE network with private service access | **New** |
-| `gcp-gke-cluster` | GCP | GKE cluster consuming an explicit network contract with Workload Identity | Stable |
+| `gcp-gke-cluster` | GCP | GKE cluster consuming an explicit network contract with Workload Identity, with Managed Prometheus switchable for a pause | Stable |
 | `gcp-gke-nodepool` | GCP | Generic single-pool nodepool (instantiate N times) | Stable |
 | `gcp-gke-external-nat` | GCP | Cloud NAT for private GKE clusters | Stable |
 | `gcp-gke-metrics-server` | GCP | Compatibility shim for k8s-metrics-server | **New** |
@@ -50,13 +50,13 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `gcp-keycloak` | GCP | Secret Manager credential resolution for k8s-keycloak | **New** |
 | `aws-eks-vpc` | AWS | Dedicated VPC with public/private subnets, NAT per AZ | **New** |
 | `aws-eks-cluster` | AWS | EKS control plane with KMS, OIDC, CloudWatch | **New** |
-| `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times) | **New** |
+| `aws-eks-nodegroup` | AWS | Generic managed node group (instantiate N times), holdable at a fixed size or at zero, as `gcp-gke-nodepool` is | **New** |
 | `aws-eks-karpenter-prereqs` | AWS | IAM + SQS + EventBridge for Karpenter (no Helm) | **New** |
 | `aws-eks-karpenter-controller` | AWS | Karpenter controller deployment on EKS with service account and configuration | **New** |
 | `aws-eks-metrics-server` | AWS | Compatibility shim for k8s-metrics-server | **New** |
 | `aws-eks-grafana-alloy` | AWS | Compatibility shim for k8s-grafana-alloy | **New** |
 | `aws-eks-irsa` | AWS | Generic IRSA role factory | **New** |
-| `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic) and per-field overrides | **New** |
+| `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic), per-field overrides, and an `activation_policy` that removes its instances and keeps the cluster and data, like stopping `gcp-cloudsql-postgres` | **New** |
 | `aws-eks-keycloak` | AWS | Compatibility shim for aws-keycloak and k8s-keycloak | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
 | `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
@@ -79,13 +79,15 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `postgres-binding` | Generic | Resource-less portable PostgreSQL connection binding | **New** |
 | `redis-service-contract` | Generic | Resource-less Redis persistence, availability, and access contract | **New** |
 | `node-provisioning-contract` | Generic | Resource-less scheduling, capacity, and disruption contract | **New** |
+| `karpenter-controller-contract` | Generic | Resource-less Karpenter controller replica, placement, preference-policy, and PriorityClass contract shared by the AWS and GCP controller modules | **New** |
 
 ### Examples
 
 - `terraform/examples/gcp-gke-full-stack/` — GKE network + cluster + system/workload pools + NAT
 - `terraform/examples/gcp-cloudsql-connection-contract/` — Private Cloud SQL connection and writer-only reader endpoint contract
 - `terraform/examples/gcp-gke-karpenter-network-tag-contract/` — Karpenter GCENodeClass network-tag contract
-- `terraform/examples/gcp-gke-environment-pause/` — Two-root pause of a GKE environment: baseline pool at zero nodes, Cloud SQL stopped, Karpenter controller removed with its CRDs kept, and a guard that refuses the pause while Karpenter has nodes
+- `terraform/examples/gcp-gke-environment-pause/` — Two-root pause of a GKE environment: baseline pool at zero nodes, Cloud SQL stopped, Managed Prometheus off, the Karpenter controller (placed off its own nodes, with the Ignore preference policy) removed with its CRDs kept, a guard that refuses the pause while Karpenter has nodes, and one that refuses reinstalling the controller before Managed Prometheus is back
+- `terraform/examples/aws-eks-environment-pause/` — The same two-root pause on EKS: baseline node group at zero nodes, Aurora instances removed with the cluster and its data kept, Karpenter controller removed with its CRDs kept by Helm, and the same NodeClaim guard
 - `terraform/examples/aws-eks-full-stack/` — EKS cluster + system/workload nodes + Karpenter prereqs + IRSA
 - `terraform/examples/aws-eks-grafana-alloy/` — EKS Grafana Alloy/k8s-monitoring collectors with inline-token credential path and annotation autodiscovery
 - `terraform/examples/aws-eks-aurora-event-store/` — Write-optimized Aurora cluster (event-store preset)

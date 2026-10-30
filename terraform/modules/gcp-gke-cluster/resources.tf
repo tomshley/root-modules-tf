@@ -80,6 +80,17 @@ resource "google_container_cluster" "gke_cluster" {
 
   resource_labels = var.labels
 
+  # Only Managed Prometheus is set; enable_components is left to GKE, so its
+  # default monitoring components are kept either way.
+  dynamic "monitoring_config" {
+    for_each = var.managed_prometheus == null ? [] : [var.managed_prometheus]
+    content {
+      managed_prometheus {
+        enabled = monitoring_config.value
+      }
+    }
+  }
+
   remove_default_node_pool = true
   initial_node_count       = 1
   # Set `deletion_protection` to `true` will ensure that one cannot

@@ -26,8 +26,8 @@
 # Order: pause this root before ../cluster and resume it after.
 # - Pausing first removes the controller before the baseline pool drains, so
 #   nothing launches nodes for the pods the drain leaves pending.
-# - Resuming last lets the controller's Helm install, which waits for its pods
-#   to be ready, find the baseline pool's nodes back.
+# - Resuming last lets the controller's Helm install, which waits for one of
+#   its two pods to be ready, find the baseline pool's nodes back.
 #
 # Replace placeholder values before applying.
 ###############################################################################
@@ -149,6 +149,15 @@ module "karpenter_controller" {
   # needs the patched dual-stack build and when it needs a pull Secret.
   use_patched_dual_stack_image = true
   image_pull_secrets           = var.image_pull_secret_name == null ? [] : [var.image_pull_secret_name]
+  # The NodeClaim guard below only clears once Karpenter has removed its
+  # nodes, which on GKE, while konnectivity-agent runs a pod on every node,
+  # needs both of these; see "Controller placement and consolidation" in the
+  # gcp-karpenter-controller README. Off Karpenter's nodes, the chart's two
+  # replicas hold the baseline pool at two nodes or more while running; set
+  # controller_replicas = 1 to fit one, with no controller while it is
+  # replaced.
+  keep_controller_off_karpenter_nodes = true
+  preference_policy                   = "Ignore"
 
   depends_on = [module.karpenter_crds]
 }
@@ -168,7 +177,7 @@ data "kubernetes_resources" "nodeclaim_crd" {
 # Without the NodeClaim CRD (an environment created already paused) there
 # can be no NodeClaims, and listing the kind would fail.
 data "kubernetes_resources" "nodeclaims" {
-  count = var.paused && length(try(data.kubernetes_resources.nodeclaim_crd[0].objects, [])) > 0 ? 1 : 0
+  count = var.paused && length(coalesce(try(data.kubernetes_resources.nodeclaim_crd[0].objects, null), [])) > 0 ? 1 : 0
 
   api_version = "karpenter.sh/v1"
   kind        = "NodeClaim"
@@ -177,6 +186,26 @@ data "kubernetes_resources" "nodeclaims" {
     postcondition {
       condition     = length(coalesce(self.objects, [])) == 0
       error_message = "Karpenter has nodes (NodeClaims exist). Removing its controller would leave them running and billing with nothing to consolidate them, so this root does not pause while any exist."
+    }
+  }
+}
+
+# The controller runs at the chart's gmp-critical PriorityClass, which exists
+# only while ../cluster has Managed Prometheus on. ../cluster turns it off
+# while paused and back on when resumed, so installing the controller before
+# ../cluster has resumed is refused here rather than leaving its pod
+# uncreatable.
+data "kubernetes_resources" "gmp_priority_class" {
+  count = var.paused ? 0 : 1
+
+  api_version    = "scheduling.k8s.io/v1"
+  kind           = "PriorityClass"
+  field_selector = "metadata.name=gmp-critical"
+
+  lifecycle {
+    postcondition {
+      condition     = length(coalesce(self.objects, [])) == 1
+      error_message = "The gmp-critical PriorityClass the Karpenter controller runs at does not exist, so Managed Prometheus is off: resume ../cluster before this root."
     }
   }
 }
