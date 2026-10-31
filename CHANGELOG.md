@@ -16,6 +16,18 @@ This project follows Semantic Versioning.
 
 ---
 
+## [3.1.1] — 2026-10-30
+
+### Fixed
+
+- **gcp-gke-cluster**: `managed_prometheus = false` could not apply. It rendered only `managed_prometheus.enabled`, and GKE refuses to disable Managed Prometheus while its metric packages stay enabled. The module now sets `enable_components` to `SYSTEM_COMPONENTS` in the same update, which GKE accepts.
+
+### Added
+
+- **gcp-gke-cluster**: `monitoring_components` sets the cluster's monitoring components — passing the metric packages back in the same update that turns Managed Prometheus on, since turning it on alone does not restore them. An empty list, an unsupported component, and packages while disabling are refused at plan time. The GKE pause example restores the components on resume, kept in place by an adapter check.
+
+---
+
 ## [3.1.0] — 2026-10-29
 
 ### Added
