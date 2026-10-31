@@ -80,13 +80,20 @@ resource "google_container_cluster" "gke_cluster" {
 
   resource_labels = var.labels
 
-  # Only Managed Prometheus is set; enable_components is left to GKE, so its
-  # default monitoring components are kept either way.
+  # monitoring_config renders whenever either input is set. With Managed
+  # Prometheus off, GKE accepts no metric packages, so enable_components is
+  # pinned to SYSTEM_COMPONENTS; otherwise it is exactly
+  # monitoring_components, or GKE's components when that is null.
   dynamic "monitoring_config" {
-    for_each = var.managed_prometheus == null ? [] : [var.managed_prometheus]
+    for_each = var.managed_prometheus != null || var.monitoring_components != null ? [true] : []
     content {
-      managed_prometheus {
-        enabled = monitoring_config.value
+      enable_components = var.managed_prometheus == false ? ["SYSTEM_COMPONENTS"] : var.monitoring_components
+
+      dynamic "managed_prometheus" {
+        for_each = var.managed_prometheus == null ? [] : [var.managed_prometheus]
+        content {
+          enabled = managed_prometheus.value
+        }
       }
     }
   }
@@ -101,6 +108,15 @@ resource "google_container_cluster" "gke_cluster" {
     precondition {
       condition     = can(regex("^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$", local.gke_cluster_name))
       error_message = "The derived GKE cluster name '${local.gke_cluster_name}' violates GKE's rules: at most 40 characters of lowercase letters, digits, and hyphens, starting with a letter and not ending with a hyphen. Shorten project_name_prefix."
+    }
+    precondition {
+      condition = (
+        var.managed_prometheus == null
+        || var.managed_prometheus
+        || var.monitoring_components == null
+        || alltrue([for component in var.monitoring_components : component == "SYSTEM_COMPONENTS"])
+      )
+      error_message = "GKE ties its metric packages to Managed Prometheus: with managed_prometheus = false, monitoring_components may name only SYSTEM_COMPONENTS, which the module sets itself. Pass metric packages only while enabling Managed Prometheus."
     }
   }
 }

@@ -63,6 +63,28 @@ variable "paused" {
   nullable = false
 }
 
+# The GKE monitoring components a running cluster collects: the system
+# components it always keeps plus the workload metric packages, which GKE
+# collects only while Managed Prometheus is on. APISERVER, SCHEDULER, and
+# CONTROLLER_MANAGER are added only for control-plane metrics. The provider
+# compares the list in order and GKE keeps its own, so a list in any other
+# order plans a reorder on every run.
+locals {
+  monitoring_components = [
+    "SYSTEM_COMPONENTS",
+    "STORAGE",
+    "HPA",
+    "POD",
+    "DAEMONSET",
+    "DEPLOYMENT",
+    "STATEFULSET",
+    "CADVISOR",
+    "KUBELET",
+    "DCGM",
+    "JOBSET",
+  ]
+}
+
 # --- Network ---
 
 module "network" {
@@ -88,9 +110,13 @@ module "cluster" {
   google_compute_subnetwork_id           = module.network.subnetwork_id
   services_secondary_range_name          = module.network.services_secondary_range_name
   pods_secondary_range_name              = module.network.pods_secondary_range_name
-  # With no nodes there is nothing to scrape. Resuming must set true: null
-  # would keep the disabled setting.
-  managed_prometheus = !var.paused
+  # With no nodes there is nothing to scrape, so a pause turns Managed
+  # Prometheus off; GKE accepts only SYSTEM_COMPONENTS while it is off, which
+  # the module sets itself. Resuming sets true — null would keep the
+  # disabled setting — and passes the metric packages back in the same
+  # update, because turning it on alone does not restore them.
+  managed_prometheus    = !var.paused
+  monitoring_components = var.paused ? null : local.monitoring_components
 }
 
 # --- Baseline Nodepool ---
