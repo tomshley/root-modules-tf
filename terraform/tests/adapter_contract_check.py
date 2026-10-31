@@ -463,6 +463,7 @@ def main() -> int:
         ("gcp-gke-environment-pause/cluster", "baseline_pool", r"node_count\s*=\s*var\.paused \? 0 : null", "GKE example pool at zero"),
         ("gcp-gke-environment-pause/cluster", "database", r'activation_policy\s*=\s*var\.paused \? "NEVER" : null', "GKE example Cloud SQL stopped"),
         ("gcp-gke-environment-pause/cluster", "cluster", r"managed_prometheus\s*=\s*!var\.paused", "GKE example Managed Prometheus restored"),
+        ("gcp-gke-environment-pause/cluster", "cluster", r"monitoring_components\s*=\s*var\.paused \? null : local\.\w+", "GKE example monitoring components restored"),
         ("aws-eks-environment-pause/cluster", "baseline_nodes", r"node_count\s*=\s*var\.paused \? 0 : null", "EKS example node group at zero"),
         ("aws-eks-environment-pause/cluster", "database", r'activation_policy\s*=\s*var\.paused \? "NEVER" : null', "EKS example Aurora instances removed"),
         ("gcp-gke-environment-pause/node-provisioning", "karpenter_controller", r"keep_controller_off_karpenter_nodes\s*=\s*true", "GKE example controller off Karpenter nodes"),
@@ -499,10 +500,21 @@ def main() -> int:
         require(examples[root], pattern, label)
     gke_cluster_example = raw_examples["gcp-gke-environment-pause/cluster"]
     reject_mutation(module_block(examples["gcp-gke-environment-pause/cluster"], "cluster"), r"managed_prometheus\s*=\s*!var\.paused", "GKE example Managed Prometheus restore")
-    commented = live_hcl(gke_cluster_example.replace("managed_prometheus = !var.paused", "# managed_prometheus = !var.paused"))
+    commented_source = gke_cluster_example.replace("managed_prometheus    = !var.paused", "# managed_prometheus    = !var.paused")
+    if commented_source == gke_cluster_example:
+        raise SystemExit("GKE example Managed Prometheus restore comment probe did not match the example")
+    commented = live_hcl(commented_source)
     if re.search(r"managed_prometheus\s*=\s*!var\.paused", commented):
         raise SystemExit("adapter guard failed to detect mutation: GKE example Managed Prometheus restore commented out")
     print("PASS adapter-negative GKE example Managed Prometheus restore commented out")
+    reject_mutation(module_block(examples["gcp-gke-environment-pause/cluster"], "cluster"), r"monitoring_components\s*=\s*var\.paused \? null : local\.\w+", "GKE example monitoring components restore")
+    commented_source = gke_cluster_example.replace("monitoring_components = var.paused ? null : local.monitoring_components", "# monitoring_components = var.paused ? null : local.monitoring_components")
+    if commented_source == gke_cluster_example:
+        raise SystemExit("GKE example monitoring components restore comment probe did not match the example")
+    commented = live_hcl(commented_source)
+    if re.search(r"monitoring_components\s*=\s*var\.paused", commented):
+        raise SystemExit("adapter guard failed to detect mutation: GKE example monitoring components restore commented out")
+    print("PASS adapter-negative GKE example monitoring components restore commented out")
     reject_mutation(examples["gcp-gke-environment-pause/node-provisioning"], r'module "karpenter_controller" \{\s*count\s*=\s*var\.paused \? 0 : 1[ \t]*$', "GKE example controller removal")
     reject_mutation(examples["gcp-gke-environment-pause/node-provisioning"], gmp_guard, "GKE example gmp-critical guard")
     for root in ("gcp-gke-environment-pause/node-provisioning", "aws-eks-environment-pause/node-provisioning"):
