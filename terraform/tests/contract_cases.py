@@ -801,6 +801,109 @@ module "gke" {
   managed_prometheus            = true
 }
 """,
+    "gke-cluster-monitoring-components-with-prometheus": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  managed_prometheus            = true
+  monitoring_components         = ["KUBELET", "POD"]
+}
+""",
+    "gke-cluster-monitoring-components-alone": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  monitoring_components         = ["SYSTEM_COMPONENTS", "KUBELET"]
+}
+""",
+    "gke-cluster-monitoring-packages-without-prometheus": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  managed_prometheus            = false
+  monitoring_components         = ["KUBELET"]
+}
+""",
+    "gke-cluster-monitoring-components-invalid": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  monitoring_components         = ["NOT_A_COMPONENT"]
+}
+""",
+    "gke-cluster-monitoring-components-empty": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  managed_prometheus            = true
+  monitoring_components         = []
+}
+""",
     "gke-cluster-location-zonal": """provider "google" {
   project      = "contract-test-project"
   access_token = "invalid-token-for-plan-only"
@@ -2158,13 +2261,17 @@ EXPECTED_RESOURCE_COUNTS = {
     },
 }
 
-# Managed Prometheus as planned: unset renders no monitoring_config, so the
-# cluster's current setting stands; true and false set it, and nothing else in
+# Managed Prometheus and monitoring components as planned: with both unset,
+# no monitoring_config renders, so the cluster's current settings stand; a
+# set input renders exactly — enabled is the managed_prometheus block's setting,
+# components the enable_components list — and nothing else in
 # monitoring_config is set either way.
-EXPECTED_GKE_MANAGED_PROMETHEUS = {
+EXPECTED_GKE_MONITORING_CONFIG = {
     "gke-cluster-managed-prometheus-default": None,
-    "gke-cluster-managed-prometheus-off": False,
-    "gke-cluster-managed-prometheus-on": True,
+    "gke-cluster-managed-prometheus-off": {"enabled": False, "components": ["SYSTEM_COMPONENTS"]},
+    "gke-cluster-managed-prometheus-on": {"enabled": True, "components": None},
+    "gke-cluster-monitoring-components-with-prometheus": {"enabled": True, "components": ["KUBELET", "POD"]},
+    "gke-cluster-monitoring-components-alone": {"enabled": None, "components": ["KUBELET", "SYSTEM_COMPONENTS"]},
 }
 
 EXPECTED_GKE_CLUSTER_LOCATIONS = {
@@ -2593,6 +2700,9 @@ EXPECTED_DIAGNOSTICS = {
     "gke-cluster-name-too-long": "GKE cluster name",
     "gke-cluster-name-invalid-shape": "GKE cluster name",
     "gke-cluster-location-mode-invalid": 'location_mode must be either "regional" or "zonal".',
+    "gke-cluster-monitoring-packages-without-prometheus": "monitoring_components may name only SYSTEM_COMPONENTS",
+    "gke-cluster-monitoring-components-invalid": "monitoring_components entries must be GKE monitoring components",
+    "gke-cluster-monitoring-components-empty": "empty list is refused because GKE keeps system monitoring on",
     "gke-nodepool-size-negative": "node_count must be null or a whole number of nodes, 0 or more.",
     "gke-nodepool-size-fractional": "node_count must be null or a whole number of nodes, 0 or more.",
     "gke-nodepool-location-mismatch": "The node pool location differs from the cluster location in google_container_cluster_self_link; set google_container_cluster_location from the gcp-gke-cluster output google_container_cluster_gke_cluster_location.",
@@ -2714,7 +2824,7 @@ def main() -> int:
                         or name in EXPECTED_RESOURCE_COUNTS
                         or name in EXPECTED_ATTRIBUTE_CONDITIONS
                         or name in EXPECTED_GKE_CLUSTER_LOCATIONS
-                        or name in EXPECTED_GKE_MANAGED_PROMETHEUS
+                        or name in EXPECTED_GKE_MONITORING_CONFIG
                         or name in EXPECTED_GKE_NODEPOOL_LOCATIONS
                         or name in EXPECTED_GKE_NODEPOOL_SIZING
                         or name in EXPECTED_EKS_NODEGROUP_SIZING
@@ -2767,17 +2877,20 @@ def main() -> int:
                         if condition != EXPECTED_ATTRIBUTE_CONDITIONS[name]:
                             failures.append(f"{name}: planned attribute_condition changed")
                             continue
-                    if name in EXPECTED_GKE_MANAGED_PROMETHEUS:
+                    if name in EXPECTED_GKE_MONITORING_CONFIG:
                         clusters = [
                             resource
                             for resource in planned_resources(planned["root_module"])
                             if resource["type"] == "google_container_cluster"
                         ]
                         monitoring = (clusters[0]["values"].get("monitoring_config") or []) if len(clusters) == 1 else None
+                        expected = EXPECTED_GKE_MONITORING_CONFIG[name]
                         enabled = (monitoring[0].get("managed_prometheus") or [{}])[0].get("enabled") if monitoring else None
-                        others = sorted(key for key, value in (monitoring[0] if monitoring else {}).items() if key != "managed_prometheus" and value not in (None, []))
-                        if len(clusters) != 1 or enabled != EXPECTED_GKE_MANAGED_PROMETHEUS[name] or others:
-                            failures.append(f"{name}: planned Managed Prometheus changed: {monitoring}")
+                        components = sorted(monitoring[0]["enable_components"]) if monitoring and monitoring[0].get("enable_components") is not None else None
+                        expected_components = sorted(expected["components"]) if expected and expected["components"] is not None else None
+                        others = sorted(key for key, value in (monitoring[0] if monitoring else {}).items() if key not in ("managed_prometheus", "enable_components") and value not in (None, []))
+                        if len(clusters) != 1 or enabled != (expected["enabled"] if expected else None) or components != expected_components or others:
+                            failures.append(f"{name}: planned monitoring config changed: {monitoring}")
                             continue
                     if name in EXPECTED_GKE_CLUSTER_LOCATIONS:
                         clusters = [
