@@ -16,6 +16,14 @@ This project follows Semantic Versioning.
 
 ---
 
+## [3.2.1] — 2026-11-02
+
+### Added
+
+- **gcp-gke-environment-pause/node-provisioning**: the example installs a scale-down PodDisruptionBudget beside each GKE-managed kube-system Deployment — the cluster autoscaler will not evict a kube-system pod that has no budget, so a spare node can survive a pool scale-down. The budgets permit one eviction at a time, are named `*-scale-down` to keep clear of the budgets GKE installs itself, stay while paused, and leave with the cluster on down.
+
+---
+
 ## [3.2.0] — 2026-11-02
 
 ### Added
