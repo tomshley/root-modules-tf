@@ -23,8 +23,17 @@
 # paused = true removes the compute and keeps everything else: the cluster and
 # its control plane, the node group resource, the network, the IAM roles, and
 # the Aurora cluster with its storage, endpoints, master credential, and
-# tenant secrets. Nothing this root outputs changes, so whatever is rendered
-# from those outputs stays valid.
+# tenant secrets.
+#
+# cluster_enabled = false additionally removes the cluster, the node group,
+# and the cluster's OIDC provider while keeping the IAM roles, the KMS key,
+# the security groups, the network, and the Aurora cluster — the full "down"
+# state. It requires paused = true: an environment without its cluster is
+# down, not running. Resuming recreates the cluster and its OIDC provider,
+# and ../node-provisioning re-trusts the new issuer automatically.
+#
+# Nothing this root outputs loses its value while paused; while down, the
+# cluster name stays and genuinely cluster-bound outputs return null.
 #
 # Pause ../node-provisioning before this root and resume it after.
 # Replace placeholder values before applying.
@@ -56,6 +65,23 @@ variable "paused" {
   nullable = false
 }
 
+variable "cluster_enabled" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+# Removing the cluster while unpaused is not a lifecycle state, so it is
+# refused before anything else changes.
+resource "terraform_data" "lifecycle_mode" {
+  lifecycle {
+    precondition {
+      condition     = var.paused || var.cluster_enabled
+      error_message = "cluster_enabled = false requires paused = true: an environment without its cluster is down, and down stops compute first."
+    }
+  }
+}
+
 # --- Network ---
 
 module "vpc" {
@@ -66,6 +92,8 @@ module "vpc" {
   availability_zones   = var.availability_zones
   public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
   private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+
+  nat_gateway_enabled = var.cluster_enabled
 }
 
 # --- Cluster ---
@@ -78,6 +106,7 @@ module "cluster" {
   vpc_id              = module.vpc.vpc_id
   subnet_ids          = concat(module.vpc.private_subnet_ids, module.vpc.public_subnet_ids)
   public_access_cidrs = var.public_access_cidrs
+  cluster_enabled     = var.cluster_enabled
 }
 
 # --- Baseline Node Group ---
@@ -85,6 +114,7 @@ module "cluster" {
 # Paused, the group is held at zero nodes; the group itself stays. Running,
 # node_count is unset and min_size, max_size, and desired_size apply.
 module "baseline_nodes" {
+  count  = var.cluster_enabled ? 1 : 0
   source = "../../../modules/aws-eks-nodegroup"
 
   project_name_prefix = var.project_name_prefix
@@ -100,6 +130,13 @@ module "baseline_nodes" {
   node_count     = var.paused ? 0 : null
 }
 
+# The node group gained count with cluster_enabled, moving existing installs
+# to the [0] address rather than replacing them.
+moved {
+  from = module.baseline_nodes
+  to   = module.baseline_nodes[0]
+}
+
 # --- Database ---
 
 # Paused, the writer and readers are removed and the cluster stays with its
@@ -109,12 +146,14 @@ module "baseline_nodes" {
 module "database" {
   source = "../../../modules/aws-eks-aurora-cluster"
 
-  project_name_prefix        = var.project_name_prefix
-  workload_name              = "application"
-  database_name              = "application"
-  vpc_id                     = module.vpc.vpc_id
-  subnet_ids                 = module.vpc.private_subnet_ids
-  allowed_security_group_ids = [module.cluster.cluster_security_group_id]
+  project_name_prefix = var.project_name_prefix
+  workload_name       = "application"
+  database_name       = "application"
+  vpc_id              = module.vpc.vpc_id
+  subnet_ids          = module.vpc.private_subnet_ids
+  # The EKS-managed security group is gone with the cluster; the rule returns
+  # with it on resume.
+  allowed_security_group_ids = var.cluster_enabled ? [module.cluster.cluster_security_group_id] : []
   activation_policy          = var.paused ? "NEVER" : null
 }
 

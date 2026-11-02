@@ -19,14 +19,23 @@ variable "cluster_name" {
   type = string
 }
 
+variable "cluster_enabled" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether the cluster exists. False removes the node access entry with the cluster and replaces the controller role's trust with a deny-only statement, so nothing can assume it while there is no issuer to trust. The roles, policies, instance profile, and interruption queue stay, and returning to true re-trusts the recreated cluster's OIDC provider."
+}
+
 variable "oidc_provider_arn" {
   type        = string
-  description = "OIDC provider ARN from EKS cluster module"
+  default     = null
+  description = "OIDC provider ARN from EKS cluster module. Required while cluster_enabled is true; null while the cluster is removed."
 }
 
 variable "oidc_provider_url" {
   type        = string
-  description = "OIDC provider URL (without https://) from EKS cluster module"
+  default     = null
+  description = "OIDC provider URL (without https://) from EKS cluster module. Required while cluster_enabled is true; null while the cluster is removed."
 }
 
 variable "karpenter_namespace" {
@@ -43,4 +52,16 @@ variable "tags" {
   type        = map(string)
   default     = {}
   description = "Additional tags to apply to all resources"
+}
+
+variable "account_id" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "AWS account ID the role policies bind their resource ARNs to. Null reads the caller's identity at plan time; set it to plan without live credentials."
+
+  validation {
+    condition     = var.account_id == null ? true : can(regex("^[0-9]{12}$", var.account_id))
+    error_message = "account_id must be a 12-digit AWS account ID when set."
+  }
 }

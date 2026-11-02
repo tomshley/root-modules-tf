@@ -22,8 +22,15 @@
 # paused = true removes the compute and Managed Prometheus and keeps
 # everything else: the cluster and its control plane, the node pool resource,
 # the network, the service accounts, and the Cloud SQL instance with its data.
-# Nothing this root outputs changes, so whatever is rendered from those
-# outputs stays valid.
+#
+# cluster_enabled = false additionally removes the cluster and the baseline
+# pool while keeping the network, the service accounts, and the Cloud SQL
+# instance with its data — the full "down" state. It requires paused = true:
+# an environment without its cluster is down, not running.
+#
+# Nothing this root outputs loses its value while paused; while down, the
+# cluster name and location and the service account stay, and only genuinely
+# cluster-bound outputs return null.
 #
 # Pause ../node-provisioning before this root and resume it after.
 # Replace placeholder values before applying.
@@ -61,6 +68,23 @@ variable "paused" {
   type     = bool
   default  = false
   nullable = false
+}
+
+variable "cluster_enabled" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+# Removing the cluster while unpaused is not a lifecycle state, so it is
+# refused before anything else changes.
+resource "terraform_data" "lifecycle_mode" {
+  lifecycle {
+    precondition {
+      condition     = var.paused || var.cluster_enabled
+      error_message = "cluster_enabled = false requires paused = true: an environment without its cluster is down, and down stops compute first."
+    }
+  }
 }
 
 # The GKE monitoring components a running cluster collects: the system
@@ -117,6 +141,7 @@ module "cluster" {
   # update, because turning it on alone does not restore them.
   managed_prometheus    = !var.paused
   monitoring_components = var.paused ? null : local.monitoring_components
+  cluster_enabled       = var.cluster_enabled
 }
 
 # --- Baseline Nodepool ---
@@ -125,13 +150,14 @@ module "cluster" {
 # itself stays, so Karpenter can bootstrap from it again on resume. Running,
 # node_count is unset and the autoscaler sizes the pool between its bounds.
 module "baseline_pool" {
+  count  = var.cluster_enabled ? 1 : 0
   source = "../../../modules/gcp-gke-nodepool"
 
   project_name_prefix                = var.project_name_prefix
   google_region                      = var.google_region
   pool_name_suffix                   = "baseline"
   google_container_cluster_location  = module.cluster.google_container_cluster_gke_cluster_location
-  google_container_cluster_self_link = module.cluster.google_container_cluster_gke_cluster_self_link
+  google_container_cluster_self_link = var.cluster_enabled ? module.cluster.google_container_cluster_gke_cluster_self_link : "unused-while-down"
   google_service_account_email       = module.cluster.google_service_account_gke_service_account_email
 
   machine_type       = "e2-standard-2"
@@ -139,6 +165,13 @@ module "baseline_pool" {
   min_node_count     = 1
   max_node_count     = 3
   node_count         = var.paused ? 0 : null
+}
+
+# The pool gained count with cluster_enabled, moving existing installs to
+# the [0] address rather than replacing them.
+moved {
+  from = module.baseline_pool
+  to   = module.baseline_pool[0]
 }
 
 # --- Database ---
@@ -173,7 +206,7 @@ output "cluster_location" {
 }
 
 output "baseline_node_pool_name" {
-  value = module.baseline_pool.node_pool_name
+  value = "${var.project_name_prefix}-pool-baseline"
 }
 
 output "node_service_account_email" {

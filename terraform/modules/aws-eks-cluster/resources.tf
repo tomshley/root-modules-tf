@@ -88,6 +88,7 @@ resource "aws_security_group_rule" "eks_cluster_egress" {
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
+  count    = var.cluster_enabled ? 1 : 0
   name     = var.cluster_name
   version  = var.kubernetes_version
   role_arn = aws_iam_role.eks_cluster_role.arn
@@ -125,15 +126,17 @@ resource "aws_eks_cluster" "eks_cluster" {
 }
 
 resource "aws_ec2_tag" "eks_managed_sg_karpenter_discovery" {
-  resource_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
+  count       = var.cluster_enabled ? 1 : 0
+  resource_id = aws_eks_cluster.eks_cluster[0].vpc_config[0].cluster_security_group_id
   key         = "karpenter.sh/discovery"
   value       = var.cluster_name
 }
 
 resource "aws_iam_openid_connect_provider" "eks_oidc" {
+  count           = var.cluster_enabled ? 1 : 0
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = []
-  url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
+  url             = aws_eks_cluster.eks_cluster[0].identity[0].oidc[0].issuer
 
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-eks-oidc"

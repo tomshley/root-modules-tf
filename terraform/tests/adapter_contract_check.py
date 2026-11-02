@@ -395,6 +395,95 @@ def main() -> int:
             twin_variables[module] = text
             require(text, rf'variable "{variable}" \{{', f"{module} pause input {variable}")
             require(text, re.escape(shared), f"{module} {variable} shared rule")
+    # Environment down: the cluster modules share one cluster_enabled input
+    # — identical name, type, default, and rule — that gates only the
+    # cluster-bound resources, moving their addresses rather than replacing
+    # identities an existing install already holds.
+    cluster_enabled_description = (
+        "Whether the cluster exists. False removes the cluster itself while keeping every other resource this module owns"
+    )
+    for module, cluster_resource, cluster_output in (
+        ("gcp-gke-cluster", "google_container_cluster", "google_container_cluster_gke_cluster"),
+        ("aws-eks-cluster", "aws_eks_cluster", "cluster"),
+    ):
+        variables = live_hcl((ROOT / f"terraform/modules/{module}/variables.tf").read_text())
+        resources = live_hcl((ROOT / f"terraform/modules/{module}/resources.tf").read_text())
+        outputs = live_hcl((ROOT / f"terraform/modules/{module}/outputs.tf").read_text())
+        require(variables, r'variable "cluster_enabled" \{', f"{module} lifecycle input cluster_enabled")
+        require(variables, re.escape(cluster_enabled_description), f"{module} cluster_enabled shared meaning")
+        require(variables, r'variable "cluster_enabled" \{[^}]*default\s*=\s*true', f"{module} cluster_enabled defaults enabled")
+        require(variables, r'variable "cluster_enabled" \{[^}]*nullable\s*=\s*false', f"{module} cluster_enabled refuses null")
+        require(resources, rf'resource "{cluster_resource}" "[^"]+" \{{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', f"{module} cluster resource gated")
+        require(outputs, rf'output "{cluster_output}_name" \{{\s*value\s*=\s*var\.cluster_enabled \?', f"{module} stable name while down")
+        require(outputs, rf'output "{cluster_output}_endpoint" \{{\s*value\s*=\s*var\.cluster_enabled \? [^:]+ : null', f"{module} nullable endpoint while down")
+    gke_moved = (ROOT / "terraform/modules/gcp-gke-cluster/moved.tf").read_text()
+    eks_moved = (ROOT / "terraform/modules/aws-eks-cluster/moved.tf").read_text()
+    require(gke_moved, re.escape("from = google_container_cluster.gke_cluster"), "GKE cluster state move source")
+    require(gke_moved, re.escape("to   = google_container_cluster.gke_cluster[0]"), "GKE cluster state move target")
+    for marker in ("aws_eks_cluster.eks_cluster", "aws_ec2_tag.eks_managed_sg_karpenter_discovery", "aws_iam_openid_connect_provider.eks_oidc"):
+        require(eks_moved, re.escape(f"to   = {marker}[0]"), f"EKS cluster-bound state move {marker}")
+    # AWS keeps its CI access and Karpenter prerequisites through a down, but
+    # their cluster-bound access entries leave with the cluster and return on
+    # resume; the preserved Karpenter controller role's trust becomes
+    # deny-only while there is no issuer to trust.
+    for module, gated in (
+        ("aws-eks-karpenter-prereqs", (r'resource "aws_eks_access_entry" "karpenter_node" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0',)),
+        ("aws-eks-ci-oidc-access", (r'resource "aws_eks_access_entry" "ci_deploy" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', r'resource "aws_eks_access_policy_association" "ci_deploy" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0')),
+    ):
+        variables = live_hcl((ROOT / f"terraform/modules/{module}/variables.tf").read_text())
+        resources = live_hcl((ROOT / f"terraform/modules/{module}/resources.tf").read_text())
+        require(variables, r'variable "cluster_enabled" \{[^}]*default\s*=\s*true', f"{module} cluster_enabled defaults enabled")
+        require(variables, r'variable "cluster_enabled" \{[^}]*nullable\s*=\s*false', f"{module} cluster_enabled refuses null")
+        for pattern in gated:
+            require(resources, pattern, f"{module} cluster-bound access gated")
+    karpenter_prereqs_resources = live_hcl((ROOT / "terraform/modules/aws-eks-karpenter-prereqs/resources.tf").read_text())
+    karpenter_prereqs_variables = live_hcl((ROOT / "terraform/modules/aws-eks-karpenter-prereqs/variables.tf").read_text())
+    require(karpenter_prereqs_resources, r'Effect\s*=\s*"Deny"', "Karpenter controller dormant deny-only trust")
+    require(karpenter_prereqs_resources, r'assume_role_policy\s*=\s*var\.cluster_enabled \?', "Karpenter controller trust switches on cluster_enabled")
+    # A declared account ID substitutes for the caller-identity lookup, so a
+    # down plan needs no credentials at all; without one the identity is
+    # still read, keeping the default behaviour.
+    require(karpenter_prereqs_variables, r'variable "account_id" \{[^}]*default\s*=\s*null', "Karpenter prereqs account_id defaults to the live identity")
+    require(karpenter_prereqs_variables, r'variable "account_id" \{[^}]*\[0-9\]\{12\}', "Karpenter prereqs account_id validates 12 digits")
+    require(karpenter_prereqs_resources, r'data "aws_caller_identity" "current" \{\s*count\s*=\s*var\.account_id == null \? 1 : 0', "Karpenter prereqs identity lookup gated")
+    require(karpenter_prereqs_resources, r'coalesce\(var\.account_id, one\(data\.aws_caller_identity\.current\[\*\]\.account_id\)\)', "Karpenter prereqs account ID resolution")
+    prereqs_moved = (ROOT / "terraform/modules/aws-eks-karpenter-prereqs/moved.tf").read_text()
+    require(prereqs_moved, re.escape("to   = aws_eks_access_entry.karpenter_node[0]"), "Karpenter access entry state move")
+    ci_access_moved = (ROOT / "terraform/modules/aws-eks-ci-oidc-access/moved.tf").read_text()
+    for marker in ("aws_eks_access_entry.ci_deploy", "aws_eks_access_policy_association.ci_deploy"):
+        require(ci_access_moved, re.escape(f"to   = {marker}[0]"), f"CI access state move {marker}")
+    # The VPC is never gated as a whole — the addresses its subnets and
+    # security groups keep matter to the preserved resources — but its
+    # chargeable NAT egress leaves with the cluster: the gateways, their
+    # elastic addresses, and the private route tables' default routes.
+    vpc_variables = live_hcl((ROOT / "terraform/modules/aws-eks-vpc/variables.tf").read_text())
+    vpc_resources = live_hcl((ROOT / "terraform/modules/aws-eks-vpc/resources.tf").read_text())
+    require(vpc_variables, r'variable "nat_gateway_enabled" \{[^}]*default\s*=\s*true', "aws-eks-vpc nat_gateway_enabled defaults enabled")
+    require(vpc_variables, r'variable "nat_gateway_enabled" \{[^}]*nullable\s*=\s*false', "aws-eks-vpc nat_gateway_enabled refuses null")
+    require(vpc_resources, r'resource "aws_eip" "nat" \{\s*count\s*=\s*var\.nat_gateway_enabled \? length\(var\.availability_zones\) : 0', "aws-eks-vpc NAT addresses gated")
+    require(vpc_resources, r'resource "aws_nat_gateway" "eks_nat" \{\s*count\s*=\s*var\.nat_gateway_enabled \? length\(var\.availability_zones\) : 0', "aws-eks-vpc NAT gateways gated")
+    require(vpc_resources, r'dynamic "route" \{\s*for_each\s*=\s*var\.nat_gateway_enabled \? \[0\] : \[\]', "aws-eks-vpc private default route gated")
+    require(live_hcl((ROOT / "terraform/examples/aws-eks-environment-pause/cluster/main.tf").read_text()), r'nat_gateway_enabled\s*=\s*var\.cluster_enabled', "AWS example NAT follows the cluster")
+    # A module called with count = 0 still validates its inputs, and a null
+    # cluster self link is refused even though the pool is disabled.
+    require(live_hcl((ROOT / "terraform/examples/gcp-gke-environment-pause/cluster/main.tf").read_text()), r'var\.cluster_enabled \? module\.cluster\.google_container_cluster_gke_cluster_self_link : "unused-while-down"', "GKE example pool self link stays non-null while down")
+    reject_mutation(karpenter_prereqs_resources, r'Effect\s*=\s*"Deny"', "Karpenter controller dormant deny trust")
+    reject_mutation(karpenter_prereqs_resources, r'data "aws_caller_identity" "current" \{\s*count\s*=\s*var\.account_id == null \? 1 : 0', "Karpenter prereqs identity gate")
+    gke_cluster_resources = live_hcl((ROOT / "terraform/modules/gcp-gke-cluster/resources.tf").read_text())
+    eks_cluster_resources = live_hcl((ROOT / "terraform/modules/aws-eks-cluster/resources.tf").read_text())
+    ci_access_resources = live_hcl((ROOT / "terraform/modules/aws-eks-ci-oidc-access/resources.tf").read_text())
+    cluster_enabled_variables = live_hcl((ROOT / "terraform/modules/gcp-gke-cluster/variables.tf").read_text())
+    reject_mutation(gke_cluster_resources, r'resource "google_container_cluster" "[^"]+" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', "GKE cluster gate")
+    reject_mutation(gke_moved, re.escape("to   = google_container_cluster.gke_cluster[0]"), "GKE cluster state move")
+    reject_mutation(eks_cluster_resources, r'resource "aws_eks_cluster" "[^"]+" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', "EKS cluster gate")
+    reject_mutation(eks_moved, re.escape("to   = aws_eks_cluster.eks_cluster[0]"), "EKS cluster state move")
+    reject_mutation(karpenter_prereqs_resources, r'resource "aws_eks_access_entry" "karpenter_node" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', "Karpenter access entry gate")
+    reject_mutation(prereqs_moved, re.escape("to   = aws_eks_access_entry.karpenter_node[0]"), "Karpenter access entry state move")
+    reject_mutation(ci_access_resources, r'resource "aws_eks_access_entry" "ci_deploy" \{\s*count\s*=\s*var\.cluster_enabled \? 1 : 0', "CI access entry gate")
+    reject_mutation(ci_access_moved, re.escape("to   = aws_eks_access_entry.ci_deploy[0]"), "CI access entry state move")
+    reject_mutation(cluster_enabled_variables, r'variable "cluster_enabled" \{[^}]*default\s*=\s*true', "GKE cluster_enabled default")
+    reject_mutation(vpc_resources, r'resource "aws_nat_gateway" "eks_nat" \{\s*count\s*=\s*var\.nat_gateway_enabled \? length\(var\.availability_zones\) : 0', "aws-eks-vpc NAT gateway")
+    print("PASS cluster-enabled-parity")
     # node_count reaches the live size only while nothing ignores it.
     for module, kind, field in (("gcp-gke-nodepool", "google_container_node_pool", "autoscaling"), ("aws-eks-nodegroup", "aws_eks_node_group", "scaling_config[0].desired_size")):
         resources = live_hcl((ROOT / f"terraform/modules/{module}/resources.tf").read_text())
@@ -461,13 +550,19 @@ def main() -> int:
     # nested in a map or inside a heredoc, does not count.
     block_wiring = (
         ("gcp-gke-environment-pause/cluster", "baseline_pool", r"node_count\s*=\s*var\.paused \? 0 : null", "GKE example pool at zero"),
+        ("gcp-gke-environment-pause/cluster", "baseline_pool", r"count\s*=\s*var\.cluster_enabled \? 1 : 0", "GKE example pool removed on down"),
+        ("gcp-gke-environment-pause/cluster", "cluster", r"cluster_enabled\s*=\s*var\.cluster_enabled", "GKE example cluster_enabled passed"),
         ("gcp-gke-environment-pause/cluster", "database", r'activation_policy\s*=\s*var\.paused \? "NEVER" : null', "GKE example Cloud SQL stopped"),
         ("gcp-gke-environment-pause/cluster", "cluster", r"managed_prometheus\s*=\s*!var\.paused", "GKE example Managed Prometheus restored"),
         ("gcp-gke-environment-pause/cluster", "cluster", r"monitoring_components\s*=\s*var\.paused \? null : local\.\w+", "GKE example monitoring components restored"),
         ("aws-eks-environment-pause/cluster", "baseline_nodes", r"node_count\s*=\s*var\.paused \? 0 : null", "EKS example node group at zero"),
+        ("aws-eks-environment-pause/cluster", "baseline_nodes", r"count\s*=\s*var\.cluster_enabled \? 1 : 0", "EKS example node group removed on down"),
+        ("aws-eks-environment-pause/cluster", "cluster", r"cluster_enabled\s*=\s*var\.cluster_enabled", "EKS example cluster_enabled passed"),
         ("aws-eks-environment-pause/cluster", "database", r'activation_policy\s*=\s*var\.paused \? "NEVER" : null', "EKS example Aurora instances removed"),
+        ("gcp-gke-environment-pause/node-provisioning", "karpenter_crds", r"count\s*=\s*var\.cluster_enabled \? 1 : 0", "GKE example CRDs removed on down"),
         ("gcp-gke-environment-pause/node-provisioning", "karpenter_controller", r"keep_controller_off_karpenter_nodes\s*=\s*true", "GKE example controller off Karpenter nodes"),
         ("gcp-gke-environment-pause/node-provisioning", "karpenter_controller", r'preference_policy\s*=\s*"Ignore"', "GKE example Ignore preference policy"),
+        ("aws-eks-environment-pause/node-provisioning", "karpenter_prereqs", r"cluster_enabled\s*=\s*var\.cluster_enabled", "EKS example prerequisites follow the cluster"),
         ("aws-eks-environment-pause/node-provisioning", "karpenter_controller", r"controller_replicas\s*=\s*1", "EKS example single controller replica"),
     )
     for root, module, pattern, label in block_wiring:
@@ -532,16 +627,40 @@ def main() -> int:
     kept_modules = (
         ("gcp-gke-environment-pause/cluster", "network"),
         ("gcp-gke-environment-pause/cluster", "cluster"),
-        ("gcp-gke-environment-pause/cluster", "baseline_pool"),
         ("gcp-gke-environment-pause/cluster", "database"),
         ("aws-eks-environment-pause/cluster", "vpc"),
         ("aws-eks-environment-pause/cluster", "cluster"),
-        ("aws-eks-environment-pause/cluster", "baseline_nodes"),
         ("aws-eks-environment-pause/cluster", "database"),
         ("gcp-gke-environment-pause/node-provisioning", "karpenter_prereqs"),
-        ("gcp-gke-environment-pause/node-provisioning", "karpenter_crds"),
         ("aws-eks-environment-pause/node-provisioning", "karpenter_prereqs"),
     )
+    # Down removes exactly these example modules, through cluster_enabled —
+    # never through paused, which keeps everything but the controller.
+    down_gated_modules = (
+        ("gcp-gke-environment-pause/cluster", "baseline_pool"),
+        ("aws-eks-environment-pause/cluster", "baseline_nodes"),
+        ("gcp-gke-environment-pause/node-provisioning", "karpenter_crds"),
+    )
+    for root, module in down_gated_modules:
+        arguments = module_arguments(module_block(examples[root], module))
+        require(arguments, r"^\s*count\s*=\s*var\.cluster_enabled \? 1 : 0\s*$", f"{root} {module} gated by cluster_enabled")
+        if re.search(r"\b(?:count|for_each)\s*=\s*var\.paused", arguments):
+            raise SystemExit(f"{root} {module} is gated by paused instead of cluster_enabled")
+        paused_gate = module_block(examples[root], module).replace("var.cluster_enabled", "var.paused", 1)
+        if re.search(r"^\s*count\s*=\s*var\.cluster_enabled \? 1 : 0\s*$", module_arguments(paused_gate), re.MULTILINE):
+            raise SystemExit(f"adapter guard failed to detect mutation: {root} {module} gated by paused")
+        print(f"PASS adapter-negative {root} {module} gated by paused")
+    # Every lifecycle root names both lifecycle inputs and refuses the
+    # combination that removes the cluster while unpaused.
+    for root in (
+        "gcp-gke-environment-pause/cluster",
+        "aws-eks-environment-pause/cluster",
+        "gcp-gke-environment-pause/node-provisioning",
+        "aws-eks-environment-pause/node-provisioning",
+    ):
+        require(examples[root], r'variable "cluster_enabled" \{[^}]*nullable\s*=\s*false', f"{root} lifecycle input")
+        require(examples[root], r"var\.paused \|\| var\.cluster_enabled", f"{root} refuses down without pause")
+    print("PASS environment-down-examples")
     for root, module in kept_modules:
         block = module_block(examples[root], module)
         if not block or repeated.search(block):

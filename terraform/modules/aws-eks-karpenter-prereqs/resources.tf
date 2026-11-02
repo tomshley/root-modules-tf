@@ -11,13 +11,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+  count = var.account_id == null ? 1 : 0
+}
 data "aws_region" "current" {}
+
+locals {
+  account_id = coalesce(var.account_id, one(data.aws_caller_identity.current[*].account_id))
+}
 
 resource "aws_iam_role" "karpenter_controller" {
   name = "${var.project_name_prefix}-karpenter-controller"
 
-  assume_role_policy = jsonencode({
+  # While the cluster is removed there is no issuer to trust, so the
+  # preserved role denies every assume instead of holding a stale or
+  # permissive statement.
+  assume_role_policy = var.cluster_enabled ? jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -34,11 +43,36 @@ resource "aws_iam_role" "karpenter_controller" {
         }
       }
     ]
+    }) : jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Deny"
+        Principal = {
+          AWS = "*"
+        }
+        Action = [
+          "sts:AssumeRole",
+          "sts:AssumeRoleWithWebIdentity",
+        ]
+      }
+    ]
   })
 
   tags = merge(var.tags, {
     Name = "${var.project_name_prefix}-karpenter-controller"
   })
+
+  lifecycle {
+    precondition {
+      condition     = var.cluster_enabled ? var.oidc_provider_arn != null : true
+      error_message = "oidc_provider_arn is required while cluster_enabled is true; pass the recreated cluster's OIDC provider ARN on resume."
+    }
+    precondition {
+      condition     = var.cluster_enabled ? var.oidc_provider_url != null : true
+      error_message = "oidc_provider_url is required while cluster_enabled is true; pass the recreated cluster's OIDC provider URL on resume."
+    }
+  }
 }
 
 resource "aws_iam_policy" "karpenter_controller" {
@@ -101,7 +135,7 @@ resource "aws_iam_policy" "karpenter_controller" {
         Sid      = "EKS"
         Effect   = "Allow"
         Action   = "eks:DescribeCluster"
-        Resource = "arn:aws:eks:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/${var.cluster_name}"
+        Resource = "arn:aws:eks:${data.aws_region.current.name}:${local.account_id}:cluster/${var.cluster_name}"
       },
       {
         Sid    = "InstanceProfile"
@@ -114,7 +148,7 @@ resource "aws_iam_policy" "karpenter_controller" {
           "iam:RemoveRoleFromInstanceProfile",
           "iam:TagInstanceProfile",
         ]
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/*"
+        Resource = "arn:aws:iam::${local.account_id}:instance-profile/*"
       },
     ]
   })
@@ -175,6 +209,7 @@ resource "aws_iam_instance_profile" "karpenter_node" {
 }
 
 resource "aws_eks_access_entry" "karpenter_node" {
+  count         = var.cluster_enabled ? 1 : 0
   cluster_name  = var.cluster_name
   principal_arn = aws_iam_role.karpenter_node.arn
   type          = "EC2_LINUX"

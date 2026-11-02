@@ -83,6 +83,13 @@ variable "bootstrap_cluster_creator_admin_permissions" {
   description = "Whether the cluster creator IAM principal gets admin access. ForceNew — must match the value used at cluster creation to avoid replacement."
 }
 
+variable "cluster_enabled" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether the cluster exists. False removes the cluster itself while keeping every other resource this module owns — identities, keys, and network prerequisites — so a stopped environment keeps its data and credentials, and returning to true recreates the cluster with the same identities. Stable outputs keep their values while it is off; genuinely cluster-bound outputs return null."
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}
