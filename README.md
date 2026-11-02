@@ -59,7 +59,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `aws-eks-aurora-cluster` | AWS | Generic Aurora PostgreSQL Serverless v2 module with workload presets (event-store, read-store, generic), per-field overrides, and an `activation_policy` that removes its instances and keeps the cluster and data, like stopping `gcp-cloudsql-postgres` | **New** |
 | `aws-eks-keycloak` | AWS | Compatibility shim for aws-keycloak and k8s-keycloak | **New** |
 | `aws-eks-secure-s3` | AWS | Hardened S3 bucket with TLS-only policy and IRSA-ready IAM policies | **New** |
-| `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA | **New** |
+| `cloudflare-domain-baseline` | Cloudflare | Baseline SSL/TLS posture, curated DNS, optional Origin CA and custom error pages | **New** |
 | `cloudflare-website-acceleration` | Cloudflare | Public website HTTPS, redirects, cache rules, edge settings | **New** |
 | `cloudflare-preview-website` | Cloudflare | Tunnel-backed publication of one or more hostnames, across zones, through a single tunnel | **New** |
 | `cloudflare-access-guard` | Cloudflare | Access protection for an existing hostname with email/email-domain allow rules | **New** |
@@ -154,11 +154,13 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 ## Usage
 
+Compose modules from `terraform/modules/` in a consumer root configuration. Run initialization, validation, planning, and application through that consumer stack's Makefile so its backend and credential configuration are loaded consistently.
+
+For non-mutating library checks in this repository:
+
 ```bash
-cd terraform/<module>
-terraform init
-terraform plan
-terraform apply
+make -C terraform/tests contract-check
+make -C terraform/tests quality-check
 ```
 
 ---
