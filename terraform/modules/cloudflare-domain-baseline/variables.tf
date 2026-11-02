@@ -187,3 +187,35 @@ variable "origin_ca" {
     error_message = "origin_ca.requested_validity must be one of: 7, 30, 90, 365, 730, 1095, 5475 when origin_ca is provided."
   }
 }
+
+variable "custom_error_pages" {
+  type = map(object({
+    url   = string
+    state = optional(string, "customized")
+  }))
+  default     = {}
+  nullable    = false
+  description = "Zone custom pages keyed by Cloudflare page identifier. Supply an HTTPS URL for customized pages, or state = default and url = an empty string to reset a page before removing its entry. Omitted or null maps leave pages unmanaged. Requires the zone's custom-page entitlement."
+
+  validation {
+    condition = alltrue([
+      for identifier in keys(var.custom_error_pages) :
+      contains(["500_errors", "1000_errors", "basic_challenge", "country_challenge", "ip_block", "managed_challenge", "ratelimit_block", "under_attack", "waf_block", "waf_challenge"], identifier)
+    ])
+    error_message = "custom_error_pages keys must be Cloudflare custom page identifiers: 500_errors, 1000_errors, basic_challenge, country_challenge, ip_block, managed_challenge, ratelimit_block, under_attack, waf_block, waf_challenge."
+  }
+
+  validation {
+    condition = alltrue([
+      for page in values(var.custom_error_pages) : try(contains(["default", "customized"], page.state), false)
+    ])
+    error_message = "Each custom_error_pages entry must be non-null with state default or customized."
+  }
+
+  validation {
+    condition = alltrue([
+      for page in values(var.custom_error_pages) : try(page.state == "default" ? page.url == "" : can(regex("^https://([[:alnum:]]([[:alnum:]-]*[[:alnum:]])?\\.)*[[:alnum:]]([[:alnum:]-]*[[:alnum:]])?(:[0-9]{1,5})?([/?#][^[:space:]]*)?$", page.url)), false)
+    ])
+    error_message = "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace; default pages must use an empty url."
+  }
+}

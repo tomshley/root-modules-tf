@@ -34,6 +34,7 @@ MODULES = {
     "redis-service-contract",
     "node-provisioning-contract",
     "postgres-binding",
+    "cloudflare-domain-baseline",
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
     "gcp-gke-ci-oidc-access",
@@ -246,6 +247,126 @@ module "contract" {
     password_secret_name = "db-password"
     reader_capable = true
   }
+}
+""",
+    "baseline-custom-error-page-valid": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500_errors" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-invalid-identifier": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500 errors" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-always-online": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "always_online" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-custom-ips": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "custom_ips" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-forbidden": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "forbidden" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-omitted": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+}
+""",
+    "baseline-custom-error-page-empty": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {}
+}
+""",
+    "baseline-custom-error-page-null": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = null
+}
+""",
+    "baseline-custom-error-page-reset": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "default", url = "" } }
+}
+""",
+    "baseline-custom-error-page-multiple": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500_errors" = { url = "https://static.example.com/errors/500.html" }
+    "1000_errors" = { url = "https://static.example.com/errors/1000.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-http": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "http://static.example.com/error.html" } }
+}
+""",
+    "baseline-custom-error-page-hostless": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https:///error.html" } }
+}
+""",
+    "baseline-custom-error-page-query-only": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https://?error=500" } }
+}
+""",
+    "baseline-custom-error-page-whitespace": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https://static.example.com/error page.html" } }
+}
+""",
+    "baseline-custom-error-page-null-url": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = null } }
+}
+""",
+    "baseline-custom-error-page-null-entry": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = null }
+}
+""",
+    "baseline-custom-error-page-invalid-state": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "disabled", url = "https://static.example.com/error.html" } }
+}
+""",
+    "baseline-custom-error-page-reset-with-url": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "default", url = "https://static.example.com/error.html" } }
 }
 """,
     "preview-tunnel-single": """module "preview" {
@@ -2368,7 +2489,101 @@ EXPECTED_INGRESS = {
     ],
 }
 
+EXPECTED_CUSTOM_PAGES = {
+    "baseline-custom-error-page-valid": {
+        "500_errors": {"url": "https://static.example.com/errors/500.0123456789ab.html", "state": "customized"},
+    },
+    "baseline-custom-error-page-reset": {
+        "500_errors": {"url": "", "state": "default"},
+    },
+    "baseline-custom-error-page-multiple": {
+        "500_errors": {"url": "https://static.example.com/errors/500.html", "state": "customized"},
+        "1000_errors": {"url": "https://static.example.com/errors/1000.html", "state": "customized"},
+    },
+    "baseline-custom-error-page-omitted": {},
+    "baseline-custom-error-page-empty": {},
+    "baseline-custom-error-page-null": {},
+}
+
+
+def custom_page_lifecycle(tofu: str, work: Path, plan_json: dict, customized: bool) -> list[str]:
+    """Re-plan synthetic prior state; never apply or claim remote API behavior."""
+    schemas = run([tofu, "providers", "schema", "-json"], work)
+    if schemas.returncode != 0:
+        return ["could not read provider schemas"]
+    providers = json.loads(schemas.stdout)["provider_schemas"]
+    resources = []
+    for resource in planned_resources(plan_json["planned_values"]["root_module"]):
+        schema = providers[resource["provider_name"]]["resource_schemas"][resource["type"]]
+        attributes = {name: None for name in schema["block"]["attributes"]}
+        attributes.update(resource["values"])
+        # Zone settings have a dynamic value: state stores its concrete type
+        # alongside the value, while plan JSON contains only the plain string.
+        for name, attribute in schema["block"]["attributes"].items():
+            if attribute.get("type") == "dynamic" and attributes[name] is not None:
+                attributes[name] = {"type": "string", "value": attributes[name]}
+        attributes["id"] = attributes.get("identifier") or attributes.get("setting_id")
+        instance = {"schema_version": schema["version"], "attributes": attributes, "sensitive_attributes": []}
+        if "index" in resource:
+            instance["index_key"] = resource["index"]
+        resources.append({
+            "module": "module.baseline", "mode": "managed", "type": resource["type"],
+            "name": resource["name"], "provider": f'provider["{resource["provider_name"]}"]',
+            "instances": [instance],
+        })
+    original = (work / "main.tf").read_text()
+    old_url = "https://static.example.com/errors/500.0123456789ab.html"
+    new_url = "https://static.example.com/errors/500.abcdef012345.html"
+    transitions = [("unchanged", original, "no-op")]
+    if customized:
+        transitions.extend([
+            ("update", original.replace(old_url, new_url), "update"),
+            ("reset", original.replace(f'url = "{old_url}"', 'state = "default", url = ""'), "update"),
+            ("remove", CASE_CONFIGS["baseline-custom-error-page-empty"].replace("../../../modules", str(ROOT / "terraform" / "modules")), "delete"),
+        ])
+    for label, config, action in transitions:
+        (work / "terraform.tfstate").write_text(json.dumps({
+            "version": 4, "terraform_version": "1.9.0", "serial": 1, "lineage": "custom-page-contract",
+            "outputs": {}, "resources": resources,
+        }))
+        (work / "main.tf").write_text(config)
+        result = run([tofu, "plan", "-refresh=false", "-input=false", "-lock=false", "-no-color", "-out=lifecycle.plan"], work)
+        if result.returncode != 0:
+            return [f"{label} re-plan failed: " + (result.stdout + result.stderr)[-2000:]]
+        shown = run([tofu, "show", "-json", "lifecycle.plan"], work)
+        if shown.returncode != 0:
+            return [f"{label} plan could not be inspected"]
+        changes = json.loads(shown.stdout)["resource_changes"]
+        expected_addresses = {resource["address"] for resource in planned_resources(plan_json["planned_values"]["root_module"])}
+        if {change["address"] for change in changes} != expected_addresses:
+            return [f"{label}: planned resource addresses changed"]
+        for change in changes:
+            is_page = change["type"] == "cloudflare_custom_pages"
+            expected = action if is_page else "no-op"
+            if change["change"]["actions"] != [expected]:
+                return [f"{label}: {change['address']} plans {change['change']['actions']}, expected {expected}"]
+            if is_page and label in ("update", "reset"):
+                expected_url, expected_state = (new_url, "customized") if label == "update" else ("", "default")
+                after = change["change"]["after"]
+                if (after["url"], after["state"]) != (expected_url, expected_state):
+                    return [f"{label}: page URL or state changed unexpectedly"]
+                for resource in resources:
+                    if resource["type"] == "cloudflare_custom_pages":
+                        resource["instances"][0]["attributes"].update(url=expected_url, state=expected_state)
+        print(f"PASS custom-page-lifecycle {label}: synthetic state, refresh disabled")
+    return []
+
+
 EXPECTED_RESOURCE_COUNTS = {
+    "baseline-custom-error-page-omitted": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-empty": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-null": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-reset": {"cloudflare_custom_pages": 1},
+    "baseline-custom-error-page-multiple": {"cloudflare_custom_pages": 2},
+
+    "baseline-custom-error-page-valid": {
+        "cloudflare_custom_pages": 1,
+    },
     "preview-tunnel-dns-unmanaged": {
         "cloudflare_dns_record": 0,
         "cloudflare_zero_trust_tunnel_cloudflared": 1,
@@ -2852,6 +3067,19 @@ EXPECTED_WARNINGS = {
 }
 
 EXPECTED_DIAGNOSTICS = {
+    "baseline-custom-error-page-http": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-hostless": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-query-only": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-whitespace": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-null-url": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-null-entry": "Each custom_error_pages entry must be non-null with state default or customized",
+    "baseline-custom-error-page-invalid-state": "Each custom_error_pages entry must be non-null with state default or customized",
+    "baseline-custom-error-page-reset-with-url": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+
+    "baseline-custom-error-page-invalid-identifier": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-always-online": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-custom-ips": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-forbidden": "custom_error_pages keys must be Cloudflare custom page identifiers",
     "postgres-purpose-invalid": "contract.purpose must be generic",
     "postgres-authority-mismatch": "An authoritative store is not",
     "tenancy-duplicate-database": "Tenant database names must be unique",
@@ -3036,6 +3264,26 @@ def main() -> int:
                         if ingress != EXPECTED_INGRESS[name]:
                             failures.append(f"{name}: planned ingress changed")
                             continue
+                    if name in EXPECTED_CUSTOM_PAGES:
+                        pages = {
+                            resource["values"]["identifier"]: {
+                                key: resource["values"].get(key) for key in ("url", "state")
+                            }
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "cloudflare_custom_pages"
+                        }
+                        if pages != EXPECTED_CUSTOM_PAGES[name] or any(
+                            resource["values"].get("zone_id") != "00000000000000000000000000000001"
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "cloudflare_custom_pages"
+                        ):
+                            failures.append(f"{name}: planned custom page attributes changed")
+                            continue
+                        if name in ("baseline-custom-error-page-valid", "baseline-custom-error-page-omitted"):
+                            problems = custom_page_lifecycle(tofu, work, plan_json, name.endswith("-valid"))
+                            if problems:
+                                failures.append(f"{name}: {problems}")
+                                continue
                     if name in EXPECTED_RESOURCE_COUNTS:
                         counts: dict[str, int] = {}
                         for resource in planned_resources(planned["root_module"]):
