@@ -16,6 +16,19 @@ This project follows Semantic Versioning.
 
 ---
 
+## [3.2.0] — 2026-11-02
+
+### Added
+
+- **aws-eks-cluster**, **gcp-gke-cluster**: `cluster_enabled` removes the cluster itself while keeping every other resource the module owns — identities, keys, and network prerequisites — so a stopped environment keeps its data and credentials, and returning to `true` recreates the cluster under the same identities. Stable outputs keep their values while the cluster is off; genuinely cluster-bound outputs return `null`. `moved` blocks carry an existing cluster to its counted address without recreation.
+- **aws-eks-ci-oidc-access**: `cluster_enabled` removes the access entry and its policy association with the cluster while the OIDC provider and deploy role stay, so the pipeline that recreates the cluster keeps working.
+- **aws-eks-karpenter-prereqs**: `cluster_enabled` removes the node access entry with the cluster and replaces the controller role's trust with a deny-only statement while there is no issuer to trust; returning to `true` re-trusts the recreated cluster's OIDC provider.
+- **aws-eks-vpc**: `nat_gateway_enabled` removes the NAT gateways, their elastic IPs, and the private route tables' default routes, leaving the private subnets without managed egress for a cheaper pause.
+- **cloudflare-domain-baseline**: `custom_error_pages` maps Cloudflare custom page identifiers to `cloudflare_custom_pages` resources with state and HTTPS-URL validation, covering the reset-before-remove lifecycle the v5 provider requires.
+- The EKS and GKE environment-pause examples wire the new inputs, and adapter and contract checks pin them.
+
+---
+
 ## [3.1.1] — 2026-10-30
 
 ### Fixed

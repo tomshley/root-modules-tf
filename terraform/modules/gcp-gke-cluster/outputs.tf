@@ -23,8 +23,11 @@ output "google_compute_network_gke_network_id" {
   value = var.google_compute_network_id
 }
 
+# The name and location outputs read the cluster while it exists, so
+# consumers such as node pools keep their ordering edge on it, and fall back
+# to the configured values while it is disabled.
 output "google_container_cluster_gke_cluster_name" {
-  value = google_container_cluster.gke_cluster.name
+  value = var.cluster_enabled ? google_container_cluster.gke_cluster[0].name : local.gke_cluster_name
 }
 
 output "google_service_account_gke_service_account_id" {
@@ -40,19 +43,19 @@ output "google_compute_subnetwork_id" {
 }
 
 output "google_container_cluster_gke_cluster_self_link" {
-  value = google_container_cluster.gke_cluster.self_link
+  value = var.cluster_enabled ? google_container_cluster.gke_cluster[0].self_link : null
 }
 
 output "google_container_cluster_gke_cluster_location" {
-  value = google_container_cluster.gke_cluster.location
+  value = var.cluster_enabled ? google_container_cluster.gke_cluster[0].location : (var.location_mode == "zonal" ? var.google_region_zone : var.google_region)
 }
 
 output "google_container_cluster_gke_cluster_endpoint" {
-  value = google_container_cluster.gke_cluster.endpoint
+  value = var.cluster_enabled ? google_container_cluster.gke_cluster[0].endpoint : null
 }
 
 output "google_container_cluster_gke_cluster_ca_certificate" {
-  value     = google_container_cluster.gke_cluster.master_auth[0].cluster_ca_certificate
+  value     = var.cluster_enabled ? google_container_cluster.gke_cluster[0].master_auth[0].cluster_ca_certificate : null
   sensitive = true
 }
 

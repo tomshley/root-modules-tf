@@ -103,6 +103,7 @@ resource "aws_iam_role_policy_attachment" "ci_deploy" {
 }
 
 resource "aws_eks_access_entry" "ci_deploy" {
+  count         = var.cluster_enabled ? 1 : 0
   cluster_name  = var.eks_cluster_name
   principal_arn = aws_iam_role.ci_deploy.arn
   type          = "STANDARD"
@@ -113,6 +114,7 @@ resource "aws_eks_access_entry" "ci_deploy" {
 }
 
 resource "aws_eks_access_policy_association" "ci_deploy" {
+  count         = var.cluster_enabled ? 1 : 0
   cluster_name  = var.eks_cluster_name
   principal_arn = aws_iam_role.ci_deploy.arn
   policy_arn    = var.eks_access_policy_arn

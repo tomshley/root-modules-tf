@@ -104,3 +104,12 @@ resource "cloudflare_origin_ca_certificate" "this" {
   request_type       = each.value.request_type
   requested_validity = each.value.requested_validity
 }
+
+resource "cloudflare_custom_pages" "this" {
+  for_each = var.custom_error_pages
+
+  zone_id    = local.normalized_zone_id
+  identifier = each.key
+  state      = each.value.state
+  url        = each.value.url
+}

@@ -56,3 +56,10 @@ variable "tags" {
   default     = {}
   description = "Additional tags to apply to all resources"
 }
+
+variable "nat_gateway_enabled" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether the NAT gateways exist. False removes the NAT gateways, their elastic IPs, and the private route tables' default routes, leaving the private subnets without managed egress."
+}

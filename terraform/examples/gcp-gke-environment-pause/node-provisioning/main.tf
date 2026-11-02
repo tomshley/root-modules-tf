@@ -23,6 +23,13 @@
 # place with no controller acting on them. Whether to compose the controller
 # is this root's choice; neither module takes a flag for it.
 #
+# cluster_enabled = false additionally removes the CRD release and its
+# managed in-cluster resources, clearing them before ../cluster deletes the
+# API. It requires paused = true, so the NodeClaim guard below still runs
+# first. While the cluster is absent this root cannot plan at all — its
+# providers connect through the cluster — so a consumer defers this root
+# until ../cluster exists again.
+#
 # Order: pause this root before ../cluster and resume it after.
 # - Pausing first removes the controller before the baseline pool drains, so
 #   nothing launches nodes for the pods the drain leaves pending.
@@ -88,6 +95,23 @@ variable "paused" {
   nullable = false
 }
 
+variable "cluster_enabled" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+# Removing the cluster while unpaused is not a lifecycle state, so it is
+# refused before anything else changes.
+resource "terraform_data" "lifecycle_mode" {
+  lifecycle {
+    precondition {
+      condition     = var.paused || var.cluster_enabled
+      error_message = "cluster_enabled = false requires paused = true: an environment without its cluster is down, and down stops compute first."
+    }
+  }
+}
+
 # --- Cluster connection ---
 
 provider "google" {
@@ -126,10 +150,18 @@ module "karpenter_prereqs" {
   node_service_account_email = var.node_service_account_email
 }
 
-# Installed whether or not paused; it also creates the namespace both
-# releases use.
+# Installed while the cluster exists, whether or not paused; it also creates
+# the namespace both releases use. Down removes it with the cluster.
 module "karpenter_crds" {
+  count  = var.cluster_enabled ? 1 : 0
   source = "../../../modules/gcp-karpenter-crds"
+}
+
+# The CRD release gained count with cluster_enabled, moving existing
+# installs to the [0] address rather than replacing them.
+moved {
+  from = module.karpenter_crds
+  to   = module.karpenter_crds[0]
 }
 
 module "karpenter_controller" {

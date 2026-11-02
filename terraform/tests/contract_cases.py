@@ -34,6 +34,7 @@ MODULES = {
     "redis-service-contract",
     "node-provisioning-contract",
     "postgres-binding",
+    "cloudflare-domain-baseline",
     "cloudflare-preview-website",
     "gcp-ci-oidc-role",
     "gcp-gke-ci-oidc-access",
@@ -41,6 +42,8 @@ MODULES = {
     "gcp-gke-cluster",
     "gcp-gke-nodepool",
     "aws-eks-cluster",
+    "aws-eks-vpc",
+    "aws-eks-karpenter-prereqs",
     "aws-eks-nodegroup",
     "aws-eks-aurora-cluster",
     "gcp-cloudsql-postgres",
@@ -244,6 +247,126 @@ module "contract" {
     password_secret_name = "db-password"
     reader_capable = true
   }
+}
+""",
+    "baseline-custom-error-page-valid": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500_errors" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-invalid-identifier": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500 errors" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-always-online": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "always_online" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-custom-ips": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "custom_ips" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-forbidden": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "forbidden" = { url = "https://static.example.com/errors/500.0123456789ab.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-omitted": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+}
+""",
+    "baseline-custom-error-page-empty": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {}
+}
+""",
+    "baseline-custom-error-page-null": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = null
+}
+""",
+    "baseline-custom-error-page-reset": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "default", url = "" } }
+}
+""",
+    "baseline-custom-error-page-multiple": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = {
+    "500_errors" = { url = "https://static.example.com/errors/500.html" }
+    "1000_errors" = { url = "https://static.example.com/errors/1000.html" }
+  }
+}
+""",
+    "baseline-custom-error-page-http": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "http://static.example.com/error.html" } }
+}
+""",
+    "baseline-custom-error-page-hostless": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https:///error.html" } }
+}
+""",
+    "baseline-custom-error-page-query-only": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https://?error=500" } }
+}
+""",
+    "baseline-custom-error-page-whitespace": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = "https://static.example.com/error page.html" } }
+}
+""",
+    "baseline-custom-error-page-null-url": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { url = null } }
+}
+""",
+    "baseline-custom-error-page-null-entry": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = null }
+}
+""",
+    "baseline-custom-error-page-invalid-state": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "disabled", url = "https://static.example.com/error.html" } }
+}
+""",
+    "baseline-custom-error-page-reset-with-url": """module "baseline" {
+  source = "../../../modules/cloudflare-domain-baseline"
+  zone_id = "00000000000000000000000000000001"
+  custom_error_pages = { "500_errors" = { state = "default", url = "https://static.example.com/error.html" } }
 }
 """,
     "preview-tunnel-single": """module "preview" {
@@ -942,6 +1065,26 @@ module "gke" {
   services_secondary_range_name = "services-range"
   pods_secondary_range_name     = "pods-range"
   location_mode                 = "multi-zonal"
+}
+""",
+    "gke-cluster-disabled": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  cluster_enabled               = false
 }
 """,
     "gke-nodepool-location-regional-default": """provider "google" {
@@ -1992,6 +2135,115 @@ module "eks" {
   public_access_cidrs = ["10.0.0.0/8"]
 }
 """.replace("TOOLONGPREFIX", "a" * 48),
+    "eks-cluster-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-cluster"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+  cluster_enabled     = false
+}
+""",
+    "eks-vpc-nat-default": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "vpc" {
+  source = "../../../modules/aws-eks-vpc"
+
+  project_name_prefix  = "contract"
+  cluster_name         = "contract-cluster"
+  availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+}
+""",
+    "eks-vpc-nat-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "vpc" {
+  source = "../../../modules/aws-eks-vpc"
+
+  project_name_prefix  = "contract"
+  cluster_name         = "contract-cluster"
+  availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+
+  nat_gateway_enabled = false
+}
+""",
+    # The node-provisioning example's own providers connect through the
+    # cluster, so a consumer defers it while the cluster is absent; this
+    # case exercises the composition its down plan reduces to: every
+    # in-cluster resource at count zero and the retained prerequisites
+    # planning under the cloud provider alone, with a declared account ID
+    # standing in for the caller-identity lookup. It sources through
+    # ./modules because the controller module's ../karpenter-controller-contract
+    # submodule must stay inside the package boundary.
+    "eks-node-provisioning-cluster-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+variable "paused" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+variable "cluster_enabled" {
+  type     = bool
+  default  = false
+  nullable = false
+}
+
+module "karpenter_prereqs" {
+  source = "./modules/aws-eks-karpenter-prereqs"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-cluster"
+  cluster_enabled     = var.cluster_enabled
+  account_id          = "123456789012"
+}
+
+module "karpenter_controller" {
+  count  = var.paused ? 0 : 1
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-cluster"
+  cluster_endpoint                  = "contract-endpoint"
+  karpenter_controller_role_arn     = module.karpenter_prereqs.controller_role_arn
+  karpenter_interruption_queue_name = module.karpenter_prereqs.sqs_queue_name
+  controller_replicas               = 1
+}
+""",
     # The gcp-cloudsql-postgres cases also source through ./modules because the
     # module's ../postgres-workload-contract submodule must stay inside the
     # package boundary, same as gcp-ci-oidc-role above.
@@ -2237,7 +2489,101 @@ EXPECTED_INGRESS = {
     ],
 }
 
+EXPECTED_CUSTOM_PAGES = {
+    "baseline-custom-error-page-valid": {
+        "500_errors": {"url": "https://static.example.com/errors/500.0123456789ab.html", "state": "customized"},
+    },
+    "baseline-custom-error-page-reset": {
+        "500_errors": {"url": "", "state": "default"},
+    },
+    "baseline-custom-error-page-multiple": {
+        "500_errors": {"url": "https://static.example.com/errors/500.html", "state": "customized"},
+        "1000_errors": {"url": "https://static.example.com/errors/1000.html", "state": "customized"},
+    },
+    "baseline-custom-error-page-omitted": {},
+    "baseline-custom-error-page-empty": {},
+    "baseline-custom-error-page-null": {},
+}
+
+
+def custom_page_lifecycle(tofu: str, work: Path, plan_json: dict, customized: bool) -> list[str]:
+    """Re-plan synthetic prior state; never apply or claim remote API behavior."""
+    schemas = run([tofu, "providers", "schema", "-json"], work)
+    if schemas.returncode != 0:
+        return ["could not read provider schemas"]
+    providers = json.loads(schemas.stdout)["provider_schemas"]
+    resources = []
+    for resource in planned_resources(plan_json["planned_values"]["root_module"]):
+        schema = providers[resource["provider_name"]]["resource_schemas"][resource["type"]]
+        attributes = {name: None for name in schema["block"]["attributes"]}
+        attributes.update(resource["values"])
+        # Zone settings have a dynamic value: state stores its concrete type
+        # alongside the value, while plan JSON contains only the plain string.
+        for name, attribute in schema["block"]["attributes"].items():
+            if attribute.get("type") == "dynamic" and attributes[name] is not None:
+                attributes[name] = {"type": "string", "value": attributes[name]}
+        attributes["id"] = attributes.get("identifier") or attributes.get("setting_id")
+        instance = {"schema_version": schema["version"], "attributes": attributes, "sensitive_attributes": []}
+        if "index" in resource:
+            instance["index_key"] = resource["index"]
+        resources.append({
+            "module": "module.baseline", "mode": "managed", "type": resource["type"],
+            "name": resource["name"], "provider": f'provider["{resource["provider_name"]}"]',
+            "instances": [instance],
+        })
+    original = (work / "main.tf").read_text()
+    old_url = "https://static.example.com/errors/500.0123456789ab.html"
+    new_url = "https://static.example.com/errors/500.abcdef012345.html"
+    transitions = [("unchanged", original, "no-op")]
+    if customized:
+        transitions.extend([
+            ("update", original.replace(old_url, new_url), "update"),
+            ("reset", original.replace(f'url = "{old_url}"', 'state = "default", url = ""'), "update"),
+            ("remove", CASE_CONFIGS["baseline-custom-error-page-empty"].replace("../../../modules", str(ROOT / "terraform" / "modules")), "delete"),
+        ])
+    for label, config, action in transitions:
+        (work / "terraform.tfstate").write_text(json.dumps({
+            "version": 4, "terraform_version": "1.9.0", "serial": 1, "lineage": "custom-page-contract",
+            "outputs": {}, "resources": resources,
+        }))
+        (work / "main.tf").write_text(config)
+        result = run([tofu, "plan", "-refresh=false", "-input=false", "-lock=false", "-no-color", "-out=lifecycle.plan"], work)
+        if result.returncode != 0:
+            return [f"{label} re-plan failed: " + (result.stdout + result.stderr)[-2000:]]
+        shown = run([tofu, "show", "-json", "lifecycle.plan"], work)
+        if shown.returncode != 0:
+            return [f"{label} plan could not be inspected"]
+        changes = json.loads(shown.stdout)["resource_changes"]
+        expected_addresses = {resource["address"] for resource in planned_resources(plan_json["planned_values"]["root_module"])}
+        if {change["address"] for change in changes} != expected_addresses:
+            return [f"{label}: planned resource addresses changed"]
+        for change in changes:
+            is_page = change["type"] == "cloudflare_custom_pages"
+            expected = action if is_page else "no-op"
+            if change["change"]["actions"] != [expected]:
+                return [f"{label}: {change['address']} plans {change['change']['actions']}, expected {expected}"]
+            if is_page and label in ("update", "reset"):
+                expected_url, expected_state = (new_url, "customized") if label == "update" else ("", "default")
+                after = change["change"]["after"]
+                if (after["url"], after["state"]) != (expected_url, expected_state):
+                    return [f"{label}: page URL or state changed unexpectedly"]
+                for resource in resources:
+                    if resource["type"] == "cloudflare_custom_pages":
+                        resource["instances"][0]["attributes"].update(url=expected_url, state=expected_state)
+        print(f"PASS custom-page-lifecycle {label}: synthetic state, refresh disabled")
+    return []
+
+
 EXPECTED_RESOURCE_COUNTS = {
+    "baseline-custom-error-page-omitted": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-empty": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-null": {"cloudflare_custom_pages": 0},
+    "baseline-custom-error-page-reset": {"cloudflare_custom_pages": 1},
+    "baseline-custom-error-page-multiple": {"cloudflare_custom_pages": 2},
+
+    "baseline-custom-error-page-valid": {
+        "cloudflare_custom_pages": 1,
+    },
     "preview-tunnel-dns-unmanaged": {
         "cloudflare_dns_record": 0,
         "cloudflare_zero_trust_tunnel_cloudflared": 1,
@@ -2258,6 +2604,44 @@ EXPECTED_RESOURCE_COUNTS = {
     "karpenter-prereqs-canonical-role": {
         "google_project_iam_custom_role": 1,
         "google_service_account_iam_member": 1,
+    },
+    # Down removes the cluster-bound resources and keeps the module's
+    # identities and prerequisites: the node service account on GCP, the
+    # cluster role, the KMS key, and the security groups on AWS.
+    "gke-cluster-disabled": {
+        "google_container_cluster": 0,
+        "google_service_account": 1,
+    },
+    "eks-cluster-disabled": {
+        "aws_eks_cluster": 0,
+        "aws_iam_openid_connect_provider": 0,
+        "aws_ec2_tag": 0,
+        "aws_iam_role": 1,
+        "aws_kms_key": 1,
+        "aws_security_group": 1,
+    },
+    # Three zones: three gateways and three elastic addresses by default,
+    # none when nat_gateway_enabled is false; the subnets and both sets of
+    # route tables stay either way.
+    "eks-vpc-nat-default": {
+        "aws_nat_gateway": 3,
+        "aws_eip": 3,
+        "aws_route_table": 4,
+    },
+    "eks-vpc-nat-disabled": {
+        "aws_nat_gateway": 0,
+        "aws_eip": 0,
+        "aws_route_table": 4,
+    },
+    # The down composition the example's plan reduces to: the cluster-bound
+    # access entry is absent, the controller and node roles and the
+    # interruption queue stay, and the plan needs only the cloud provider —
+    # nothing asks a live cluster or the caller identity for an answer.
+    "eks-node-provisioning-cluster-disabled": {
+        "aws_eks_access_entry": 0,
+        "aws_iam_role": 2,
+        "aws_sqs_queue": 1,
+        "helm_release": 0,
     },
 }
 
@@ -2661,6 +3045,13 @@ EXAMPLE_ROOTS = [
 # are checked as written instead.
 REQUIRED_MOVES = [
     ("aws-eks-aurora-cluster/moved.tf", "aws_rds_cluster_instance.writer", "aws_rds_cluster_instance.writer[0]"),
+    ("gcp-gke-cluster/moved.tf", "google_container_cluster.gke_cluster", "google_container_cluster.gke_cluster[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_eks_cluster.eks_cluster", "aws_eks_cluster.eks_cluster[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_ec2_tag.eks_managed_sg_karpenter_discovery", "aws_ec2_tag.eks_managed_sg_karpenter_discovery[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_iam_openid_connect_provider.eks_oidc", "aws_iam_openid_connect_provider.eks_oidc[0]"),
+    ("aws-eks-karpenter-prereqs/moved.tf", "aws_eks_access_entry.karpenter_node", "aws_eks_access_entry.karpenter_node[0]"),
+    ("aws-eks-ci-oidc-access/moved.tf", "aws_eks_access_entry.ci_deploy", "aws_eks_access_entry.ci_deploy[0]"),
+    ("aws-eks-ci-oidc-access/moved.tf", "aws_eks_access_policy_association.ci_deploy", "aws_eks_access_policy_association.ci_deploy[0]"),
 ]
 
 # Module files that must stay identical: gcp-karpenter-controller passes
@@ -2676,6 +3067,19 @@ EXPECTED_WARNINGS = {
 }
 
 EXPECTED_DIAGNOSTICS = {
+    "baseline-custom-error-page-http": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-hostless": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-query-only": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-whitespace": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-null-url": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+    "baseline-custom-error-page-null-entry": "Each custom_error_pages entry must be non-null with state default or customized",
+    "baseline-custom-error-page-invalid-state": "Each custom_error_pages entry must be non-null with state default or customized",
+    "baseline-custom-error-page-reset-with-url": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
+
+    "baseline-custom-error-page-invalid-identifier": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-always-online": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-custom-ips": "custom_error_pages keys must be Cloudflare custom page identifiers",
+    "baseline-custom-error-page-forbidden": "custom_error_pages keys must be Cloudflare custom page identifiers",
     "postgres-purpose-invalid": "contract.purpose must be generic",
     "postgres-authority-mismatch": "An authoritative store is not",
     "tenancy-duplicate-database": "Tenant database names must be unique",
@@ -2860,6 +3264,26 @@ def main() -> int:
                         if ingress != EXPECTED_INGRESS[name]:
                             failures.append(f"{name}: planned ingress changed")
                             continue
+                    if name in EXPECTED_CUSTOM_PAGES:
+                        pages = {
+                            resource["values"]["identifier"]: {
+                                key: resource["values"].get(key) for key in ("url", "state")
+                            }
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "cloudflare_custom_pages"
+                        }
+                        if pages != EXPECTED_CUSTOM_PAGES[name] or any(
+                            resource["values"].get("zone_id") != "00000000000000000000000000000001"
+                            for resource in planned_resources(planned["root_module"])
+                            if resource["type"] == "cloudflare_custom_pages"
+                        ):
+                            failures.append(f"{name}: planned custom page attributes changed")
+                            continue
+                        if name in ("baseline-custom-error-page-valid", "baseline-custom-error-page-omitted"):
+                            problems = custom_page_lifecycle(tofu, work, plan_json, name.endswith("-valid"))
+                            if problems:
+                                failures.append(f"{name}: {problems}")
+                                continue
                     if name in EXPECTED_RESOURCE_COUNTS:
                         counts: dict[str, int] = {}
                         for resource in planned_resources(planned["root_module"]):

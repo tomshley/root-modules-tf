@@ -73,7 +73,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count  = length(var.availability_zones)
+  count  = var.nat_gateway_enabled ? length(var.availability_zones) : 0
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -82,7 +82,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "eks_nat" {
-  count         = length(var.availability_zones)
+  count         = var.nat_gateway_enabled ? length(var.availability_zones) : 0
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -114,9 +114,12 @@ resource "aws_route_table" "private" {
   count  = length(var.availability_zones)
   vpc_id = aws_vpc.eks_vpc.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.eks_nat[count.index].id
+  dynamic "route" {
+    for_each = var.nat_gateway_enabled ? [0] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.eks_nat[count.index].id
+    }
   }
 
   tags = merge(var.tags, {

@@ -11,16 +11,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Reads the cluster while it exists, so consumers such as node groups keep
+# their ordering edge on it, and falls back to the configured name while it
+# is disabled.
 output "cluster_name" {
-  value = aws_eks_cluster.eks_cluster.name
+  value = var.cluster_enabled ? aws_eks_cluster.eks_cluster[0].name : var.cluster_name
 }
 
 output "cluster_endpoint" {
-  value = aws_eks_cluster.eks_cluster.endpoint
+  value = var.cluster_enabled ? aws_eks_cluster.eks_cluster[0].endpoint : null
 }
 
 output "cluster_ca_certificate" {
-  value     = aws_eks_cluster.eks_cluster.certificate_authority[0].data
+  value     = var.cluster_enabled ? aws_eks_cluster.eks_cluster[0].certificate_authority[0].data : null
   sensitive = true
 }
 
@@ -28,16 +31,17 @@ output "cluster_security_group_id" {
   # EKS-managed SG — automatically attached to both control plane and node groups.
   # The custom additional SG (eks_cluster_sg) is only on the control plane, so
   # downstream consumers (RDS, ElastiCache, etc.) must reference this managed SG
-  # to allow traffic from pods running on nodes.
-  value = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
+  # to allow traffic from pods running on nodes. Null while the cluster is
+  # removed.
+  value = var.cluster_enabled ? aws_eks_cluster.eks_cluster[0].vpc_config[0].cluster_security_group_id : null
 }
 
 output "oidc_provider_arn" {
-  value = aws_iam_openid_connect_provider.eks_oidc.arn
+  value = var.cluster_enabled ? aws_iam_openid_connect_provider.eks_oidc[0].arn : null
 }
 
 output "oidc_provider_url" {
-  value = replace(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, "https://", "")
+  value = var.cluster_enabled ? replace(aws_eks_cluster.eks_cluster[0].identity[0].oidc[0].issuer, "https://", "") : null
 }
 
 output "cluster_iam_role_arn" {

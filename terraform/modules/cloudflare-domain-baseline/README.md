@@ -8,6 +8,7 @@ This module manages:
 - Email address obfuscation toggle
 - Curated DNS records limited to `A`, `AAAA`, `CNAME`, `TXT`, and `CAA`
 - Optional Cloudflare Origin CA certificate issuance from a caller-provided CSR
+- Optional custom error pages keyed by Cloudflare page identifier
 
 This module does not create a zone.
 
@@ -30,10 +31,15 @@ This module does not create a zone.
 - `origin_ca`
   - Default: `null`
   - Optional Origin CA certificate request.
+- `custom_error_pages`
+  - Default: `{}`
+  - Optional custom pages keyed by Cloudflare page identifier. Each value supplies `url` and optional `state` (`customized` by default). A null map uses the empty default. Requires a zone plan that includes custom error pages.
 
 ## DNS record contract
 
 Supported record types are `A`, `AAAA`, `CNAME`, `TXT`, and `CAA`.
+
+Each record may also carry an optional `comment`, passed through to the Cloudflare record.
 
 Defaults:
 - `ttl = 1`
@@ -73,6 +79,34 @@ When composing with `cloudflare-mail-foundation`, keep mail DNS out of `dns_reco
 `dns_records` are keyed internally by input order as well as record name and type. Reordering existing entries in the list changes the Terraform resource addresses and will cause record replacement even when the record contents stay the same.
 
 When `origin_ca` is set, `requested_validity` must be one of Cloudflare's supported Origin CA validity periods: `7`, `30`, `90`, `365`, `730`, `1095`, or `5475` days.
+
+`custom_error_pages` keys must be Cloudflare custom page identifiers: `500_errors`, `1000_errors`, `basic_challenge`, `country_challenge`, `ip_block`, `managed_challenge`, `ratelimit_block`, `under_attack`, `waf_block`, `waf_challenge`. For `state = "customized"`, `url` must be an HTTPS URL with a DNS hostname and no whitespace. For `state = "default"`, use `url = ""`. Custom error pages require a zone plan that includes them; entitlement and page acceptance are checked by Cloudflare when applied.
+
+### Custom page lifecycle
+
+The caller owns page content and hosting. Cloudflare fetches and stores the HTML; it does not fetch the URL for each visitor. The page must be publicly reachable when configured, meet the [HTML and size requirements](https://developers.cloudflare.com/rules/custom-errors/edit-error-pages/), and include the applicable [error tokens](https://developers.cloudflare.com/rules/custom-errors/reference/error-tokens/).
+
+```hcl
+custom_error_pages = {
+  "500_errors" = {
+    url = "https://static.example.com/errors/500.0123456789ab.html"
+  }
+}
+```
+
+To update content, publish a new versioned URL and change `url`. Changing bytes at the same URL produces no Terraform diff; Cloudflare requires an explicit re-fetch in that situation.
+
+To retire a page, keep its key and first apply:
+
+```hcl
+custom_error_pages = {
+  "500_errors" = { state = "default", url = "" }
+}
+```
+
+Verify Cloudflare reports `state = "default"` before removing the key in a subsequent plan and apply. The [v5 provider's delete operation](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.8.2/internal/services/custom_pages/resource.go) only removes Terraform state and does not reset Cloudflare. Removing a customized entry directly, including setting the map to `{}` or `null`, leaves its live page configured. Resetting at zone level can also expose an account-level custom page; inspect the effective page in the dashboard.
+
+Omitting this input creates no custom-page resources and leaves existing page settings unmanaged. No page hosting, content upload, or account-level page management is performed by this module.
 
 ## Outputs
 
