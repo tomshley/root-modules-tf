@@ -94,6 +94,13 @@ variable "master_authorized_networks_cidr_blocks" {
   description = "CIDR blocks allowed to access the GKE control plane when its public endpoint is enabled."
 }
 
+variable "cluster_enabled" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether the cluster exists. False removes the cluster itself while keeping every other resource this module owns — identities, keys, and network prerequisites — so a stopped environment keeps its data and credentials, and returning to true recreates the cluster with the same identities. Stable outputs keep their values while it is off; genuinely cluster-bound outputs return null."
+}
+
 variable "deletion_protection" {
   type    = bool
   default = true

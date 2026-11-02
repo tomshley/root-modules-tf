@@ -41,6 +41,8 @@ MODULES = {
     "gcp-gke-cluster",
     "gcp-gke-nodepool",
     "aws-eks-cluster",
+    "aws-eks-vpc",
+    "aws-eks-karpenter-prereqs",
     "aws-eks-nodegroup",
     "aws-eks-aurora-cluster",
     "gcp-cloudsql-postgres",
@@ -942,6 +944,26 @@ module "gke" {
   services_secondary_range_name = "services-range"
   pods_secondary_range_name     = "pods-range"
   location_mode                 = "multi-zonal"
+}
+""",
+    "gke-cluster-disabled": """provider "google" {
+  project      = "contract-test-project"
+  access_token = "invalid-token-for-plan-only"
+}
+
+module "gke" {
+  source = "../../../modules/gcp-gke-cluster"
+
+  google_organization_id        = "org"
+  google_region                 = "us-east4"
+  google_region_zone            = "us-east4-a"
+  google_project_id             = "contract-test-project"
+  project_name_prefix           = "contract"
+  google_compute_network_id     = "contract-network"
+  google_compute_subnetwork_id  = "contract-subnetwork"
+  services_secondary_range_name = "services-range"
+  pods_secondary_range_name     = "pods-range"
+  cluster_enabled               = false
 }
 """,
     "gke-nodepool-location-regional-default": """provider "google" {
@@ -1992,6 +2014,115 @@ module "eks" {
   public_access_cidrs = ["10.0.0.0/8"]
 }
 """.replace("TOOLONGPREFIX", "a" * 48),
+    "eks-cluster-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "eks" {
+  source = "../../../modules/aws-eks-cluster"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-cluster"
+  vpc_id              = "vpc-00000000000000000"
+  subnet_ids          = ["subnet-00000000000000000", "subnet-11111111111111111"]
+  public_access_cidrs = ["10.0.0.0/8"]
+  cluster_enabled     = false
+}
+""",
+    "eks-vpc-nat-default": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "vpc" {
+  source = "../../../modules/aws-eks-vpc"
+
+  project_name_prefix  = "contract"
+  cluster_name         = "contract-cluster"
+  availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+}
+""",
+    "eks-vpc-nat-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+module "vpc" {
+  source = "../../../modules/aws-eks-vpc"
+
+  project_name_prefix  = "contract"
+  cluster_name         = "contract-cluster"
+  availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+
+  nat_gateway_enabled = false
+}
+""",
+    # The node-provisioning example's own providers connect through the
+    # cluster, so a consumer defers it while the cluster is absent; this
+    # case exercises the composition its down plan reduces to: every
+    # in-cluster resource at count zero and the retained prerequisites
+    # planning under the cloud provider alone, with a declared account ID
+    # standing in for the caller-identity lookup. It sources through
+    # ./modules because the controller module's ../karpenter-controller-contract
+    # submodule must stay inside the package boundary.
+    "eks-node-provisioning-cluster-disabled": """provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "invalid-key-for-plan-only"
+  secret_key                  = "invalid-secret-for-plan-only"
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
+  skip_metadata_api_check     = true
+}
+
+variable "paused" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+variable "cluster_enabled" {
+  type     = bool
+  default  = false
+  nullable = false
+}
+
+module "karpenter_prereqs" {
+  source = "./modules/aws-eks-karpenter-prereqs"
+
+  project_name_prefix = "contract"
+  cluster_name        = "contract-cluster"
+  cluster_enabled     = var.cluster_enabled
+  account_id          = "123456789012"
+}
+
+module "karpenter_controller" {
+  count  = var.paused ? 0 : 1
+  source = "./modules/aws-eks-karpenter-controller"
+
+  cluster_name                      = "contract-cluster"
+  cluster_endpoint                  = "contract-endpoint"
+  karpenter_controller_role_arn     = module.karpenter_prereqs.controller_role_arn
+  karpenter_interruption_queue_name = module.karpenter_prereqs.sqs_queue_name
+  controller_replicas               = 1
+}
+""",
     # The gcp-cloudsql-postgres cases also source through ./modules because the
     # module's ../postgres-workload-contract submodule must stay inside the
     # package boundary, same as gcp-ci-oidc-role above.
@@ -2258,6 +2389,44 @@ EXPECTED_RESOURCE_COUNTS = {
     "karpenter-prereqs-canonical-role": {
         "google_project_iam_custom_role": 1,
         "google_service_account_iam_member": 1,
+    },
+    # Down removes the cluster-bound resources and keeps the module's
+    # identities and prerequisites: the node service account on GCP, the
+    # cluster role, the KMS key, and the security groups on AWS.
+    "gke-cluster-disabled": {
+        "google_container_cluster": 0,
+        "google_service_account": 1,
+    },
+    "eks-cluster-disabled": {
+        "aws_eks_cluster": 0,
+        "aws_iam_openid_connect_provider": 0,
+        "aws_ec2_tag": 0,
+        "aws_iam_role": 1,
+        "aws_kms_key": 1,
+        "aws_security_group": 1,
+    },
+    # Three zones: three gateways and three elastic addresses by default,
+    # none when nat_gateway_enabled is false; the subnets and both sets of
+    # route tables stay either way.
+    "eks-vpc-nat-default": {
+        "aws_nat_gateway": 3,
+        "aws_eip": 3,
+        "aws_route_table": 4,
+    },
+    "eks-vpc-nat-disabled": {
+        "aws_nat_gateway": 0,
+        "aws_eip": 0,
+        "aws_route_table": 4,
+    },
+    # The down composition the example's plan reduces to: the cluster-bound
+    # access entry is absent, the controller and node roles and the
+    # interruption queue stay, and the plan needs only the cloud provider —
+    # nothing asks a live cluster or the caller identity for an answer.
+    "eks-node-provisioning-cluster-disabled": {
+        "aws_eks_access_entry": 0,
+        "aws_iam_role": 2,
+        "aws_sqs_queue": 1,
+        "helm_release": 0,
     },
 }
 
@@ -2661,6 +2830,13 @@ EXAMPLE_ROOTS = [
 # are checked as written instead.
 REQUIRED_MOVES = [
     ("aws-eks-aurora-cluster/moved.tf", "aws_rds_cluster_instance.writer", "aws_rds_cluster_instance.writer[0]"),
+    ("gcp-gke-cluster/moved.tf", "google_container_cluster.gke_cluster", "google_container_cluster.gke_cluster[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_eks_cluster.eks_cluster", "aws_eks_cluster.eks_cluster[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_ec2_tag.eks_managed_sg_karpenter_discovery", "aws_ec2_tag.eks_managed_sg_karpenter_discovery[0]"),
+    ("aws-eks-cluster/moved.tf", "aws_iam_openid_connect_provider.eks_oidc", "aws_iam_openid_connect_provider.eks_oidc[0]"),
+    ("aws-eks-karpenter-prereqs/moved.tf", "aws_eks_access_entry.karpenter_node", "aws_eks_access_entry.karpenter_node[0]"),
+    ("aws-eks-ci-oidc-access/moved.tf", "aws_eks_access_entry.ci_deploy", "aws_eks_access_entry.ci_deploy[0]"),
+    ("aws-eks-ci-oidc-access/moved.tf", "aws_eks_access_policy_association.ci_deploy", "aws_eks_access_policy_association.ci_deploy[0]"),
 ]
 
 # Module files that must stay identical: gcp-karpenter-controller passes

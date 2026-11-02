@@ -94,6 +94,13 @@ variable "policy_arns" {
   description = "IAM policy ARNs to attach to the CI deploy role (e.g., ECR read, EKS describe)."
 }
 
+variable "cluster_enabled" {
+  type        = bool
+  default     = true
+  nullable    = false
+  description = "Whether the cluster exists. False removes the access entry and its policy association with the cluster while the CI identity — the OIDC provider and the deploy role with its trust — stays, so the pipeline that recreates the cluster keeps working."
+}
+
 variable "eks_cluster_name" {
   type        = string
   description = "Target EKS cluster name for the access entry."

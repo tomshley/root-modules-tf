@@ -29,6 +29,7 @@ resource "google_service_account" "gke_service_account" {
 }
 
 resource "google_container_cluster" "gke_cluster" {
+  count          = var.cluster_enabled ? 1 : 0
   depends_on     = [google_service_account.gke_service_account]
   name           = local.gke_cluster_name
   project        = var.google_project_id

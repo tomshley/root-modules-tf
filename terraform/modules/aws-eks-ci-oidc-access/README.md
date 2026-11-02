@@ -17,6 +17,7 @@ CI provider differences (GitHub Actions, GitLab CI, Bitbucket Pipelines) are exp
 | trust_conditions | IAM trust policy conditions (test/claim/values) | `list(object)` | yes | — |
 | policy_arns | IAM policy ARNs to attach | `list(string)` | no | `[]` |
 | eks_cluster_name | Target EKS cluster name | `string` | yes | — |
+| cluster_enabled | Whether the cluster exists; `false` removes the access entry and policy association while keeping the CI identity | `bool` | no | `true` |
 | eks_access_policy_arn | EKS access policy ARN | `string` | no | `AmazonEKSClusterAdminPolicy` |
 | eks_access_scope_type | Access scope: `cluster` or `namespace` | `string` | no | `cluster` |
 | eks_access_scope_namespaces | Namespaces for namespace-scoped access | `list(string)` | no | `[]` |

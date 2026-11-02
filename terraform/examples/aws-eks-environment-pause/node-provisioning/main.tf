@@ -24,6 +24,13 @@
 # needed to keep them. The prerequisites stay, so the controller's role and
 # interruption queue are the same on resume.
 #
+# cluster_enabled = false tells the prerequisites the cluster is gone: the
+# node access entry leaves with it, and the controller role's trust becomes
+# deny-only until a recreated cluster's issuer arrives. It requires
+# paused = true. While the cluster is absent this root cannot plan at all —
+# its providers connect through the cluster — so a consumer defers it until
+# ../cluster exists again.
+#
 # Order: pause this root before ../cluster and resume it after.
 # - Pausing first removes the controller before the baseline group drains, so
 #   nothing launches nodes for the pods the drain leaves pending.
@@ -61,17 +68,36 @@ variable "cluster_name" {
 }
 
 variable "oidc_provider_arn" {
-  type = string
+  type    = string
+  default = null
 }
 
 variable "oidc_provider_url" {
-  type = string
+  type    = string
+  default = null
 }
 
 variable "paused" {
   type     = bool
   default  = false
   nullable = false
+}
+
+variable "cluster_enabled" {
+  type     = bool
+  default  = true
+  nullable = false
+}
+
+# Removing the cluster while unpaused is not a lifecycle state, so it is
+# refused before anything else changes.
+resource "terraform_data" "lifecycle_mode" {
+  lifecycle {
+    precondition {
+      condition     = var.paused || var.cluster_enabled
+      error_message = "cluster_enabled = false requires paused = true: an environment without its cluster is down, and down stops compute first."
+    }
+  }
 }
 
 # --- Cluster connection ---
@@ -105,6 +131,7 @@ module "karpenter_prereqs" {
 
   project_name_prefix = var.project_name_prefix
   cluster_name        = var.cluster_name
+  cluster_enabled     = var.cluster_enabled
   oidc_provider_arn   = var.oidc_provider_arn
   oidc_provider_url   = var.oidc_provider_url
 }
