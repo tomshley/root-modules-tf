@@ -24,11 +24,12 @@
 # is this root's choice; neither module takes a flag for it.
 #
 # cluster_enabled = false additionally removes the CRD release and its
-# managed in-cluster resources, clearing them before ../cluster deletes the
-# API. It requires paused = true, so the NodeClaim guard below still runs
-# first. While the cluster is absent this root cannot plan at all — its
-# providers connect through the cluster — so a consumer defers this root
-# until ../cluster exists again.
+# managed in-cluster resources plus the kube-system scale-down disruption
+# budgets, clearing them before ../cluster deletes the API. It requires
+# paused = true, so the NodeClaim guard below still runs first. While the
+# cluster is absent this root cannot plan at all — its providers connect
+# through the cluster — so a consumer defers this root until ../cluster
+# exists again.
 #
 # Order: pause this root before ../cluster and resume it after.
 # - Pausing first removes the controller before the baseline pool drains, so
@@ -238,6 +239,43 @@ data "kubernetes_resources" "gmp_priority_class" {
     postcondition {
       condition     = length(coalesce(self.objects, [])) == 1
       error_message = "The gmp-critical PriorityClass the Karpenter controller runs at does not exist, so Managed Prometheus is off: resume ../cluster before this root."
+    }
+  }
+}
+
+locals {
+  # Budget name prefix => the k8s-app label of the GKE-managed kube-system
+  # Deployment it covers. metrics-server's Deployment name carries its
+  # version; its k8s-app label does not, so the budget survives upgrades.
+  system_disruption_budgets = {
+    "antrea-controller-autoscaler"  = "antrea-controller-autoscaler"
+    "event-exporter"                = "event-exporter"
+    "konnectivity-agent"            = "konnectivity-agent"
+    "konnectivity-agent-autoscaler" = "konnectivity-agent-autoscaler"
+    "kube-dns"                      = "kube-dns"
+    "kube-dns-autoscaler"           = "kube-dns-autoscaler"
+    "l7-default-backend"            = "glbc"
+    "metrics-server"                = "metrics-server"
+  }
+}
+
+# The cluster autoscaler refuses to evict a kube-system pod that has no
+# disruption budget, so a spare node can survive a scale-down. One eviction
+# at a time is safe for these GKE-managed Deployments, and the -scale-down
+# names keep clear of any budgets GKE itself installs. Like the rest of this
+# root's in-cluster objects they stay while paused and leave with the
+# cluster.
+resource "kubernetes_pod_disruption_budget_v1" "system" {
+  for_each = var.cluster_enabled ? local.system_disruption_budgets : {}
+
+  metadata {
+    name      = "${each.key}-scale-down"
+    namespace = "kube-system"
+  }
+  spec {
+    max_unavailable = "1"
+    selector {
+      match_labels = { "k8s-app" = each.value }
     }
   }
 }
