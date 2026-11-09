@@ -1,6 +1,10 @@
 {
   "schema_revision": "contract-cases-v1",
   "cases": [
+    {"name": "composition-aws", "module": "aws-eks-gateway", "outcome": "pass", "description": "Plan the complete AWS consumer and render its Gateway with exact well-known and Keycloak prefix routes."},
+    {"name": "composition-gcp", "module": "gcp-gke-gateway", "outcome": "pass", "description": "Plan the complete GCP consumer and render its Gateway with the same consumer route contracts."},
+    {"name": "composition-route-drift", "module": "aws-eks-gateway", "outcome": "fail", "description": "A changed route in the actual consumer must fail the exact-match assertion."},
+    {"name": "composition-hostname-drift", "module": "aws-eks-gateway", "outcome": "fail", "description": "Changing only Keycloak's public_hostname argument must fail the shared public-origin assertion."},
     {"name": "app-links-golden", "module": "k8s-app-links", "outcome": "pass", "description": "Golden Apple and Android association render."},
     {"name": "app-links-empty", "module": "k8s-app-links", "outcome": "pass", "description": "Empty apps produce no placeholder files."},
     {"name": "app-links-ios-only", "module": "k8s-app-links", "outcome": "pass", "description": "Only Apple associations are emitted."},
