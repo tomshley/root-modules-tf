@@ -11,6 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+output "public_url" {
+  description = "HTTPS public URL when public_hostname is set, otherwise null."
+  value       = module.keycloak.public_url
+}
+
 output "release_name" { value = module.keycloak.release_name }
 output "release_namespace" { value = module.keycloak.release_namespace }
 output "release_version" { value = module.keycloak.release_version }

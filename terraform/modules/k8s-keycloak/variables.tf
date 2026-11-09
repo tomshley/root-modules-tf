@@ -11,6 +11,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+variable "public_hostname" {
+  description = "Bare lowercase DNS name for Keycloak's public HTTPS URL; null preserves chart defaults."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.public_hostname == null ? true : alltrue([length(var.public_hostname) <= 253, can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", var.public_hostname)), can(regex("[a-z]", reverse(split(".", var.public_hostname))[0]))])
+    error_message = "public_hostname must be null or a bare lowercase DNS name, without a scheme, path, port or whitespace, and with a letter in the last label."
+  }
+}
+
+variable "existing_secrets" {
+  description = "Existing Kubernetes Secret names and keys for admin and database credentials; null preserves password handling."
+  type = object({
+    admin = optional(object({
+      name         = string
+      password_key = optional(string, "admin-password")
+    }))
+    db = optional(object({
+      name         = string
+      user_key     = optional(string, "db-user")
+      password_key = optional(string, "db-password")
+    }))
+  })
+  default = null
+  validation {
+    condition     = var.existing_secrets == null ? true : alltrue([for secret in [var.existing_secrets.admin, var.existing_secrets.db] : secret == null ? true : try(alltrue([length(secret.name) <= 253, can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$", secret.name))]), false)])
+    error_message = "existing_secrets names must be non-empty DNS-1123 Secret names of at most 253 characters."
+  }
+  validation {
+    condition     = var.existing_secrets == null ? true : alltrue([for secret in [var.existing_secrets.admin, var.existing_secrets.db] : secret == null ? true : alltrue([for key, value in secret : try(alltrue([length(value) <= 253, !contains([".", ".."], value), !startswith(value, ".."), can(regex("^[-._a-zA-Z0-9]+$", value))]), false) if key != "name"])])
+    error_message = "existing_secrets keys must be 1-253 characters matching ^[-._a-zA-Z0-9]+$, must not be . or .., and must not start with two dots."
+  }
+}
+
 variable "release_name" {
   type    = string
   default = "keycloak"
@@ -40,7 +74,18 @@ variable "db_name" { type = string }
 variable "db_user" { type = string }
 variable "db_password" {
   type      = string
+  default   = null
   sensitive = true
+
+  validation {
+    condition     = var.db_password == null ? true : try(var.existing_secrets.db, null) == null
+    error_message = "existing_secrets.db and db_password are mutually exclusive."
+  }
+
+  validation {
+    condition     = var.db_password != null || try(var.existing_secrets.db, null) != null
+    error_message = "Either db_password or existing_secrets.db must be provided."
+  }
 }
 variable "admin_user" {
   type    = string
@@ -48,7 +93,18 @@ variable "admin_user" {
 }
 variable "admin_password" {
   type      = string
+  default   = null
   sensitive = true
+
+  validation {
+    condition     = var.admin_password == null ? true : try(var.existing_secrets.admin, null) == null
+    error_message = "existing_secrets.admin and admin_password are mutually exclusive."
+  }
+
+  validation {
+    condition     = var.admin_password != null || try(var.existing_secrets.admin, null) != null
+    error_message = "Either admin_password or existing_secrets.admin must be provided."
+  }
 }
 variable "realm_json_path" {
   type    = string
@@ -108,4 +164,12 @@ variable "helm_timeout" {
 variable "extra_helm_values" {
   type    = list(string)
   default = []
+  validation {
+    condition     = var.public_hostname == null ? true : alltrue([for values in var.extra_helm_values : can(yamldecode(values))])
+    error_message = "When public_hostname is set, every extra_helm_values entry must decode as a single YAML document."
+  }
+  validation {
+    condition     = var.public_hostname == null ? true : alltrue([for values in var.extra_helm_values : !try(contains(keys(yamldecode(values)), "extraEnvVars"), false)])
+    error_message = "public_hostname and top-level extraEnvVars in extra_helm_values are mutually exclusive because Helm replaces lists."
+  }
 }

@@ -11,6 +11,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+variable "public_hostname" {
+  description = "Bare lowercase DNS name for Keycloak's public HTTPS URL; null preserves chart defaults."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.public_hostname == null ? true : alltrue([length(var.public_hostname) <= 253, can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", var.public_hostname)), can(regex("[a-z]", reverse(split(".", var.public_hostname))[0]))])
+    error_message = "public_hostname must be null or a bare lowercase DNS name, without a scheme, path, port or whitespace, and with a letter in the last label."
+  }
+}
+
+variable "existing_secrets" {
+  description = "Existing Kubernetes Secret names and keys for admin and database credentials; null preserves password handling."
+  type = object({
+    admin = optional(object({
+      name         = string
+      password_key = optional(string, "admin-password")
+    }))
+    db = optional(object({
+      name         = string
+      user_key     = optional(string, "db-user")
+      password_key = optional(string, "db-password")
+    }))
+  })
+  default = null
+  validation {
+    condition     = var.existing_secrets == null ? true : alltrue([for secret in [var.existing_secrets.admin, var.existing_secrets.db] : secret == null ? true : try(alltrue([length(secret.name) <= 253, can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$", secret.name))]), false)])
+    error_message = "existing_secrets names must be non-empty DNS-1123 Secret names of at most 253 characters."
+  }
+  validation {
+    condition     = var.existing_secrets == null ? true : alltrue([for secret in [var.existing_secrets.admin, var.existing_secrets.db] : secret == null ? true : alltrue([for key, value in secret : try(alltrue([length(value) <= 253, !contains([".", ".."], value), !startswith(value, ".."), can(regex("^[-._a-zA-Z0-9]+$", value))]), false) if key != "name"])])
+    error_message = "existing_secrets keys must be 1-253 characters matching ^[-._a-zA-Z0-9]+$, must not be . or .., and must not start with two dots."
+  }
+}
+
 variable "release_name" {
   description = "Name of the Helm release and prefix for all K8s resources (secrets, configmap). Must be unique within the namespace when deploying multiple Keycloak instances."
   type        = string
@@ -54,8 +88,14 @@ variable "keycloak_image_tag" {
 # --- Database connection (from aws-eks-aurora-cluster outputs) ---
 
 variable "db_secret_arn" {
-  description = "Secrets Manager ARN containing database credentials (username, password, host, port, dbname). From aws-eks-aurora-cluster master_secret_arn output."
+  description = "Secrets Manager ARN containing database credentials (username, password, host, port, dbname). From aws-eks-aurora-cluster master_secret_arn output. Mutually exclusive with existing_secrets.db."
   type        = string
+  default     = null
+
+  validation {
+    condition     = var.db_secret_arn == null ? true : try(var.existing_secrets.db, null) == null
+    error_message = "existing_secrets.db and db_secret_arn are mutually exclusive."
+  }
 }
 
 variable "db_endpoint" {
@@ -80,18 +120,28 @@ variable "db_user" {
 }
 
 variable "db_password" {
-  description = "Database password for Keycloak. When null, resolved from Secrets Manager via db_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.db_credentials to rotate."
+  description = "Database password for Keycloak. When null and existing_secrets.db is unset, resolved from Secrets Manager via db_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Changes to managed Secret data are ignored; replace the managed Kubernetes Secret to rotate."
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = var.db_password == null ? true : try(var.existing_secrets.db, null) == null
+    error_message = "existing_secrets.db and db_password are mutually exclusive."
+  }
 }
 
 # --- Admin credentials ---
 
 variable "admin_secret_arn" {
-  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password). Required when admin_password is null."
+  description = "Secrets Manager ARN containing Keycloak admin credentials (username, password). Required when admin_password is null and existing_secrets.admin is unset."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.admin_secret_arn == null ? true : try(var.existing_secrets.admin, null) == null
+    error_message = "existing_secrets.admin and admin_secret_arn are mutually exclusive."
+  }
 }
 
 variable "admin_user" {
@@ -101,10 +151,15 @@ variable "admin_user" {
 }
 
 variable "admin_password" {
-  description = "Keycloak admin password. When null, resolved from Secrets Manager via admin_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Note: ignore_changes on the K8s secret data means subsequent changes to this variable are not applied — taint kubernetes_secret.admin_credentials to rotate."
+  description = "Keycloak admin password. When null and existing_secrets.admin is unset, resolved from Secrets Manager via admin_secret_arn at plan time — no ExternalSecretsOperator required for first apply. Changes to managed Secret data are ignored; replace the managed Kubernetes Secret to rotate."
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = var.admin_password == null ? true : try(var.existing_secrets.admin, null) == null
+    error_message = "existing_secrets.admin and admin_password are mutually exclusive."
+  }
 }
 
 # --- Realm import ---

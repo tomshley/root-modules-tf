@@ -38,7 +38,7 @@ module "keycloak" {
     "app.kubernetes.io/part-of"    = "keycloak"
     "eks.amazonaws.com/cluster"    = var.cluster_name
   }, var.tags)
-  db_secret_annotations     = { "secrets-manager/arn" = var.db_secret_arn }
+  db_secret_annotations     = var.db_secret_arn != null ? { "secrets-manager/arn" = var.db_secret_arn } : {}
   admin_secret_annotations  = var.admin_secret_arn != null ? { "secrets-manager/arn" = var.admin_secret_arn } : {}
   resources_requests_cpu    = var.resources_requests_cpu
   resources_requests_memory = var.resources_requests_memory
@@ -46,4 +46,6 @@ module "keycloak" {
   resources_limits_memory   = var.resources_limits_memory
   helm_timeout              = var.helm_timeout
   extra_helm_values         = var.extra_helm_values
+  public_hostname           = var.public_hostname
+  existing_secrets          = var.existing_secrets
 }

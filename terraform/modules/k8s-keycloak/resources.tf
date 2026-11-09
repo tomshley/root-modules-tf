@@ -21,11 +21,14 @@ resource "kubernetes_namespace" "keycloak" {
 }
 
 locals {
+  existing_admin     = try(var.existing_secrets.admin, null)
+  existing_db        = try(var.existing_secrets.db, null)
   resolved_namespace = var.create_namespace ? kubernetes_namespace.keycloak[0].metadata[0].name : var.namespace
   realm_import       = var.realm_json_path != null
   realm_content      = local.realm_import ? file(var.realm_json_path) : null
   realm_content_hash = local.realm_import ? sha256(local.realm_content) : null
   image_tag_values   = var.image_tag != null ? { image = { tag = var.image_tag } } : {}
+  hostname_values    = var.public_hostname == null ? {} : { extraEnvVars = [{ name = "KC_HOSTNAME", value = "https://${var.public_hostname}" }] }
   pod_annotations = merge(
     var.pod_annotations,
     local.realm_import ? { "checksum/realm-config" = local.realm_content_hash } : {},
@@ -35,6 +38,8 @@ locals {
 }
 
 resource "kubernetes_secret" "db_credentials" {
+  count = local.existing_db == null ? 1 : 0
+
   metadata {
     name        = "${var.release_name}-db-credentials"
     namespace   = local.resolved_namespace
@@ -55,6 +60,8 @@ resource "kubernetes_secret" "db_credentials" {
 }
 
 resource "kubernetes_secret" "admin_credentials" {
+  count = local.existing_admin == null ? 1 : 0
+
   metadata {
     name        = "${var.release_name}-admin-credentials"
     namespace   = local.resolved_namespace
@@ -99,17 +106,17 @@ resource "helm_release" "keycloak" {
     replicaCount     = var.replicas
     auth = {
       adminUser         = var.admin_user
-      existingSecret    = kubernetes_secret.admin_credentials.metadata[0].name
-      passwordSecretKey = "admin-password"
+      existingSecret    = local.existing_admin == null ? kubernetes_secret.admin_credentials[0].metadata[0].name : local.existing_admin.name
+      passwordSecretKey = local.existing_admin == null ? "admin-password" : local.existing_admin.password_key
     }
-    externalDatabase = {
+    externalDatabase = merge({
       host                      = var.db_endpoint
       port                      = var.db_port
       user                      = var.db_user
       database                  = var.db_name
-      existingSecret            = kubernetes_secret.db_credentials.metadata[0].name
-      existingSecretPasswordKey = "db-password"
-    }
+      existingSecret            = local.existing_db == null ? kubernetes_secret.db_credentials[0].metadata[0].name : local.existing_db.name
+      existingSecretPasswordKey = local.existing_db == null ? "db-password" : local.existing_db.password_key
+    }, local.existing_db == null ? {} : { existingSecretUserKey = local.existing_db.user_key })
     postgresql = { enabled = false }
     service = {
       type  = var.service_type
@@ -125,7 +132,7 @@ resource "helm_release" "keycloak" {
       } : {
       enabled = false
     }
-    }, local.image_tag_values, length(local.pod_annotations) > 0 ? {
+    }, local.image_tag_values, local.hostname_values, length(local.pod_annotations) > 0 ? {
     podAnnotations = local.pod_annotations
   } : {}))], var.extra_helm_values)
 
