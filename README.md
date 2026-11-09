@@ -89,6 +89,8 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 ### Examples
 
+- `terraform/examples/aws-eks-gateway-keycloak-app-links/` — Consumer-owned HTTPS routes composing Gateway, cert-manager, Keycloak, app links and DNS on an existing EKS cluster
+- `terraform/examples/gcp-gke-gateway-keycloak-app-links/` — The same consumer composition on an existing GKE cluster
 - `terraform/examples/gcp-gke-full-stack/` — GKE network + cluster + system/workload pools + NAT
 - `terraform/examples/gcp-cloudsql-connection-contract/` — Private Cloud SQL connection and writer-only reader endpoint contract
 - `terraform/examples/gcp-gke-karpenter-network-tag-contract/` — Karpenter GCENodeClass network-tag contract

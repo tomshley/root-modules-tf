@@ -31,6 +31,7 @@ from gateway_chart_check import chart_problems as gateway_chart_problems
 from gateway_cases import CASES as GATEWAY_CASES, CONFIGS as GATEWAY_CONFIGS, DIAGNOSTICS as GATEWAY_DIAGNOSTICS, check_plan as check_gateway_plan
 from cert_manager_cases import CASES as CERT_MANAGER_CASES, CONFIGS as CERT_MANAGER_CONFIGS, DIAGNOSTICS as CERT_MANAGER_DIAGNOSTICS, check_plan as check_cert_manager_plan
 from cert_manager_chart_check import chart_problems as cert_manager_chart_problems
+from composition_check import CASES as COMPOSITION_CASES, run_case as composition_case
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES_PATH = ROOT / "terraform" / "contracts" / "scenarios" / "contract-cases.json"
@@ -3561,7 +3562,7 @@ def main() -> int:
         raise SystemExit("unsupported contract case schema")
     cases = payload.get("cases", [])
     names = {case.get("name") for case in cases}
-    if names != set(CASE_CONFIGS):
+    if names != set(CASE_CONFIGS) | set(COMPOSITION_CASES):
         raise SystemExit("case manifest and executable cases differ")
     if {case.get("module") for case in cases} != MODULES:
         raise SystemExit("case manifest does not cover every contract module")
@@ -3610,6 +3611,16 @@ def main() -> int:
             name = case["name"]
             work = temp_root / name
             work.mkdir()
+            if name in COMPOSITION_CASES:
+                try:
+                    problems = composition_case(name, tofu, work, run)
+                except (AssertionError, KeyError, TypeError, ValueError) as error:
+                    problems = [str(error)]
+                if problems:
+                    failures.append(f"{name}: " + "; ".join(problems))
+                else:
+                    print(f"PASS {name} ({case['outcome']})")
+                continue
             # Cases whose module references sibling modules (gcp-ci-oidc-role
             # -> ../ci-oidc-trust) source through this symlink so the relative
             # reference stays inside the work dir's package boundary.
