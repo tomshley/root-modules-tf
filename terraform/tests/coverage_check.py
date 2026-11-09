@@ -30,18 +30,24 @@ RUNNER = ROOT / "terraform" / "tests" / "contract_cases.py"
 def main() -> int:
     payload = json.loads(CASES.read_text())
     expected = {case["name"] for case in payload["cases"]}
-    result = subprocess.run([sys.executable, str(RUNNER)], cwd=ROOT, text=True, capture_output=True, check=False)
-    executed = {
-        line.split()[1]
-        for line in result.stdout.splitlines()
-        if line.startswith("PASS ") and " (" in line and len(line.split()) >= 2
+    association_negative = {
+        case["name"] for case in payload["cases"]
+        if case["module"] in {"k8s-app-links", "k8s-static-responder"} and case["outcome"] == "fail"
     }
-    if result.returncode != 0 or executed != expected:
-        print(result.stdout)
-        print(result.stderr)
-        print(f"expected={sorted(expected)}")
-        print(f"executed={sorted(executed)}")
-        return 1
+    executed = set()
+    for runner, owned in [(RUNNER, expected - association_negative), (RUNNER.with_name("association_cases.py"), association_negative)]:
+        result = subprocess.run([sys.executable, str(runner)], cwd=ROOT, text=True, capture_output=True, check=False)
+        found = set()
+        for line in result.stdout.splitlines():
+            if line.startswith("PASS ") and " (" in line:
+                found.add(line.split()[2] if line.startswith("PASS renderer-negative ") else line.split()[1])
+        if result.returncode != 0 or found != owned or found & executed:
+            print(result.stdout)
+            print(result.stderr)
+            print(f"expected={sorted(owned)}")
+            print(f"executed={sorted(found)}")
+            return 1
+        executed.update(found)
     broken_env = os.environ.copy()
     broken_env["TOFU"] = "command-that-does-not-exist"
     broken = subprocess.run([sys.executable, str(RUNNER)], cwd=ROOT, env=broken_env, text=True, capture_output=True, check=False)

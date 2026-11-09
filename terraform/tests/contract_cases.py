@@ -25,6 +25,7 @@ import tempfile
 from pathlib import Path
 
 from adapter_contract_check import live_hcl
+from association_cases import CASES as ASSOCIATION_CASES, DIAGNOSTICS as ASSOCIATION_DIAGNOSTICS, problems as association_problems, nginx_problems as association_nginx_problems
 from gateway_chart_check import chart_problems as gateway_chart_problems
 from gateway_cases import CASES as GATEWAY_CASES, CONFIGS as GATEWAY_CONFIGS, DIAGNOSTICS as GATEWAY_DIAGNOSTICS, check_plan as check_gateway_plan
 from cert_manager_cases import CASES as CERT_MANAGER_CASES, CONFIGS as CERT_MANAGER_CONFIGS, DIAGNOSTICS as CERT_MANAGER_DIAGNOSTICS, check_plan as check_cert_manager_plan
@@ -33,6 +34,8 @@ from cert_manager_chart_check import chart_problems as cert_manager_chart_proble
 ROOT = Path(__file__).resolve().parents[2]
 CASES_PATH = ROOT / "terraform" / "contracts" / "scenarios" / "contract-cases.json"
 MODULES = {
+    "k8s-app-links",
+    "k8s-static-responder",
     "postgres-workload-contract",
     "postgres-tenancy-contract",
     "redis-service-contract",
@@ -3160,6 +3163,7 @@ EXPECTED_DIAGNOSTICS.update(CERT_MANAGER_DIAGNOSTICS)
 
 
 def main() -> int:
+    CASE_CONFIGS.update(ASSOCIATION_CASES)
     payload = json.loads(CASES_PATH.read_text())
     if payload.get("schema_revision") != "contract-cases-v1":
         raise SystemExit("unsupported contract case schema")
@@ -3170,6 +3174,7 @@ def main() -> int:
     if {case.get("module") for case in cases} != MODULES:
         raise SystemExit("case manifest does not cover every contract module")
 
+    cases = [case for case in cases if case["name"] not in ASSOCIATION_DIAGNOSTICS]
     tofu = os.environ.get("TOFU", "tofu")
     # Plans run with -refresh=false against empty state and never reach the
     # Cloudflare API, but the provider must still configure itself. The plugin
@@ -3224,6 +3229,13 @@ def main() -> int:
                 failures.append(f"{name}: initialization failed before the case could run")
                 print((init.stdout + init.stderr)[-4000:])
                 continue
+            if name == "static-responder-minimum-provider":
+                validate = run([tofu, "validate", "-no-color"], work)
+                if validate.returncode != 0:
+                    failures.append(f"{name}: minimum provider validation failed")
+                    print(validate.stdout + validate.stderr)
+                    continue
+                print("PASS static-responder-minimum-provider init+validate")
             plan = run([tofu, "plan", "-refresh=false", "-input=false", "-lock=false", "-no-color", "-out=case.plan"], work)
             diagnostics = plan.stdout + plan.stderr
             expected_pass = case["outcome"] == "pass"
@@ -3239,7 +3251,8 @@ def main() -> int:
                         continue
                     planned = None
                     if (
-                        name in GATEWAY_CASES
+                        name in ASSOCIATION_CASES
+                        or name in GATEWAY_CASES
                         or name in CERT_MANAGER_CASES
                         or name in EXPECTED_BINDINGS
                         or name in EXPECTED_INGRESS
@@ -3264,6 +3277,13 @@ def main() -> int:
                             continue
                         plan_json = json.loads(shown.stdout)
                         planned = plan_json["planned_values"]
+                    if name in ASSOCIATION_CASES:
+                        problems = association_problems(name, planned)
+                        if not problems and name in {"static-responder-fixed", "static-responder-escaped"}:
+                            problems = association_nginx_problems(work, planned, case=name)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
                     if name in GATEWAY_CASES:
                         try:
                             check_gateway_plan(name, plan_json)

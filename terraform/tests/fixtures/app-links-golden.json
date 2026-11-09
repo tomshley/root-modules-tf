@@ -1,0 +1,32 @@
+{
+  "/.well-known/apple-app-site-association": {
+    "applinks": {
+      "details": [
+        {
+          "appIDs": [
+            "ABCDE12345.test.example.app"
+          ],
+          "components": [
+            {
+              "/": "/auth/callback/example"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "/.well-known/assetlinks.json": [
+    {
+      "relation": [
+        "delegate_permission/common.handle_all_urls"
+      ],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "test.example.app",
+        "sha256_cert_fingerprints": [
+          "AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB"
+        ]
+      }
+    }
+  ]
+}
