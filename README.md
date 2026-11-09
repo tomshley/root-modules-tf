@@ -45,6 +45,7 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `gcp-karpenter-controller-release` | GCP | Pre-1.0 Karpenter GCP controller Helm release without its CRDs | **New** |
 | `k8s-grafana-alloy` | Kubernetes | Portable Grafana Alloy base module | **New** |
 | `k8s-metrics-server` | Kubernetes | Portable Metrics Server base module | **New** |
+| `k8s-cert-manager` | Kubernetes | cert-manager with Gateway API support and one Cloudflare DNS-01 ClusterIssuer | **New** |
 | `k8s-keycloak` | Kubernetes | Portable Keycloak deployment from resolved credentials | **New** |
 | `aws-keycloak` | AWS | Secrets Manager credential resolution for k8s-keycloak | **New** |
 | `gcp-keycloak` | GCP | Secret Manager credential resolution for k8s-keycloak | **New** |

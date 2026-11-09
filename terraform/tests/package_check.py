@@ -216,6 +216,23 @@ def main() -> int:
                     raise SystemExit(result.stdout + result.stderr)
             print(f"PASS package-install {shim}")
 
+        cert_archive = work / "cert-manager.tgz"
+        cert_manifest = work / "cert-manager.json"
+        build("terraform/modules/k8s-cert-manager", cert_archive, cert_manifest)
+        cert_root = work / "cert-manager"
+        extract_safe(cert_archive, cert_root)
+        for relative in ("chart/Chart.yaml", "chart/templates/issuer.yaml"):
+            if (cert_root / relative).read_bytes() != (ROOT / "terraform/modules/k8s-cert-manager" / relative).read_bytes():
+                raise SystemExit(f"issuer chart changed during packaging: {relative}")
+        for command in (
+            ["tofu", "init", "-backend=false", "-input=false", "-no-color"],
+            ["tofu", "validate", "-no-color"],
+        ):
+            result = subprocess.run(command, cwd=cert_root, text=True, capture_output=True, check=False)
+            if result.returncode != 0:
+                raise SystemExit(result.stdout + result.stderr)
+        print("PASS package-install k8s-cert-manager chart-included")
+
         negative_root = work / "negative-root"
         missing_entry = negative_root / "modules" / "entry"
         missing_entry.mkdir(parents=True)
