@@ -11,6 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+output "public_url" {
+  description = "HTTPS public URL when public_hostname is set, otherwise null."
+  value       = module.keycloak.public_url
+}
+
 output "release_name" { value = module.keycloak.release_name }
 output "release_namespace" { value = module.keycloak.release_namespace }
 output "release_version" { value = module.keycloak.release_version }
@@ -23,7 +28,7 @@ output "admin_console_url" {
   value = module.keycloak.admin_console_url
 
   precondition {
-    condition     = var.admin_password != null || var.admin_secret_arn != null
-    error_message = "Either admin_password or admin_secret_arn must be provided. Without both, Keycloak would start with no usable admin credentials."
+    condition     = var.admin_password != null || var.admin_secret_arn != null || try(var.existing_secrets.admin, null) != null
+    error_message = "Either admin_password, admin_secret_arn or existing_secrets.admin must be provided. Without one, Keycloak would start with no usable admin credentials."
   }
 }

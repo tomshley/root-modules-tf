@@ -11,6 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+output "public_url" {
+  description = "HTTPS public URL when public_hostname is set, otherwise null."
+  value       = var.public_hostname == null ? null : "https://${var.public_hostname}"
+}
+
 output "release_name" { value = helm_release.keycloak.name }
 output "release_namespace" { value = helm_release.keycloak.namespace }
 output "release_version" { value = helm_release.keycloak.version }
