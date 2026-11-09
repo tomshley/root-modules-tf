@@ -30,6 +30,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGER = ROOT / "tools" / "module-package" / "package_module.py"
 SOURCE_RE = re.compile(r'(?m)^\s*source\s*=\s*"([^"]+)"')
 SHIM_CLOSURES = {
+    "aws-eks-gateway": {"k8s-gateway"},
+    "gcp-gke-gateway": {"k8s-gateway"},
     "aws-eks-metrics-server": {"k8s-metrics-server"},
     "aws-eks-grafana-alloy": {"k8s-grafana-alloy"},
     "gcp-gke-metrics-server": {"k8s-metrics-server"},

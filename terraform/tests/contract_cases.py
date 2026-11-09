@@ -25,6 +25,8 @@ import tempfile
 from pathlib import Path
 
 from adapter_contract_check import live_hcl
+from gateway_chart_check import chart_problems as gateway_chart_problems
+from gateway_cases import CASES as GATEWAY_CASES, CONFIGS as GATEWAY_CONFIGS, DIAGNOSTICS as GATEWAY_DIAGNOSTICS, check_plan as check_gateway_plan
 from cert_manager_cases import CASES as CERT_MANAGER_CASES, CONFIGS as CERT_MANAGER_CONFIGS, DIAGNOSTICS as CERT_MANAGER_DIAGNOSTICS, check_plan as check_cert_manager_plan
 from cert_manager_chart_check import chart_problems as cert_manager_chart_problems
 
@@ -3035,6 +3037,8 @@ def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, t
 
 # Example roots that must validate against the modules in this tree.
 EXAMPLE_ROOTS = [
+    "aws-eks-gateway",
+    "gcp-gke-gateway",
     "gcp-gke-environment-pause/cluster",
     "gcp-gke-environment-pause/node-provisioning",
     "aws-eks-environment-pause/cluster",
@@ -3145,6 +3149,11 @@ EXPECTED_DIAGNOSTICS = {
 }
 
 
+CASE_CONFIGS.update(GATEWAY_CONFIGS)
+MODULES.update(spec["module"] for spec in GATEWAY_CASES.values())
+EXPECTED_DIAGNOSTICS.update(GATEWAY_DIAGNOSTICS)
+
+
 CASE_CONFIGS.update(CERT_MANAGER_CONFIGS)
 MODULES.add("k8s-cert-manager")
 EXPECTED_DIAGNOSTICS.update(CERT_MANAGER_DIAGNOSTICS)
@@ -3230,7 +3239,8 @@ def main() -> int:
                         continue
                     planned = None
                     if (
-                        name in CERT_MANAGER_CASES
+                        name in GATEWAY_CASES
+                        or name in CERT_MANAGER_CASES
                         or name in EXPECTED_BINDINGS
                         or name in EXPECTED_INGRESS
                         or name in EXPECTED_RESOURCE_COUNTS
@@ -3254,6 +3264,17 @@ def main() -> int:
                             continue
                         plan_json = json.loads(shown.stdout)
                         planned = plan_json["planned_values"]
+                    if name in GATEWAY_CASES:
+                        try:
+                            check_gateway_plan(name, plan_json)
+                        except (AssertionError, KeyError, StopIteration) as error:
+                            failures.append(f"{name}: gateway render assertions failed: {error}")
+                            continue
+                    if name in ("gateway-policy-selector", "gateway-large-timeout"):
+                        problems = gateway_chart_problems(tofu, work, planned, run)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
                     if name in CERT_MANAGER_CASES:
                         try:
                             check_cert_manager_plan(name, plan_json)
