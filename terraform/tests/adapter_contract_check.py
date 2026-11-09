@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from gateway_variable_guard import check_gateway_mirrors, check_gateway_variable_guard
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -783,6 +785,8 @@ def main() -> int:
     reject_mutation(gcp_resources, r"transaction_log_retention_days\s*=\s*module\.workload_contract\.contract\.retention_days", "GCP retention mapping")
     print("PASS gcp-retention-contract")
 
+    check_gateway_variable_guard(live_hcl)
+    check_gateway_mirrors(live_hcl)
     print("PASS adapter-source-guard")
     return 0
 

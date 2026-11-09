@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gateway-configuration
+description: Gateway infrastructure configuration without routes or CRD installation
+type: application
+version: 0.1.0

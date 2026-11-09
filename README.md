@@ -47,6 +47,9 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `k8s-metrics-server` | Kubernetes | Portable Metrics Server base module | **New** |
 | `k8s-cert-manager` | Kubernetes | cert-manager with Gateway API support and one Cloudflare DNS-01 ClusterIssuer | **New** |
 | `k8s-keycloak` | Kubernetes | Portable Keycloak deployment from resolved credentials | **New** |
+| `k8s-gateway` | Kubernetes | Envoy Gateway controller and gateway infrastructure without routes | **New** |
+| `aws-eks-gateway` | AWS | Load-balancer attachment annotations for k8s-gateway | **New** |
+| `gcp-gke-gateway` | GCP | Load-balancer attachment annotations for k8s-gateway | **New** |
 | `aws-keycloak` | AWS | Secrets Manager credential resolution for k8s-keycloak | **New** |
 | `gcp-keycloak` | GCP | Secret Manager credential resolution for k8s-keycloak | **New** |
 | `aws-eks-vpc` | AWS | Dedicated VPC with public/private subnets, NAT per AZ | **New** |
