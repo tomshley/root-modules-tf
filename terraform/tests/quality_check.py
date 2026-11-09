@@ -32,6 +32,7 @@ SCAN_ROOTS = [
         "node-provisioning-contract",
         "karpenter-controller-contract",
         "postgres-binding",
+        "k8s-cert-manager",
     ]),
 ]
 FORBIDDEN = [

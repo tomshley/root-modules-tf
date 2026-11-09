@@ -25,6 +25,8 @@ import tempfile
 from pathlib import Path
 
 from adapter_contract_check import live_hcl
+from cert_manager_cases import CASES as CERT_MANAGER_CASES, CONFIGS as CERT_MANAGER_CONFIGS, DIAGNOSTICS as CERT_MANAGER_DIAGNOSTICS, check_plan as check_cert_manager_plan
+from cert_manager_chart_check import chart_problems as cert_manager_chart_problems
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES_PATH = ROOT / "terraform" / "contracts" / "scenarios" / "contract-cases.json"
@@ -3143,6 +3145,11 @@ EXPECTED_DIAGNOSTICS = {
 }
 
 
+CASE_CONFIGS.update(CERT_MANAGER_CONFIGS)
+MODULES.add("k8s-cert-manager")
+EXPECTED_DIAGNOSTICS.update(CERT_MANAGER_DIAGNOSTICS)
+
+
 def main() -> int:
     payload = json.loads(CASES_PATH.read_text())
     if payload.get("schema_revision") != "contract-cases-v1":
@@ -3223,7 +3230,8 @@ def main() -> int:
                         continue
                     planned = None
                     if (
-                        name in EXPECTED_BINDINGS
+                        name in CERT_MANAGER_CASES
+                        or name in EXPECTED_BINDINGS
                         or name in EXPECTED_INGRESS
                         or name in EXPECTED_RESOURCE_COUNTS
                         or name in EXPECTED_ATTRIBUTE_CONDITIONS
@@ -3246,6 +3254,17 @@ def main() -> int:
                             continue
                         plan_json = json.loads(shown.stdout)
                         planned = plan_json["planned_values"]
+                    if name in CERT_MANAGER_CASES:
+                        try:
+                            check_cert_manager_plan(name, plan_json)
+                        except (AssertionError, KeyError, StopIteration, TypeError) as error:
+                            failures.append(f"{name}: cert-manager plan assertions failed: {error}")
+                            continue
+                        if name in ("cert-manager-default", "cert-manager-overrides"):
+                            problems = cert_manager_chart_problems(tofu, work, planned, run, 3 if name.endswith("overrides") else 1)
+                            if problems:
+                                failures.append(f"{name}: " + "; ".join(problems))
+                                continue
                     if name in EXPECTED_BINDINGS:
                         values = planned["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
@@ -3445,6 +3464,10 @@ def main() -> int:
             expected_diagnostic = EXPECTED_DIAGNOSTICS.get(name)
             if plan.returncode == 0:
                 failures.append(f"{name}: invalid case unexpectedly passed")
+                continue
+            if name in CERT_MANAGER_CASES and diagnostics.count("Error:") != 1:
+                failures.append(f"{name}: expected exactly one error diagnostic")
+                print(diagnostics[-4000:])
                 continue
             expected_diagnostic = " ".join(expected_diagnostic.split())
             diagnostics = " ".join(diagnostics.split())
