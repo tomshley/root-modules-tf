@@ -20,13 +20,13 @@ This project follows Semantic Versioning.
 
 ### Added
 
-- **k8s-gateway**: installs the Envoy Gateway controller chart and creates one GatewayClass, one Gateway, its EnvoyProxy configuration and a TLS 1.2 ClientTrafficPolicy — no routes, DNS records or cloud resources, so consumers keep ownership of routing and backends. Gateway API CRDs remain cluster-owner bootstrap, and the configuration release renders through a small local Helm chart so plans need no CRD discovery.
+- **k8s-gateway**: installs the Envoy Gateway controller chart and creates one GatewayClass, one Gateway, its EnvoyProxy configuration and a minimum-TLS-1.2 ClientTrafficPolicy — no routes, DNS records or cloud resources, so consumers keep ownership of routing and backends. Gateway API CRDs remain cluster-owner bootstrap, and the configuration release renders through a small local Helm chart so plans need no CRD discovery.
 - **aws-eks-gateway**, **gcp-gke-gateway**: attachment-only shims that add load-balancer Service annotations to `k8s-gateway` without creating cloud resources — AWS NLB scheme, EIP allocations, cross-zone, target type and tags through the AWS Load Balancer Controller, and GCP reserved-address and internal/external attachment through GKE annotations.
 - **k8s-cert-manager**: installs the official cert-manager chart with Gateway API support and exactly one ACME `ClusterIssuer` using Cloudflare DNS-01; the DNS credential stays a consumer-owned Secret and chart-owned CRDs are retained on uninstall.
 - **k8s-static-responder**: serves caller-supplied strings verbatim at exact URL paths from a hardened nginx workload (ConfigMap, Deployment, ClusterIP Service, PodDisruptionBudget) — for well-known files and fixed endpoints without templating, proxying or remote fetching.
 - **k8s-app-links**: resource-free renderer that produces Apple App Site Association and Android `assetlinks.json` content for `k8s-static-responder.files`, with plan-time validation of team IDs, bundle IDs, package names and signing fingerprints.
 - **k8s-keycloak** and its credential shims (**aws-keycloak**, **gcp-keycloak**, **aws-eks-keycloak**, **gcp-gke-keycloak**): `public_hostname` pins Keycloak's public HTTPS URL through `KC_HOSTNAME` and a new `public_url` output, and `existing_secrets` references consumer-managed Kubernetes Secrets for admin and database credentials instead of creating them, mutually exclusive with the managed-password inputs.
-- Examples `aws-eks-gateway`, `gcp-gke-gateway`, `aws-eks-gateway-keycloak-app-links` and `gcp-gke-gateway-keycloak-app-links` compose the gateway, cert-manager, Keycloak, app links and consumer-owned routes on existing EKS and GKE clusters.
+- Examples `aws-eks-gateway` and `gcp-gke-gateway` exercise the gateway attachment shims on existing EKS and GKE clusters; `aws-eks-gateway-keycloak-app-links` and `gcp-gke-gateway-keycloak-app-links` compose the gateway, cert-manager, Keycloak, app links and consumer-owned routes on the same clusters.
 
 ### Changed
 
