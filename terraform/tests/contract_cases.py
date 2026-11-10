@@ -25,10 +25,24 @@ import tempfile
 from pathlib import Path
 
 from adapter_contract_check import live_hcl
+from keycloak_chart_check import chart_problems as keycloak_chart_problems
+from association_cases import CASES as ASSOCIATION_CASES, DIAGNOSTICS as ASSOCIATION_DIAGNOSTICS, problems as association_problems, nginx_problems as association_nginx_problems
+from gateway_chart_check import chart_problems as gateway_chart_problems
+from gateway_cases import CASES as GATEWAY_CASES, CONFIGS as GATEWAY_CONFIGS, DIAGNOSTICS as GATEWAY_DIAGNOSTICS, check_plan as check_gateway_plan
+from cert_manager_cases import CASES as CERT_MANAGER_CASES, CONFIGS as CERT_MANAGER_CONFIGS, DIAGNOSTICS as CERT_MANAGER_DIAGNOSTICS, check_plan as check_cert_manager_plan
+from cert_manager_chart_check import chart_problems as cert_manager_chart_problems
+from composition_check import CASES as COMPOSITION_CASES, run_case as composition_case
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES_PATH = ROOT / "terraform" / "contracts" / "scenarios" / "contract-cases.json"
 MODULES = {
+    "k8s-keycloak",
+    "aws-keycloak",
+    "gcp-keycloak",
+    "aws-eks-keycloak",
+    "gcp-gke-keycloak",
+    "k8s-app-links",
+    "k8s-static-responder",
     "postgres-workload-contract",
     "postgres-tenancy-contract",
     "redis-service-contract",
@@ -2444,6 +2458,334 @@ module "db" {
 }
 
 
+KEYCLOAK_PROVIDERS = """
+provider "kubernetes" {
+  host = "https://127.0.0.1:65535"
+}
+provider "helm" {
+  kubernetes {
+    host = "https://127.0.0.1:65535"
+  }
+}
+"""
+KEYCLOAK_INPUTS = """
+  create_namespace = false
+  db_endpoint = "db.example.test"
+  db_name = "keycloak"
+  db_user = "keycloak"
+"""
+KEYCLOAK_PASSWORDS = """
+  db_password = "synthetic-db-password"
+  admin_password = "synthetic-admin-password"
+"""
+KEYCLOAK_SECRETS = """
+  existing_secrets = {
+    admin = { name = "admin-existing" }
+    db = { name = "db-existing" }
+  }
+"""
+KEYCLOAK_CASES = {
+    "keycloak-null-inputs": (KEYCLOAK_PASSWORDS + "  public_hostname = null\n  existing_secrets = null\n", 2, None),
+    "keycloak-omitted-inputs": (KEYCLOAK_PASSWORDS, 2, None),
+    "keycloak-empty-secrets": (KEYCLOAK_PASSWORDS + "  existing_secrets = {}\n", 2, None),
+    "keycloak-public-hostname": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n', 2, "https://auth.example.test"),
+    "keycloak-existing-secrets": (KEYCLOAK_SECRETS, 0, None),
+    "keycloak-custom-secret-keys": ("""
+  existing_secrets = {
+    admin = { name = "admin-existing", password_key = ".Admin.Custom_Key-1" }
+    db = { name = "db-existing", user_key = ".User.Custom_Key-1", password_key = ".DB.Custom_Key-1" }
+  }
+""", 0, None),
+    "keycloak-existing-admin-only": ("""
+  db_password = "synthetic-db-password"
+  existing_secrets = { admin = { name = "admin-existing" } }
+""", 1, None),
+    "keycloak-existing-db-only": ("""
+  admin_password = "synthetic-admin-password"
+  existing_secrets = { db = { name = "db-existing" } }
+""", 1, None),
+    "keycloak-top-level-hostname-ignored": (KEYCLOAK_PASSWORDS + """
+  public_hostname = "auth.example.test"
+  extra_helm_values = [yamlencode({ hostname = "override.example.test" })]
+""", 2, "https://auth.example.test"),
+    "keycloak-extra-env-without-hostname": (KEYCLOAK_PASSWORDS + '  extra_helm_values = [jsonencode({ extraEnvVars = [{ name = "EXAMPLE", value = "synthetic" }] })]\n', 2, None),
+    "keycloak-nested-extra-env": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = [jsonencode({ example = { extraEnvVars = [] } })]\n', 2, "https://auth.example.test"),
+    "keycloak-extra-env-conflict": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = [yamlencode({ extraEnvVars = [{ name = "EXAMPLE", value = "synthetic" }] })]\n', 2, None),
+    "keycloak-empty-extra-env-conflict": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = [yamlencode({ extraEnvVars = [] })]\n', 2, None),
+    "keycloak-null-extra-env-conflict": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = [yamlencode({ extraEnvVars = null })]\n', 2, None),
+    "keycloak-later-extra-env-conflict": (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = [yamlencode({ replicaCount = 1 }), yamlencode({ extraEnvVars = [] })]\n', 2, None),
+    "keycloak-admin-overlap": (KEYCLOAK_SECRETS + '  admin_password = "synthetic-admin-password"\n', 0, None),
+    "keycloak-db-overlap": (KEYCLOAK_SECRETS + '  db_password = "synthetic-db-password"\n', 0, None),
+    "keycloak-missing-admin": ('  db_password = "synthetic-db-password"\n', 0, None),
+    "keycloak-missing-db": ('  admin_password = "synthetic-admin-password"\n', 0, None),
+    "keycloak-explicit-null-admin": ('  admin_password = null\n  existing_secrets = null\n  db_password = "synthetic-db-password"\n', 0, None),
+    "keycloak-explicit-null-db": ('  db_password = null\n  existing_secrets = null\n  admin_password = "synthetic-admin-password"\n', 0, None),
+}
+
+KEYCLOAK_CHART_PROOFS = {
+    "keycloak-public-hostname": ("https://auth.example.test", None),
+    "keycloak-top-level-hostname-ignored": ("https://auth.example.test", None),
+    "keycloak-existing-secrets": (None, "db-user"),
+    "keycloak-custom-secret-keys": (None, ".User.Custom_Key-1"),
+}
+
+KEYCLOAK_INPUT_DIAGNOSTICS = {}
+KEYCLOAK_MULTIDOCUMENT_VALUES = "extraEnvVars: []\n---\nreplicaCount: 1\n"
+KEYCLOAK_MULTIDOCUMENT_INPUTS = KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = ' + json.dumps([KEYCLOAK_MULTIDOCUMENT_VALUES]) + "\n"
+for suffix, entries in [
+    ("multi-document", [KEYCLOAK_MULTIDOCUMENT_VALUES]),
+    ("later-multi-document", ["replicaCount: 1\n", KEYCLOAK_MULTIDOCUMENT_VALUES]),
+    ("malformed-yaml", ["extraEnvVars: [\n"]),
+]:
+    name = "keycloak-extra-env-" + suffix
+    KEYCLOAK_CASES[name] = (KEYCLOAK_PASSWORDS + '  public_hostname = "auth.example.test"\n  extra_helm_values = ' + json.dumps(entries) + "\n", 2, None)
+    KEYCLOAK_INPUT_DIAGNOSTICS[name] = "every extra_helm_values entry must decode as a single YAML document"
+for suffix, hostname in [
+    ("ipv4", "192.0.2.1"), ("empty", ""), ("scheme", "https://auth.example.test"), ("path", "auth.example.test/path"),
+    ("port", "auth.example.test:443"), ("uppercase", "Auth.example.test"),
+    ("space", "auth example.test"), ("tab", "auth\t.example.test"), ("newline", "auth.example.test\n"),
+    ("wildcard", "*.example.test"), ("leading-hyphen", "-auth.example.test"),
+    ("empty-label", "auth..example.test"), ("trailing-dot", "auth.example.test."),
+    ("long-label", "a" * 64 + ".example.test"), ("long-name", ("a" * 63 + ".") * 3 + "a" * 62),
+]:
+    name = "keycloak-hostname-" + suffix
+    KEYCLOAK_CASES[name] = (KEYCLOAK_PASSWORDS + "  public_hostname = " + json.dumps(hostname) + "\n", 2, None)
+    KEYCLOAK_INPUT_DIAGNOSTICS[name] = "public_hostname must be null or a bare lowercase DNS name"
+
+for credential in ("admin", "db"):
+    for suffix, value in [
+        ("empty", ""), ("null", None), ("uppercase", "Bad-name"), ("underscore", "bad_name"),
+        ("path", "bad/name"), ("empty-label", "bad..name"), ("long", "a" * 254),
+    ]:
+        refs = {"admin": {"name": "admin-existing"}, "db": {"name": "db-existing"}}
+        refs[credential]["name"] = value
+        name = f"keycloak-{credential}-secret-name-{suffix}"
+        KEYCLOAK_CASES[name] = ("  existing_secrets = " + json.dumps(refs) + "\n", 0, None)
+        KEYCLOAK_INPUT_DIAGNOSTICS[name] = "existing_secrets names must be non-empty DNS-1123 Secret names"
+    for key in (("password_key",) if credential == "admin" else ("password_key", "user_key")):
+        for suffix, value in [("empty", ""), ("invalid", "bad/key"), ("dot", "."), ("two-dots", ".."), ("dot-prefix", "..x"), ("long", "a" * 254)]:
+            refs = {"admin": {"name": "admin-existing"}, "db": {"name": "db-existing"}}
+            refs[credential][key] = value
+            name = f"keycloak-{credential}-{key.replace('_', '-')}-{suffix}"
+            KEYCLOAK_CASES[name] = ("  existing_secrets = " + json.dumps(refs) + "\n", 0, None)
+            KEYCLOAK_INPUT_DIAGNOSTICS[name] = "existing_secrets keys must be 1-253 characters matching ^[-._a-zA-Z0-9]+$, must not be . or .., and must not start with two dots."
+
+KEYCLOAK_CASES["keycloak-key-length-boundary"] = ("  existing_secrets = " + json.dumps({
+    "admin": {"name": "admin-existing", "password_key": "a" * 253},
+    "db": {"name": "db-existing", "user_key": "u" * 253, "password_key": "d" * 253},
+}) + "\n", 0, None)
+
+for name, (inputs, _, _) in KEYCLOAK_CASES.items():
+    CASE_CONFIGS[name] = KEYCLOAK_PROVIDERS + """
+module "keycloak" {
+  source = "../../../modules/k8s-keycloak"
+""" + KEYCLOAK_INPUTS + inputs + """
+}
+output "public" { value = { url = module.keycloak.public_url } }
+"""
+
+for shim in ("aws-keycloak", "gcp-keycloak", "aws-eks-keycloak", "gcp-gke-keycloak"):
+    provider = """
+provider "aws" {
+  region = "us-east-1"
+  access_key = "synthetic"
+  secret_key = "synthetic"
+  skip_credentials_validation = true
+  skip_requesting_account_id = true
+  skip_metadata_api_check = true
+}
+""" if shim.startswith("aws") else """
+provider "google" {
+  project = "example-test"
+  access_token = "synthetic"
+}
+"""
+    extra = '  cluster_name = "example-test"\n' if shim == "aws-eks-keycloak" else ""
+    if shim.startswith("gcp"):
+        extra += '  project_id = "example-test"\n'
+    CASE_CONFIGS[f"{shim}-existing-secrets"] = KEYCLOAK_PROVIDERS + provider + f"""
+module "keycloak" {{
+  source = "./modules/{shim}"
+""" + KEYCLOAK_INPUTS + KEYCLOAK_SECRETS + extra + """
+  public_hostname = "auth.example.test"
+}
+output "public" { value = { url = module.keycloak.public_url } }
+"""
+    secret_reference = "db_secret_arn" if shim.startswith("aws") else "db_secret_id"
+    CASE_CONFIGS[f"{shim}-missing-db-source"] = KEYCLOAK_PROVIDERS + provider + f"""
+module "keycloak" {{
+  source = "./modules/{shim}"
+""" + KEYCLOAK_INPUTS + extra + f"""
+  admin_password = "synthetic-admin-password"
+  db_password = null
+  {secret_reference} = null
+  existing_secrets = null
+}}
+"""
+    CASE_CONFIGS[f"{shim}-inline-passwords"] = KEYCLOAK_PROVIDERS + provider + f"""
+module "keycloak" {{
+  source = "./modules/{shim}"
+""" + KEYCLOAK_INPUTS + KEYCLOAK_PASSWORDS + extra + """
+}
+output "public" { value = { url = module.keycloak.public_url } }
+"""
+    CASE_CONFIGS[f"{shim}-deferred-db-reference"] = KEYCLOAK_PROVIDERS + provider + f"""
+resource "terraform_data" "db_secret" {{
+  input = "example-test"
+}}
+module "keycloak" {{
+  source = "./modules/{shim}"
+""" + KEYCLOAK_INPUTS + extra + f"""
+  admin_password = "synthetic-admin-password"
+  {secret_reference} = terraform_data.db_secret.output
+}}
+"""
+
+    for credential in ("db", "admin"):
+        cloud_input = f"{credential}_secret_" + ("arn" if shim.startswith("aws") else "id")
+        cloud_value = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example" if shim.startswith("aws") else "example-secret"
+        for suffix, overlap in [
+            ("cloud", f"  {cloud_input} = {json.dumps(cloud_value)}\n"),
+            ("password", f'  {credential}_password = "synthetic-password"\n'),
+        ]:
+            CASE_CONFIGS[f"{shim}-{credential}-{suffix}-overlap"] = KEYCLOAK_PROVIDERS + provider + f"""
+module "keycloak" {{
+  source = "./modules/{shim}"
+""" + KEYCLOAK_INPUTS + KEYCLOAK_SECRETS + extra + overlap + "\n}\n"
+
+    for suffix, original, replacement, diagnostic in [
+        ("extra-env-multi-document", KEYCLOAK_PASSWORDS, KEYCLOAK_MULTIDOCUMENT_INPUTS,
+         "every extra_helm_values entry must decode as a single YAML document"),
+        ("invalid-hostname", KEYCLOAK_PASSWORDS, KEYCLOAK_PASSWORDS + '  public_hostname = "https://auth.example.test"\n',
+         "public_hostname must be null or a bare lowercase DNS name"),
+        ("invalid-secret-name", KEYCLOAK_SECRETS, KEYCLOAK_SECRETS.replace("admin-existing", "Bad/name"),
+         "existing_secrets names must be non-empty DNS-1123 Secret names"),
+        ("invalid-secret-key", KEYCLOAK_SECRETS, KEYCLOAK_SECRETS.replace('name = "db-existing"', 'name = "db-existing", user_key = ""'),
+         "existing_secrets keys must be 1-253 characters matching ^[-._a-zA-Z0-9]+$, must not be . or .., and must not start with two dots."),
+    ]:
+        name = f"{shim}-{suffix}"
+        source = f"{shim}-inline-passwords" if suffix in ("invalid-hostname", "extra-env-multi-document") else f"{shim}-existing-secrets"
+        CASE_CONFIGS[name] = CASE_CONFIGS[source].replace(original, replacement)
+        KEYCLOAK_INPUT_DIAGNOSTICS[name] = diagnostic
+
+KEYCLOAK_INLINE_CASES = {name for name in CASE_CONFIGS if name.endswith("-keycloak-inline-passwords")} | {"aws-eks-keycloak-inline-null-arns"}
+# Evaluate the source-text db_secret_annotations expression from
+# aws-eks-keycloak/resources.tf as an output; Secret plans alone cannot catch
+# a regression because the provider normalizes null map entries.
+keycloak_db_annotations = re.search(
+    r"(?m)^\s*db_secret_annotations\s*=\s*(.+)$",
+    (ROOT / "terraform/modules/aws-eks-keycloak/resources.tf").read_text(),
+).group(1)
+CASE_CONFIGS["aws-eks-keycloak-inline-null-arns"] = CASE_CONFIGS["aws-eks-keycloak-inline-passwords"].replace(
+    KEYCLOAK_PASSWORDS, KEYCLOAK_PASSWORDS + "  db_secret_arn = var.db_secret_arn\n  admin_secret_arn = null\n"
+) + '''
+variable "db_secret_arn" {
+  type = string
+  default = null
+}
+output "db_annotations" { value = ''' + keycloak_db_annotations + " }\n"
+
+CASE_CONFIGS["keycloak-prior-secret-state"] = (
+    CASE_CONFIGS["keycloak-omitted-inputs"].replace('module "keycloak"', 'module "direct"')
+    .replace("module.keycloak.", "module.direct.").replace('output "public"', 'output "direct_public"')
+    .replace("  create_namespace = false", '  namespace = "direct-identity"\n  create_namespace = false')
+    + CASE_CONFIGS["aws-eks-keycloak-inline-passwords"].replace(KEYCLOAK_PROVIDERS, "", 1)
+    .replace('module "keycloak"', 'module "legacy"').replace("module.keycloak.", "module.legacy.")
+    .replace('output "public"', 'output "legacy_public"')
+    .replace("  create_namespace = false", '  namespace = "legacy-identity"\n  create_namespace = false')
+)
+
+CASE_CONFIGS["keycloak-prior-shim-secret-state"] = CASE_CONFIGS["keycloak-prior-secret-state"]
+
+# Captured from the module before the optional public inputs existed.
+KEYCLOAK_BASELINE_VALUES = '''"auth":
+  "adminUser": "admin"
+  "existingSecret": "keycloak-admin-credentials"
+  "passwordSecretKey": "admin-password"
+"externalDatabase":
+  "database": "keycloak"
+  "existingSecret": "keycloak-db-credentials"
+  "existingSecretPasswordKey": "db-password"
+  "host": "db.example.test"
+  "port": 5432
+  "user": "keycloak"
+"fullnameOverride": "keycloak"
+"keycloakConfigCli":
+  "enabled": false
+"postgresql":
+  "enabled": false
+"replicaCount": 1
+"resources":
+  "limits":
+    "cpu": "1000m"
+    "memory": "1024Mi"
+  "requests":
+    "cpu": "500m"
+    "memory": "512Mi"
+"service":
+  "ports":
+    "http": 80
+  "type": "ClusterIP"
+'''
+
+
+def keycloak_plan_problems(name: str, planned: dict) -> list[str]:
+    def resources(module: dict) -> list[dict]:
+        return module.get("resources", []) + [
+            resource for child in module.get("child_modules", []) for resource in resources(child)
+        ]
+
+    all_resources = resources(planned["root_module"])
+    releases = [resource for resource in all_resources if resource["type"] == "helm_release"]
+    secrets = [resource for resource in all_resources if resource["type"] == "kubernetes_secret"]
+    shim = name.endswith("-existing-secrets") and name != "keycloak-existing-secrets"
+    _, count, url = ("", 2, None) if name in KEYCLOAK_INLINE_CASES else KEYCLOAK_CASES[name] if not shim else ("", 0, "https://auth.example.test")
+    expected = KEYCLOAK_BASELINE_VALUES
+    if shim or name in ("keycloak-existing-secrets", "keycloak-custom-secret-keys", "keycloak-key-length-boundary", "keycloak-existing-admin-only"):
+        expected = expected.replace("keycloak-admin-credentials", "admin-existing")
+    if shim or name in ("keycloak-existing-secrets", "keycloak-custom-secret-keys", "keycloak-key-length-boundary", "keycloak-existing-db-only"):
+        expected = expected.replace("keycloak-db-credentials", "db-existing")
+        user_key = "u" * 253 if name == "keycloak-key-length-boundary" else ".User.Custom_Key-1" if name == "keycloak-custom-secret-keys" else "db-user"
+        expected = expected.replace('  "host":', f'  "existingSecretUserKey": "{user_key}"\n  "host":')
+    if name == "keycloak-custom-secret-keys":
+        expected = expected.replace('"admin-password"', '".Admin.Custom_Key-1"').replace('"db-password"', '".DB.Custom_Key-1"')
+    if name == "keycloak-key-length-boundary":
+        expected = expected.replace('"admin-password"', json.dumps("a" * 253)).replace('"db-password"', json.dumps("d" * 253))
+    if url is not None:
+        expected = expected.replace('"fullnameOverride":', '"extraEnvVars":\n- "name": "KC_HOSTNAME"\n  "value": "https://auth.example.test"\n"fullnameOverride":')
+    expected_values = [expected]
+    if name == "keycloak-top-level-hostname-ignored":
+        expected_values.append('"hostname": "override.example.test"\n')
+    if name == "keycloak-extra-env-without-hostname":
+        expected_values.append('{"extraEnvVars":[{"name":"EXAMPLE","value":"synthetic"}]}')
+    if name == "keycloak-nested-extra-env":
+        expected_values.append('{"example":{"extraEnvVars":[]}}')
+    problems = []
+    if len(releases) != 1 or releases[0]["values"].get("values") != expected_values:
+        problems.append("rendered Helm values differ byte-for-byte from the expected ordered values")
+    if len(secrets) != count:
+        problems.append(f"expected {count} managed credential Secrets, got {len(secrets)}")
+    expected_names = set()
+    if name in ("keycloak-existing-admin-only",):
+        expected_names.add("keycloak-db-credentials")
+    elif name in ("keycloak-existing-db-only",):
+        expected_names.add("keycloak-admin-credentials")
+    elif count == 2:
+        expected_names.update(("keycloak-db-credentials", "keycloak-admin-credentials"))
+    if {secret["values"]["metadata"][0]["name"] for secret in secrets} != expected_names:
+        problems.append("managed credential Secret ownership changed")
+    if planned["outputs"]["public"]["value"]["url"] != url:
+        problems.append("public_url does not reflect public_hostname")
+    if any(resource["mode"] == "data" for resource in all_resources):
+        problems.append("existing Secret path must not resolve cloud credentials")
+    if name == "aws-eks-keycloak-inline-null-arns":
+        if planned["outputs"]["db_annotations"]["value"] != {}:
+            problems.append("inline database credentials must pass an empty annotation map to aws-keycloak")
+        if any(secret["values"]["metadata"][0].get("annotations") for secret in secrets):
+            problems.append("inline credentials without cloud references must not have Secret annotations")
+    return problems
+
+
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
 
@@ -2965,6 +3307,10 @@ def helm_releases(module: dict) -> list[tuple[str, str, str, bool]]:
 # neither creates nor destroys, or an existing install would reinstall, and
 # an in-place update may change exactly those attributes and no others.
 EXPECTED_PRIOR_STATE_MOVES = {
+    "keycloak-prior-secret-state": {
+        **{f"module.direct.kubernetes_secret.{credential}_credentials[0]": (f"module.direct.kubernetes_secret.{credential}_credentials", {}) for credential in ("admin", "db")},
+        **{f"module.legacy.module.keycloak.module.keycloak.kubernetes_secret.{credential}_credentials[0]": (f"module.legacy.kubernetes_secret.{credential}_credentials", {}) for credential in ("admin", "db")},
+    },
     "karpenter-controller-composes-both": {
         "module.karpenter.module.crds.helm_release.crds": ("module.karpenter.helm_release.crds", {}),
         "module.karpenter.module.controller.helm_release.karpenter": (
@@ -2974,18 +3320,23 @@ EXPECTED_PRIOR_STATE_MOVES = {
     },
 }
 
+EXPECTED_PRIOR_STATE_MOVES["keycloak-prior-shim-secret-state"] = {
+    address: (address.removesuffix("[0]"), {})
+    for address in EXPECTED_PRIOR_STATE_MOVES["keycloak-prior-secret-state"]
+}
 
-def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, tuple[str, dict]]) -> list[str]:
-    """Write the planned releases into state at their old addresses and re-plan."""
+
+def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, tuple[str, dict]], require_no_op: bool = False) -> list[str]:
+    """Write planned resources at their prior addresses into state and re-plan."""
     schemas = run([tofu, "providers", "schema", "-json"], work)
     if schemas.returncode != 0:
         return ["could not read provider schemas"]
     providers = json.loads(schemas.stdout)["provider_schemas"]
     resources = []
     for change in plan_json["resource_changes"]:
-        if change["address"] not in moves:
+        if change["mode"] != "managed":
             continue
-        old_address, prior_attributes = moves[change["address"]]
+        old_address, prior_attributes = moves.get(change["address"], (change["address"], {}))
         schema = providers[change["provider_name"]]["resource_schemas"][change["type"]]
         attributes = {name: None for name in schema["block"]["attributes"]}
         attributes.update({
@@ -2994,15 +3345,29 @@ def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, t
         })
         attributes.update({key: value for key, value in change["change"]["after"].items() if value is not None})
         attributes.update(prior_attributes)
-        attributes["id"] = attributes["name"]
-        module_address, _, resource_name = old_address.rpartition(".helm_release.")
+        if change["type"] == "kubernetes_secret":
+            metadata = attributes["metadata"][0]
+            attributes["id"] = metadata["namespace"] + "/" + metadata["name"]
+        else:
+            attributes["id"] = attributes["name"]
+        sensitive_attributes = []
+        if require_no_op:
+            sensitive_attributes = [[{"type": "get_attr", "value": name}] for name, attribute in schema["block"]["attributes"].items() if attribute.get("sensitive")]
+            if change["type"] == "helm_release":
+                attributes["metadata"] = [{
+                    "name": attributes["name"], "namespace": attributes["namespace"],
+                    "version": attributes["version"], "chart": attributes["chart"],
+                    "app_version": "synthetic", "revision": 1, "values": "{}",
+                    "first_deployed": 0, "last_deployed": 0, "notes": "",
+                }]
+        module_address, _, resource_name = old_address.rpartition("." + change["type"] + ".")
         resources.append({
             "module": module_address,
             "mode": "managed",
             "type": change["type"],
             "name": resource_name,
             "provider": f'provider["{change["provider_name"]}"]',
-            "instances": [{"schema_version": schema["version"], "attributes": attributes, "sensitive_attributes": []}],
+            "instances": [{"schema_version": schema["version"], "attributes": attributes, "sensitive_attributes": sensitive_attributes}],
         })
     (work / "terraform.tfstate").write_text(json.dumps({
         "version": 4, "terraform_version": "1.9.0", "serial": 1, "lineage": "contract-prior-state",
@@ -3013,13 +3378,18 @@ def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, t
         return ["re-plan against prior state failed: " + (replan.stdout + replan.stderr)[-2000:]]
     shown = json.loads(run([tofu, "show", "-json", "prior.plan"], work).stdout)
     problems = []
+    seen = set()
     for change in shown["resource_changes"]:
+        if require_no_op and change["change"]["actions"] != ["no-op"]:
+            problems.append(f"{change['address']} must be no-op, plans {change['change']['actions']}")
+            continue
         actions = set(change["change"]["actions"])
         if actions & {"create", "delete"}:
             problems.append(f"{change['address']} plans {sorted(actions)}")
             continue
         if change["address"] not in moves:
             continue
+        seen.add(change["address"])
         old_address, prior_attributes = moves[change["address"]]
         if change.get("previous_address") != old_address:
             problems.append(f"{change['address']} was not moved from {old_address}")
@@ -3028,11 +3398,20 @@ def prior_state_moves(tofu: str, work: Path, plan_json: dict, moves: dict[str, t
         updated = {key for key, value in after.items() if unknown.get(key) is not True and before.get(key) != value}
         if updated != set(prior_attributes):
             problems.append(f"{change['address']} updates {sorted(updated)}, expected {sorted(prior_attributes)}")
+        if not problems:
+            result = "no-op" if require_no_op else "no-create-delete"
+            print(f"PASS prior-state {old_address} -> {change['address']} {result}")
+    if seen != set(moves):
+        problems.append(f"prior-state moves missing: {sorted(set(moves) - seen)}")
+    if require_no_op and not problems:
+        print(f'PASS prior-state actions=["no-op"] resources={len(shown["resource_changes"])} moved-addresses={len(moves)} refresh=false')
     return problems
 
 
 # Example roots that must validate against the modules in this tree.
 EXAMPLE_ROOTS = [
+    "aws-eks-gateway",
+    "gcp-gke-gateway",
     "gcp-gke-environment-pause/cluster",
     "gcp-gke-environment-pause/node-provisioning",
     "aws-eks-environment-pause/cluster",
@@ -3044,6 +3423,8 @@ EXAMPLE_ROOTS = [
 # move inside a module whose other resources are absent from that state; these
 # are checked as written instead.
 REQUIRED_MOVES = [
+    ("k8s-keycloak/moved.tf", "kubernetes_secret.db_credentials", "kubernetes_secret.db_credentials[0]"),
+    ("k8s-keycloak/moved.tf", "kubernetes_secret.admin_credentials", "kubernetes_secret.admin_credentials[0]"),
     ("aws-eks-aurora-cluster/moved.tf", "aws_rds_cluster_instance.writer", "aws_rds_cluster_instance.writer[0]"),
     ("gcp-gke-cluster/moved.tf", "google_container_cluster.gke_cluster", "google_container_cluster.gke_cluster[0]"),
     ("aws-eks-cluster/moved.tf", "aws_eks_cluster.eks_cluster", "aws_eks_cluster.eks_cluster[0]"),
@@ -3067,6 +3448,16 @@ EXPECTED_WARNINGS = {
 }
 
 EXPECTED_DIAGNOSTICS = {
+    "keycloak-admin-overlap": "existing_secrets.admin and admin_password are mutually exclusive.",
+    "keycloak-db-overlap": "existing_secrets.db and db_password are mutually exclusive.",
+    "keycloak-missing-admin": "Either admin_password or existing_secrets.admin must be provided.",
+    "keycloak-missing-db": "Either db_password or existing_secrets.db must be provided.",
+    "keycloak-explicit-null-admin": "Either admin_password or existing_secrets.admin must be provided.",
+    "keycloak-explicit-null-db": "Either db_password or existing_secrets.db must be provided.",
+    "aws-keycloak-missing-db-source": "Either db_password, db_secret_arn or existing_secrets.db must be provided.",
+    "aws-eks-keycloak-missing-db-source": "Either db_password, db_secret_arn or existing_secrets.db must be provided.",
+    "gcp-keycloak-missing-db-source": "Either db_password, db_secret_id or existing_secrets.db must be provided.",
+    "gcp-gke-keycloak-missing-db-source": "Either db_password, db_secret_id or existing_secrets.db must be provided.",
     "baseline-custom-error-page-http": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
     "baseline-custom-error-page-hostless": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
     "baseline-custom-error-page-query-only": "Each customized custom_error_pages url must be an HTTPS URL with a DNS hostname and no whitespace",
@@ -3142,18 +3533,41 @@ EXPECTED_DIAGNOSTICS = {
     "aurora-activation-policy-invalid": "activation_policy must be ALWAYS or NEVER.",
 }
 
+for name in ("keycloak-extra-env-conflict", "keycloak-empty-extra-env-conflict", "keycloak-null-extra-env-conflict", "keycloak-later-extra-env-conflict"):
+    EXPECTED_DIAGNOSTICS[name] = "public_hostname and top-level extraEnvVars in extra_helm_values are mutually exclusive"
+for shim in ("aws-keycloak", "gcp-keycloak", "aws-eks-keycloak", "gcp-gke-keycloak"):
+    for credential in ("db", "admin"):
+        reference = credential + "_secret_" + ("arn" if shim.startswith("aws") else "id")
+        EXPECTED_DIAGNOSTICS[f"{shim}-{credential}-cloud-overlap"] = f"existing_secrets.{credential} and {reference} are mutually exclusive."
+        EXPECTED_DIAGNOSTICS[f"{shim}-{credential}-password-overlap"] = f"existing_secrets.{credential} and {credential}_password are mutually exclusive."
+
+
+EXPECTED_DIAGNOSTICS.update(KEYCLOAK_INPUT_DIAGNOSTICS)
+
+
+CASE_CONFIGS.update(GATEWAY_CONFIGS)
+MODULES.update(spec["module"] for spec in GATEWAY_CASES.values())
+EXPECTED_DIAGNOSTICS.update(GATEWAY_DIAGNOSTICS)
+
+
+CASE_CONFIGS.update(CERT_MANAGER_CONFIGS)
+MODULES.add("k8s-cert-manager")
+EXPECTED_DIAGNOSTICS.update(CERT_MANAGER_DIAGNOSTICS)
+
 
 def main() -> int:
+    CASE_CONFIGS.update(ASSOCIATION_CASES)
     payload = json.loads(CASES_PATH.read_text())
     if payload.get("schema_revision") != "contract-cases-v1":
         raise SystemExit("unsupported contract case schema")
     cases = payload.get("cases", [])
     names = {case.get("name") for case in cases}
-    if names != set(CASE_CONFIGS):
+    if names != set(CASE_CONFIGS) | set(COMPOSITION_CASES):
         raise SystemExit("case manifest and executable cases differ")
     if {case.get("module") for case in cases} != MODULES:
         raise SystemExit("case manifest does not cover every contract module")
 
+    cases = [case for case in cases if case["name"] not in ASSOCIATION_DIAGNOSTICS]
     tofu = os.environ.get("TOFU", "tofu")
     # Plans run with -refresh=false against empty state and never reach the
     # Cloudflare API, but the provider must still configure itself. The plugin
@@ -3197,6 +3611,16 @@ def main() -> int:
             name = case["name"]
             work = temp_root / name
             work.mkdir()
+            if name in COMPOSITION_CASES:
+                try:
+                    problems = composition_case(name, tofu, work, run)
+                except (AssertionError, KeyError, TypeError, ValueError) as error:
+                    problems = [str(error)]
+                if problems:
+                    failures.append(f"{name}: " + "; ".join(problems))
+                else:
+                    print(f"PASS {name} ({case['outcome']})")
+                continue
             # Cases whose module references sibling modules (gcp-ci-oidc-role
             # -> ../ci-oidc-trust) source through this symlink so the relative
             # reference stays inside the work dir's package boundary.
@@ -3208,6 +3632,13 @@ def main() -> int:
                 failures.append(f"{name}: initialization failed before the case could run")
                 print((init.stdout + init.stderr)[-4000:])
                 continue
+            if name == "static-responder-minimum-provider":
+                validate = run([tofu, "validate", "-no-color"], work)
+                if validate.returncode != 0:
+                    failures.append(f"{name}: minimum provider validation failed")
+                    print(validate.stdout + validate.stderr)
+                    continue
+                print("PASS static-responder-minimum-provider init+validate")
             plan = run([tofu, "plan", "-refresh=false", "-input=false", "-lock=false", "-no-color", "-out=case.plan"], work)
             diagnostics = plan.stdout + plan.stderr
             expected_pass = case["outcome"] == "pass"
@@ -3223,7 +3654,13 @@ def main() -> int:
                         continue
                     planned = None
                     if (
-                        name in EXPECTED_BINDINGS
+                        name in KEYCLOAK_CASES
+                        or name.endswith("-keycloak-existing-secrets")
+                        or name in KEYCLOAK_INLINE_CASES
+                        or name in ASSOCIATION_CASES
+                        or name in GATEWAY_CASES
+                        or name in CERT_MANAGER_CASES
+                        or name in EXPECTED_BINDINGS
                         or name in EXPECTED_INGRESS
                         or name in EXPECTED_RESOURCE_COUNTS
                         or name in EXPECTED_ATTRIBUTE_CONDITIONS
@@ -3246,6 +3683,46 @@ def main() -> int:
                             continue
                         plan_json = json.loads(shown.stdout)
                         planned = plan_json["planned_values"]
+                    if name in KEYCLOAK_CASES or name.endswith("-keycloak-existing-secrets") or name in KEYCLOAK_INLINE_CASES:
+                        problems = keycloak_plan_problems(name, planned)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
+                    if name in KEYCLOAK_CHART_PROOFS:
+                        hostname, db_user_key = KEYCLOAK_CHART_PROOFS[name]
+                        problems = keycloak_chart_problems(tofu, work, planned, run, case=name, hostname=hostname, db_user_key=db_user_key)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
+                    if name in ASSOCIATION_CASES:
+                        problems = association_problems(name, planned)
+                        if not problems and name in {"static-responder-fixed", "static-responder-escaped"}:
+                            problems = association_nginx_problems(work, planned, case=name)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
+                    if name in GATEWAY_CASES:
+                        try:
+                            check_gateway_plan(name, plan_json)
+                        except (AssertionError, KeyError, StopIteration) as error:
+                            failures.append(f"{name}: gateway render assertions failed: {error}")
+                            continue
+                    if name in ("gateway-policy-selector", "gateway-large-timeout"):
+                        problems = gateway_chart_problems(tofu, work, planned, run)
+                        if problems:
+                            failures.append(f"{name}: " + "; ".join(problems))
+                            continue
+                    if name in CERT_MANAGER_CASES:
+                        try:
+                            check_cert_manager_plan(name, plan_json)
+                        except (AssertionError, KeyError, StopIteration, TypeError) as error:
+                            failures.append(f"{name}: cert-manager plan assertions failed: {error}")
+                            continue
+                        if name in ("cert-manager-default", "cert-manager-overrides"):
+                            problems = cert_manager_chart_problems(tofu, work, planned, run, 3 if name.endswith("overrides") else 1)
+                            if problems:
+                                failures.append(f"{name}: " + "; ".join(problems))
+                                continue
                     if name in EXPECTED_BINDINGS:
                         values = planned["outputs"]["bindings"]["value"]
                         if values != EXPECTED_BINDINGS[name]:
@@ -3415,7 +3892,7 @@ def main() -> int:
                             failures.append(f"{name}: rendered Helm values changed: {changed}")
                             continue
                     if name in EXPECTED_PRIOR_STATE_MOVES:
-                        problems = prior_state_moves(tofu, work, plan_json, EXPECTED_PRIOR_STATE_MOVES[name])
+                        problems = prior_state_moves(tofu, work, plan_json, EXPECTED_PRIOR_STATE_MOVES[name], require_no_op=name.startswith("keycloak-prior-"))
                         if problems:
                             failures.append(f"{name}: existing installs would not carry over: {problems}")
                             continue
@@ -3445,6 +3922,10 @@ def main() -> int:
             expected_diagnostic = EXPECTED_DIAGNOSTICS.get(name)
             if plan.returncode == 0:
                 failures.append(f"{name}: invalid case unexpectedly passed")
+                continue
+            if name in CERT_MANAGER_CASES and diagnostics.count("Error:") != 1:
+                failures.append(f"{name}: expected exactly one error diagnostic")
+                print(diagnostics[-4000:])
                 continue
             expected_diagnostic = " ".join(expected_diagnostic.split())
             diagnostics = " ".join(diagnostics.split())

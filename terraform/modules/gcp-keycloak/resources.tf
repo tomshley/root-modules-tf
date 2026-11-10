@@ -12,20 +12,27 @@
 # limitations under the License.
 
 data "google_secret_manager_secret_version" "db" {
-  count   = var.db_password == null ? 1 : 0
+  count   = var.db_password == null && try(var.existing_secrets.db, null) == null ? 1 : 0
   project = var.project_id
   secret  = var.db_secret_id
+
+  lifecycle {
+    precondition {
+      condition     = var.db_secret_id != null
+      error_message = "Either db_password, db_secret_id or existing_secrets.db must be provided."
+    }
+  }
 }
 
 data "google_secret_manager_secret_version" "admin" {
-  count   = var.admin_password == null && var.admin_secret_id != null ? 1 : 0
+  count   = var.admin_password == null && var.admin_secret_id != null && try(var.existing_secrets.admin, null) == null ? 1 : 0
   project = var.project_id
   secret  = var.admin_secret_id
 }
 
 locals {
-  resolved_db_password = var.db_password != null ? var.db_password : jsondecode(data.google_secret_manager_secret_version.db[0].secret_data)["password"]
-  resolved_admin_password = var.admin_password != null ? var.admin_password : (
+  resolved_db_password = var.db_password != null || try(var.existing_secrets.db, null) != null ? var.db_password : jsondecode(data.google_secret_manager_secret_version.db[0].secret_data)["password"]
+  resolved_admin_password = var.admin_password != null || try(var.existing_secrets.admin, null) != null ? var.admin_password : (
     var.admin_secret_id != null ? jsondecode(data.google_secret_manager_secret_version.admin[0].secret_data)["password"] : null
   )
 }
@@ -57,4 +64,6 @@ module "keycloak" {
   resources_limits_memory   = var.resources_limits_memory
   helm_timeout              = var.helm_timeout
   extra_helm_values         = var.extra_helm_values
+  public_hostname           = var.public_hostname
+  existing_secrets          = var.existing_secrets
 }

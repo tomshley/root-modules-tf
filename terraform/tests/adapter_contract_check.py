@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from gateway_variable_guard import check_gateway_mirrors, check_gateway_variable_guard
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -359,6 +361,25 @@ def module_arguments(block: str) -> str:
 
 
 def main() -> int:
+    base_variables = live_hcl((ROOT / "terraform/modules/k8s-keycloak/variables.tf").read_text())
+    for shim in ("aws-keycloak", "gcp-keycloak", "aws-eks-keycloak", "gcp-gke-keycloak"):
+        variables = live_hcl((ROOT / f"terraform/modules/{shim}/variables.tf").read_text())
+        resources = live_hcl((ROOT / f"terraform/modules/{shim}/resources.tf").read_text())
+        outputs = live_hcl((ROOT / f"terraform/modules/{shim}/outputs.tf").read_text())
+        for name in ("public_hostname", "existing_secrets"):
+            pattern = rf'variable "{name}"\s*\{{'
+            baseline_start = re.search(pattern, base_variables).start()
+            shim_start = re.search(pattern, variables).start()
+            baseline = base_variables[baseline_start:matching_bracket_end(base_variables, base_variables.index("{", baseline_start))]
+            mirrored = variables[shim_start:matching_bracket_end(variables, variables.index("{", shim_start))]
+            if re.sub(r"\s+", "", baseline) != re.sub(r"\s+", "", mirrored):
+                raise SystemExit(f"{shim} changes the {name} contract")
+            wire = rf"^\s*{name}\s*=\s*var\.{name}\s*$"
+            require(resources, wire, f"{shim} {name} mirror")
+            reject_mutation(resources, wire, f"{shim} {name} mirror")
+        require(outputs, r'output "public_url"\s*\{\s*(?:description\s*=\s*"[^"]*"\s*)?value\s*=\s*module\.keycloak\.public_url\s*\}', f"{shim} public_url mirror")
+        print(f"PASS {shim}-public-input-mirror")
+
     publisher = (ROOT / ".gitlab-ci.yml").read_text()
     require(publisher, r"CICD_PIPELINES_PYTHON_IMAGE", "pinned Python publication image")
     require(publisher, r"tools/module-package/package_module\.py", "dependency-closed publication assembly")
@@ -752,13 +773,14 @@ def main() -> int:
     require(keycloak_wrapper, r"secrets-manager/arn", "legacy Keycloak secret annotations")
     keycloak_adapter = (ROOT / "terraform/modules/aws-keycloak/resources.tf").read_text()
     keycloak_outputs = (ROOT / "terraform/modules/aws-keycloak/outputs.tf").read_text()
-    admin_credential_condition = r"var\.admin_password != null \|\| var\.admin_secret_arn != null"
-    admin_credential_message = "Either admin_password or admin_secret_arn must be provided. Without both, Keycloak would start with no usable admin credentials."
+    admin_credential_condition = r"var\.admin_password != null \|\| var\.admin_secret_arn != null \|\| try\(var\.existing_secrets\.admin, null\) != null"
+    admin_credential_message = "Either admin_password, admin_secret_arn or existing_secrets.admin must be provided. Without one, Keycloak would start with no usable admin credentials."
     require(keycloak_adapter, r'check "admin_credentials_provided"', "legacy Keycloak credential check")
     require(keycloak_adapter, admin_credential_condition, "legacy Keycloak credential check condition")
     require(keycloak_adapter, re.escape(admin_credential_message), "legacy Keycloak credential warning message")
     require(keycloak_outputs, admin_credential_condition, "legacy Keycloak credential hard gate")
     require(keycloak_outputs, re.escape(admin_credential_message), "legacy Keycloak credential hard-gate message")
+    reject_mutation(keycloak_adapter, admin_credential_condition, "Keycloak full credential source condition")
     reject_mutation(keycloak_adapter, re.escape(admin_credential_message), "Keycloak credential warning message")
     reject_mutation(keycloak_outputs, re.escape(admin_credential_message), "Keycloak credential hard-gate message")
     require(metrics_variables, r'variable "metrics_server_version"', "legacy Metrics Server version input")
@@ -783,6 +805,8 @@ def main() -> int:
     reject_mutation(gcp_resources, r"transaction_log_retention_days\s*=\s*module\.workload_contract\.contract\.retention_days", "GCP retention mapping")
     print("PASS gcp-retention-contract")
 
+    check_gateway_variable_guard(live_hcl)
+    check_gateway_mirrors(live_hcl)
     print("PASS adapter-source-guard")
     return 0
 

@@ -41,4 +41,6 @@ module "keycloak" {
   resources_limits_memory   = var.resources_limits_memory
   helm_timeout              = var.helm_timeout
   extra_helm_values         = var.extra_helm_values
+  public_hostname           = var.public_hostname
+  existing_secrets          = var.existing_secrets
 }

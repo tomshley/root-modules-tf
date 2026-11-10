@@ -1,0 +1,18 @@
+{
+  "realm": "example",
+  "enabled": true,
+  "clients": [{
+    "clientId": "mobile",
+    "enabled": true,
+    "publicClient": true,
+    "standardFlowEnabled": true,
+    "directAccessGrantsEnabled": false,
+    "attributes": {"pkce.code.challenge.method": "S256"},
+    "redirectUris": [
+      "$(env:PUBLIC_ORIGIN)/oauth/callback",
+      "test.example.mobile:/oauth/callback",
+      "http://127.0.0.1/*",
+      "http://[::1]/*"
+    ]
+  }]
+}

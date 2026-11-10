@@ -20,6 +20,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -345,7 +346,8 @@ def main() -> int:
         gcp_work.mkdir()
         check_cloudsql_bundles(baseline, gcp_work)
         check_read_tf_output_fallback(baseline, gcp_work)
-    return 0
+    sys.stdout.flush()
+    return subprocess.run([sys.executable, str(ROOT / "terraform/tests/association_cases.py")], check=False).returncode
 
 
 if __name__ == "__main__":

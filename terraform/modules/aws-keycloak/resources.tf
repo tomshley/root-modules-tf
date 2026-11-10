@@ -12,29 +12,35 @@
 # limitations under the License.
 
 data "aws_secretsmanager_secret_version" "db" {
-  count     = var.db_password == null ? 1 : 0
+  count     = var.db_password == null && try(var.existing_secrets.db, null) == null ? 1 : 0
   secret_id = var.db_secret_arn
+
+  lifecycle {
+    precondition {
+      condition     = var.db_secret_arn != null
+      error_message = "Either db_password, db_secret_arn or existing_secrets.db must be provided."
+    }
+  }
 }
 
 data "aws_secretsmanager_secret_version" "admin" {
-  count     = var.admin_password == null && var.admin_secret_arn != null ? 1 : 0
+  count     = var.admin_password == null && var.admin_secret_arn != null && try(var.existing_secrets.admin, null) == null ? 1 : 0
   secret_id = var.admin_secret_arn
 }
 
 check "admin_credentials_provided" {
   assert {
-    condition     = var.admin_password != null || var.admin_secret_arn != null
-    error_message = "Either admin_password or admin_secret_arn must be provided. Without both, Keycloak would start with no usable admin credentials."
+    condition     = var.admin_password != null || var.admin_secret_arn != null || try(var.existing_secrets.admin, null) != null
+    error_message = "Either admin_password, admin_secret_arn or existing_secrets.admin must be provided. Without one, Keycloak would start with no usable admin credentials."
   }
 }
 
 # The check above is a warning. The hard gate is the precondition on
-# output.admin_console_url — plan fails if neither admin_password nor
-# admin_secret_arn is set.
+# output.admin_console_url.
 
 locals {
-  resolved_db_password = var.db_password != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
-  resolved_admin_password = var.admin_password != null ? var.admin_password : (
+  resolved_db_password = var.db_password != null || try(var.existing_secrets.db, null) != null ? var.db_password : jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"]
+  resolved_admin_password = var.admin_password != null || try(var.existing_secrets.admin, null) != null ? var.admin_password : (
     var.admin_secret_arn != null ? jsondecode(data.aws_secretsmanager_secret_version.admin[0].secret_string)["password"] : null
   )
 }
@@ -68,4 +74,6 @@ module "keycloak" {
   resources_limits_memory   = var.resources_limits_memory
   helm_timeout              = var.helm_timeout
   extra_helm_values         = var.extra_helm_values
+  public_hostname           = var.public_hostname
+  existing_secrets          = var.existing_secrets
 }

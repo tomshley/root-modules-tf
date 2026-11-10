@@ -45,7 +45,13 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 | `gcp-karpenter-controller-release` | GCP | Pre-1.0 Karpenter GCP controller Helm release without its CRDs | **New** |
 | `k8s-grafana-alloy` | Kubernetes | Portable Grafana Alloy base module | **New** |
 | `k8s-metrics-server` | Kubernetes | Portable Metrics Server base module | **New** |
+| `k8s-cert-manager` | Kubernetes | cert-manager with Gateway API support and one Cloudflare DNS-01 ClusterIssuer | **New** |
 | `k8s-keycloak` | Kubernetes | Portable Keycloak deployment from resolved credentials | **New** |
+| `k8s-static-responder` | Kubernetes | Fixed content at exact URL paths from a hardened nginx workload | **New** |
+| `k8s-app-links` | Kubernetes | Resource-free Apple and Android app-association renderer | **New** |
+| `k8s-gateway` | Kubernetes | Envoy Gateway controller and gateway infrastructure without routes | **New** |
+| `aws-eks-gateway` | AWS | Load-balancer attachment annotations for k8s-gateway | **New** |
+| `gcp-gke-gateway` | GCP | Load-balancer attachment annotations for k8s-gateway | **New** |
 | `aws-keycloak` | AWS | Secrets Manager credential resolution for k8s-keycloak | **New** |
 | `gcp-keycloak` | GCP | Secret Manager credential resolution for k8s-keycloak | **New** |
 | `aws-eks-vpc` | AWS | Dedicated VPC with public/private subnets, NAT per AZ | **New** |
@@ -83,6 +89,8 @@ Composable Terraform modules for multi-cloud Kubernetes provisioning and Cloudfl
 
 ### Examples
 
+- `terraform/examples/aws-eks-gateway-keycloak-app-links/` — Consumer-owned HTTPS routes composing Gateway, cert-manager, Keycloak, app links and DNS on an existing EKS cluster
+- `terraform/examples/gcp-gke-gateway-keycloak-app-links/` — The same consumer composition on an existing GKE cluster
 - `terraform/examples/gcp-gke-full-stack/` — GKE network + cluster + system/workload pools + NAT
 - `terraform/examples/gcp-cloudsql-connection-contract/` — Private Cloud SQL connection and writer-only reader endpoint contract
 - `terraform/examples/gcp-gke-karpenter-network-tag-contract/` — Karpenter GCENodeClass network-tag contract
